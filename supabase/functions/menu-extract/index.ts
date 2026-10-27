@@ -1,0 +1,690 @@
+import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import { extractText, getDocumentProxy } from 'npm:unpdf@1.8.1';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
+};
+
+type Section = 'food' | 'drinks';
+
+const FOOD_CATEGORIES = [
+  'starters_appetizers',
+  'main_courses',
+  'soups',
+  'salads',
+  'sides',
+  'desserts',
+  'kids_menu',
+  'specials',
+] as const;
+
+const DRINK_CATEGORIES = [
+  'coffee_tea',
+  'soft_drinks_water',
+  'juices',
+  'mocktails',
+  'cocktails',
+  'beer_cider',
+  'wine',
+  'spirits_shots',
+  'non_alcoholic_beer',
+] as const;
+
+const CATEGORIES = [...FOOD_CATEGORIES, ...DRINK_CATEGORIES] as const;
+type Category = (typeof CATEGORIES)[number];
+const CATEGORY_SET = new Set<string>(CATEGORIES);
+const FOOD_CATEGORY_SET = new Set<string>(FOOD_CATEGORIES);
+const DRINK_CATEGORY_SET = new Set<string>(DRINK_CATEGORIES);
+
+/**
+ * A menu is far longer than a single answer, so the reply is not capped by the
+ * Admin's answer-length setting. A 1,500-token cap truncated the JSON mid-array
+ * on a real 41-item food-and-drinks menu, which then parsed to nothing and was
+ * reported as "no dishes found".
+ *
+ * Measured against that same 41-item menu: 1,500 tokens lost every drink
+ * description, while 12,000 tokens returned all 41 items with their details
+ * intact. The floor is therefore set to the measured value rather than the
+ * answer-length setting, which still applies to ordinary visitor replies.
+ */
+const EXTRACTION_MIN_TOKENS = 12000;
+const EXTRACTION_MAX_TOKENS = 16000;
+const MENU_TEXT_LIMIT = 60000;
+
+interface ModelConfig {
+  provider?: string;
+  apiKey?: string;
+  model?: string;
+  endpoint?: string;
+  reasoningEnabled?: boolean | null;
+  maxOutputTokens?: number | null;
+}
+
+type Db = ReturnType<typeof createClient>;
+
+/**
+ * Verifies the caller's Supabase Auth access token and returns the user id.
+ * The identity comes from the verified token, never from the request body, so a
+ * caller cannot claim to own a restaurant they do not own.
+ */
+async function verifyUser(supabase: Db, req: Request): Promise<string | null> {
+  const header = req.headers.get('Authorization') ?? '';
+  const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
+  if (!token) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data?.user) return null;
+  return data.user.id;
+}
+
+interface DishDraft {
+  name: string;
+  section: Section;
+  category: Category;
+  description: string;
+  ingredients: string;
+  allergy: string;
+  price: string;
+  serving: string;
+  abv: string;
+}
+
+interface VariantOption {
+  serving: string;
+  price: string;
+}
+
+interface GroupedDraft {
+  draft: DishDraft;
+  variants: VariantOption[];
+}
+
+/**
+ * Normalizes a product name for clustering size variants: lowercase, strip
+ * diacritics, collapse whitespace, drop surrounding quotes, and ignore
+ * trailing punctuation. "Coca-Cola" and "coca cola" should match; "Coca-Cola
+ * Zero" must NOT match "Coca-Cola" because the extra word differs.
+ */
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.:;,]+$/g, '')
+    .trim();
+}
+
+/**
+ * Groups extraction drafts that represent the same product offered in
+ * multiple serving sizes. Two drafts are merged into a single dish ONLY when
+ * their identity fields (name, section, category, description, ingredients,
+ * allergy, abv) are equal after normalization and the ONLY differing fields
+ * are `serving` and `price`. Any other difference (e.g. "Zero" vs regular,
+ * different ingredients, different ABV) keeps them as separate products so
+ * genuinely distinct items are never collapsed.
+ *
+ * The first draft in a group becomes the representative dish row; its
+ * `serving` is cleared (sizes now live in dish_serving_options) and its
+ * `price` is kept as the headline price. Subsequent members contribute
+ * their serving/price as options, ordered by their original position.
+ */
+function groupDraftsByVariant(drafts: DishDraft[]): GroupedDraft[] {
+  const groups: GroupedDraft[] = [];
+  const keyToIndex = new Map<string, number>();
+
+  for (const draft of drafts) {
+    const identityKey = [
+      normalizeName(draft.name),
+      draft.section,
+      draft.category,
+      draft.description.trim().toLowerCase(),
+      draft.ingredients.trim().toLowerCase(),
+      draft.allergy.trim().toLowerCase(),
+      draft.abv.trim().toLowerCase(),
+    ].join('\u0000');
+
+    const existingIndex = keyToIndex.get(identityKey);
+    if (existingIndex === undefined) {
+      keyToIndex.set(identityKey, groups.length);
+      groups.push({ draft, variants: [] });
+      continue;
+    }
+
+    const group = groups[existingIndex];
+    const serving = draft.serving.trim();
+    const price = draft.price.trim();
+    // A member with no serving size carries no size information; keep it as a
+    // standalone dish rather than merging a price-only duplicate.
+    if (serving.length === 0) {
+      groups.push({ draft, variants: [] });
+      continue;
+    }
+    // Avoid duplicate serving labels within the same group.
+    if (group.variants.some((v) => v.serving === serving) || serving === group.draft.serving.trim()) {
+      groups.push({ draft, variants: [] });
+      continue;
+    }
+    group.variants.push({ serving, price });
+  }
+
+  return groups;
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function asString(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number') return String(value);
+  return '';
+}
+
+function normalizedValue(value: unknown): string {
+  return asString(value).toLowerCase().replace(/[&/]/g, '_').replace(/[\s-]+/g, '_');
+}
+
+function asSection(value: unknown, evidence: string): Section {
+  const text = normalizedValue(value);
+  if (text === 'drinks' || text === 'drink' || text === 'beverage' || text === 'beverages') return 'drinks';
+  if (text === 'food' || text === 'foods') return 'food';
+  const lower = evidence.toLowerCase();
+  return /(cocktail|beer|lager|wine|whisky|whiskey|vodka|gin|rum|tequila|coffee|tea|juice|soda|water|mocktail|drink)/.test(lower)
+    ? 'drinks'
+    : 'food';
+}
+
+function asCategory(value: unknown, section: Section, evidence: string): Category {
+  const text = normalizedValue(value);
+  const aliases: Record<string, Category> = {
+    food: 'main_courses',
+    cocktail: 'cocktails',
+    beer: 'beer_cider',
+    cider: 'beer_cider',
+    spirit: 'spirits_shots',
+    spirits: 'spirits_shots',
+    shots: 'spirits_shots',
+    non_alcoholic_drink: 'non_alcoholic_beer',
+    non_alcoholic: 'non_alcoholic_beer',
+    coffee: 'coffee_tea',
+    tea: 'coffee_tea',
+    starter: 'starters_appetizers',
+    appetizer: 'starters_appetizers',
+    main: 'main_courses',
+    dessert: 'desserts',
+    kids: 'kids_menu',
+  };
+  const candidate = aliases[text] ?? text;
+  const allowed = section === 'food' ? FOOD_CATEGORY_SET : DRINK_CATEGORY_SET;
+  if (allowed.has(candidate) && CATEGORY_SET.has(candidate)) return candidate as Category;
+
+  const lower = evidence.toLowerCase();
+  if (section === 'drinks') {
+    if (/(non[- ]?alcoholic|alcohol[- ]?free).*(beer|lager)|(beer|lager).*(non[- ]?alcoholic|alcohol[- ]?free)/.test(lower)) return 'non_alcoholic_beer';
+    if (/(coffee|tea|espresso|cappuccino|latte)/.test(lower)) return 'coffee_tea';
+    if (/(juice|smoothie)/.test(lower)) return 'juices';
+    if (/(mocktail|virgin mojito|alcohol[- ]?free cocktail)/.test(lower)) return 'mocktails';
+    if (/(cocktail|martini|margarita|mojito|spritz|highball|daiquiri|sour)/.test(lower)) return 'cocktails';
+    if (/(beer|lager|ale|ipa|pilsner|cider)/.test(lower)) return 'beer_cider';
+    if (/(wine|champagne|prosecco|sauvignon|chardonnay)/.test(lower)) return 'wine';
+    if (/(vodka|gin|whisky|whiskey|rum|tequila|brandy|cognac|spirit|shot)/.test(lower)) return 'spirits_shots';
+    if (/(water|soda|soft drink|cola|tonic)/.test(lower)) return 'soft_drinks_water';
+    return 'soft_drinks_water';
+  }
+  if (/(soup|chowder|tom yum|tom kha)/.test(lower)) return 'soups';
+  if (/(salad|papaya|som tam)/.test(lower)) return 'salads';
+  if (/(dessert|cake|ice cream|sticky rice)/.test(lower)) return 'desserts';
+  if (/(fries|fry|rice|carrot|side)/.test(lower)) return 'sides';
+  if (/(starter|appetizer|satay|spring roll|larb)/.test(lower)) return 'starters_appetizers';
+  return 'main_courses';
+}
+
+function extractionTokens(configured: unknown): number {
+  const value = Number(configured);
+  if (!Number.isFinite(value) || value <= 0) return EXTRACTION_MIN_TOKENS;
+  return Math.min(Math.max(Math.round(value), EXTRACTION_MIN_TOKENS), EXTRACTION_MAX_TOKENS);
+}
+
+function providerHeaders(provider: string, apiKey: string): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (provider.toLowerCase().includes('azure')) {
+    headers['api-key'] = apiKey;
+  } else {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+  return headers;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Pulls the array out of a reply that may be fenced, prefaced with prose, or
+ * cut off at the token limit. A truncated tail is repaired by dropping the
+ * last, incomplete object and closing the array, so a long menu that only
+ * slightly overran is still usable instead of being thrown away entirely.
+ */
+function extractJsonArray(text: string): { items: unknown[]; truncated: boolean } {
+  const cleaned = text.replace(/```json/gi, '```').trim();
+  const fenced = cleaned.match(/```([\s\S]*?)```/);
+  const candidate = fenced ? fenced[1] : cleaned;
+
+  const start = candidate.indexOf('[');
+  if (start === -1) return { items: [], truncated: false };
+
+  const end = candidate.lastIndexOf(']');
+  if (end > start) {
+    try {
+      const parsed = JSON.parse(candidate.slice(start, end + 1));
+      return { items: Array.isArray(parsed) ? parsed : [], truncated: false };
+    } catch {
+      // fall through to repair
+    }
+  }
+
+  const body = candidate.slice(start + 1);
+  const lastClose = body.lastIndexOf('}');
+  if (lastClose === -1) return { items: [], truncated: true };
+
+  try {
+    const parsed = JSON.parse(`[${body.slice(0, lastClose + 1)}]`);
+    return { items: Array.isArray(parsed) ? parsed : [], truncated: true };
+  } catch {
+    return { items: [], truncated: true };
+  }
+}
+
+/**
+ * Extracts a non-negative integer token count from a provider's usage metadata
+ * field. Returns null when the value is missing or not a valid number, so the
+ * caller can skip the llm_usage insert rather than fabricate a count.
+ */
+function extractTokenCount(value: unknown): number | null {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n);
+}
+
+function extractionInstruction(): string {
+  return (
+    'You are reading a restaurant menu and returning structured data.\n' +
+    'Extract EVERY item in the document, including food AND drinks.\n' +
+    'Cocktails, beer, wine, spirits, shots, soft drinks, coffee and tea are all items. ' +
+    'Never skip an item because it is a drink.\n\n' +
+    'Return ONLY a JSON array. No prose, no markdown fences.\n' +
+    'Each element must be an object with exactly these keys:\n' +
+    '  "name"        - the item name as printed\n' +
+    '  "section"     - exactly one of: food, drinks\n' +
+    '  "category"    - exactly one approved category belonging to that section. ' +
+    'Food: starters_appetizers, main_courses, soups, salads, sides, desserts, kids_menu, specials. ' +
+    'Drinks: coffee_tea, soft_drinks_water, juices, mocktails, cocktails, beer_cider, wine, ' +
+    'spirits_shots, non_alcoholic_beer.\n' +
+    '  "price"       - price including currency as printed, e.g. "SEK 149"\n' +
+    '  "description" - the item description, or ""\n' +
+    '  "ingredients" - ingredients or composition, or ""\n' +
+    '  "allergy"     - allergens, ONLY when the document states them for that item, or ""\n' +
+    '  "serving"     - serving size or volume as printed, e.g. "40 cl", or ""\n' +
+    '  "abv"         - alcohol percentage as printed, e.g. "5.0%", or ""\n\n' +
+    'Choose Section first, then choose a Category belonging to that Section. Use the original ' +
+    'heading and surrounding context as evidence, but classify the item by what it actually is ' +
+    'using its name, description, ingredients and preparation details. A Drinks heading may contain ' +
+    'coffee or a non-alcoholic beer; do not copy the heading as the category. If uncertain, choose ' +
+    'the most plausible approved category; the host will review it. Examples: curry → food/main_courses, ' +
+    'soup → food/soups, cappuccino → drinks/coffee_tea, virgin mojito → drinks/mocktails, ' +
+    'non-alcoholic lager → drinks/non_alcoholic_beer, fries → food/sides.\n\n' +
+    'Use an empty string "" for any field the document does not state. ' +
+    'Never invent prices, ingredients, allergens, serving sizes or alcohol ' +
+    'percentages, and never carry an allergen over from a different item.'
+  );
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
+
+  try {
+    const body = await req.json().catch(() => null);
+    const restaurantId = body?.restaurantId as string | undefined;
+    const objectPath = (body?.objectPath as string | undefined) ?? '';
+    const mimeType = (body?.mimeType as string | undefined) ?? '';
+    const fileName = (body?.fileName as string | undefined) ?? '';
+    const departmentId = body?.departmentId as string | undefined;
+    const eventId = body?.eventId as string | undefined;
+
+    if (!restaurantId) return json({ error: 'Missing restaurant.' }, 400);
+    if (!objectPath) return json({ error: 'No menu file was uploaded.' }, 400);
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    const supabase = createClient(supabaseUrl, serviceKey);
+
+    const userId = await verifyUser(supabase, req);
+    if (!userId) return json({ error: 'Please sign in to continue.' }, 401);
+
+    // Ownership is verified against the database, not the request body, so a
+    // caller cannot extract a menu into a restaurant they do not own.
+    const { data: owned, error: ownerError } = await supabase
+      .from('restaurants')
+      .select('id')
+      .eq('id', restaurantId)
+      .eq('owner_id', userId)
+      .maybeSingle();
+    if (ownerError) throw ownerError;
+    if (!owned) return json({ error: 'This restaurant is not on your account.' }, 403);
+
+    // The caller must name a file inside their own restaurant's folder in the
+    // private menu-files bucket. No path traversal, no other host's file, and no
+    // arbitrary URL, because the object is read from the bucket with the service
+    // role rather than fetched from a caller-supplied address.
+    const safePath = objectPath.replace(/^\/+/, '');
+    if (
+      safePath.includes('..') ||
+      !safePath.startsWith(`${restaurantId}/`) ||
+      safePath.length > 300
+    ) {
+      return json({ error: 'That file does not belong to your restaurant.' }, 403);
+    }
+
+    const { data: configRow, error: configError } = await supabase
+      .from('model_settings')
+      .select('provider, api_key, model, endpoint, reasoning_enabled, max_output_tokens')
+      .eq('key', 'chatModel')
+      .maybeSingle();
+    if (configError) throw configError;
+
+    const chat: ModelConfig = {
+      provider: configRow?.provider ?? '',
+      apiKey: configRow?.api_key ?? '',
+      model: configRow?.model ?? '',
+      endpoint: configRow?.endpoint ?? '',
+      reasoningEnabled: configRow?.reasoning_enabled ?? false,
+      maxOutputTokens: configRow?.max_output_tokens ?? null,
+    };
+    if (!chat.apiKey || !chat.endpoint || !chat.model) {
+      return json({ error: 'Admin has not set the chat model' }, 400);
+    }
+
+    // The bucket is private, so the document is downloaded with the service
+    // role from the bucket directly rather than through a public URL.
+    const { data: fileBlob, error: downloadError } = await supabase.storage
+      .from('menu-files')
+      .download(safePath);
+    if (downloadError || !fileBlob) {
+      return json(
+        { error: 'Could not download the uploaded menu file. Try uploading it again.' },
+        502
+      );
+    }
+    const bytes = new Uint8Array(await fileBlob.arrayBuffer());
+    if (bytes.length === 0) {
+      return json({ error: 'That file is empty. Upload a menu photo or PDF.' }, 422);
+    }
+
+    const isPdf = mimeType === 'application/pdf' || /\.pdf$/i.test(fileName);
+    const isImage = mimeType.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(fileName);
+
+    if (!isPdf && !isImage) {
+      return json(
+        {
+          error:
+            'That file type is not supported. Upload a PDF menu or a photo of the menu (JPG or PNG).',
+        },
+        400
+      );
+    }
+
+    let menuText = '';
+    if (isPdf) {
+      try {
+        const pdf = await getDocumentProxy(bytes);
+        const result = await extractText(pdf, { mergePages: true });
+        menuText = Array.isArray(result.text) ? result.text.join('\n\n') : String(result.text ?? '');
+      } catch {
+        return json(
+          {
+            error:
+              'That PDF could not be opened. It may be corrupted or password protected. Try re-saving it or upload a photo instead.',
+          },
+          422
+        );
+      }
+      if (menuText.trim().length < 5) {
+        return json(
+          {
+            error:
+              'That PDF has no selectable text, so it looks like a scanned or image-only file. Upload a photo of the menu instead so it can be read.',
+          },
+          422
+        );
+      }
+    }
+
+    const instruction = extractionInstruction();
+    const userParts: unknown[] = [];
+    if (isImage) {
+      userParts.push({
+        type: 'image_url',
+        image_url: { url: `data:${mimeType || 'image/jpeg'};base64,${bytesToBase64(bytes)}` },
+      });
+      userParts.push({ type: 'text', text: instruction });
+    } else {
+      userParts.push({
+        type: 'text',
+        text: `${instruction}\n\n--- MENU TEXT ---\n${menuText.slice(0, MENU_TEXT_LIMIT)}`,
+      });
+    }
+
+    const requestBody: Record<string, unknown> = {
+      model: chat.model,
+      temperature: 0,
+      max_tokens: extractionTokens(chat.maxOutputTokens),
+      messages: [
+        { role: 'system', content: 'You read restaurant menus and return structured JSON.' },
+        { role: 'user', content: userParts },
+      ],
+    };
+    if (
+      chat.endpoint.includes('venice.ai') ||
+      (chat.provider ?? '').toLowerCase().includes('venice')
+    ) {
+      requestBody.reasoning = { enabled: chat.reasoningEnabled === true };
+    }
+
+    const aiResponse = await fetch(chat.endpoint, {
+      method: 'POST',
+      headers: providerHeaders(chat.provider ?? '', chat.apiKey),
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!aiResponse.ok) {
+      const detail = await aiResponse.text().catch(() => '');
+      return json(
+        {
+          error: `The chat model could not read this menu (HTTP ${aiResponse.status}).`,
+          detail: detail.slice(0, 300),
+        },
+        502
+      );
+    }
+
+    let aiPayload: {
+      choices?: Array<{ message?: { content?: unknown } }>;
+      usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown };
+    } | null = null;
+    try {
+      aiPayload = await aiResponse.json();
+    } catch {
+      return json(
+        {
+          error:
+            'The chat model returned a response that could not be read. Try uploading the menu again.',
+        },
+        502
+      );
+    }
+
+    const raw = aiPayload?.choices?.[0]?.message?.content;
+    const rawText = typeof raw === 'string' ? raw : Array.isArray(raw) ? JSON.stringify(raw) : '';
+    if (!rawText.trim()) {
+      return json(
+        { error: 'The chat model returned an empty response for this menu. Try again.' },
+        502
+      );
+    }
+
+    const { items, truncated } = extractJsonArray(rawText);
+
+    const drafts: DishDraft[] = items
+      .map((item) => {
+        const record = (item ?? {}) as Record<string, unknown>;
+        const name = asString(record.name);
+        const evidence = [
+          name,
+          asString(record.section),
+          asString(record.description),
+          asString(record.ingredients),
+        ].join(' ');
+        const section = asSection(record.section, evidence);
+        return {
+          name,
+          section,
+          category: asCategory(record.category, section, evidence),
+          description: asString(record.description),
+          ingredients: asString(record.ingredients),
+          allergy: asString(record.allergy),
+          price: asString(record.price),
+          serving: asString(record.serving),
+          abv: asString(record.abv),
+        };
+      })
+      .filter((dish) => dish.name.length > 0);
+
+    if (drafts.length === 0) {
+      if (truncated) {
+        return json(
+          {
+            error:
+              'This menu is very long and the reading was cut off before any item could be saved. Split the menu into smaller files and upload them one at a time.',
+          },
+          422
+        );
+      }
+      return json(
+        {
+          error:
+            'No menu items were recognized in that file. If the menu is a photo, try a sharper, straighter picture; if it is a PDF, make sure it is not a scan without selectable text.',
+        },
+        422
+      );
+    }
+
+    const { data: lastDish } = await supabase
+      .from('dishes')
+      .select('sort_order')
+      .eq('restaurant_id', restaurantId)
+      .order('sort_order', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const base = (lastDish?.sort_order ?? -1) + 1;
+
+    const grouped = groupDraftsByVariant(drafts);
+
+    const rows = grouped.map((group, index) => {
+      const dish = group.draft;
+      const hasVariants = group.variants.length > 0;
+      return {
+        restaurant_id: restaurantId,
+        department_id: departmentId ?? null,
+        event_id: eventId ?? null,
+        name: dish.name,
+        section: dish.section,
+        category: dish.category,
+        description: dish.description,
+        ingredients: dish.ingredients,
+        allergy: dish.allergy,
+        // The headline price stays on the dish row so cards without variants
+        // display as before. When variants exist, the visitor UI prefers the
+        // serving-option prices; the row price is the first variant's price.
+        price: dish.price,
+        // Serving sizes for variant groups live in dish_serving_options, so
+        // the row's serving text is cleared to avoid a misleading duplicate.
+        serving: hasVariants ? '' : dish.serving,
+        abv: dish.abv,
+        sort_order: base + index,
+      };
+    });
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('dishes')
+      .insert(rows)
+      .select();
+    if (insertError) throw insertError;
+
+    // For each grouped dish with size variants, insert the per-size rows into
+    // dish_serving_options. The representative dish's own serving/price
+    // becomes the first option so every size is preserved.
+    const insertedRows = (inserted ?? []) as Array<Record<string, unknown>>;
+    const optionRows: Array<{ dish_id: string; label: string; price: string; sort_order: number }> = [];
+    grouped.forEach((group, groupIndex) => {
+      if (group.variants.length === 0) return;
+      const row = insertedRows[groupIndex];
+      const dishId = row?.id as string | undefined;
+      if (!dishId) return;
+      const baseServing = group.draft.serving.trim();
+      const basePrice = group.draft.price;
+      let order = 0;
+      if (baseServing.length > 0) {
+        optionRows.push({ dish_id: dishId, label: baseServing, price: basePrice, sort_order: order++ });
+      }
+      for (const variant of group.variants) {
+        optionRows.push({ dish_id: dishId, label: variant.serving, price: variant.price, sort_order: order++ });
+      }
+    });
+
+    if (optionRows.length > 0) {
+      const { error: optionError } = await supabase.from('dish_serving_options').insert(optionRows);
+      if (optionError) throw optionError;
+    }
+
+    await supabase.from('usage_events').insert({ restaurant_id: restaurantId, kind: 'upload' });
+
+    const inputTokens = extractTokenCount(aiPayload?.usage?.prompt_tokens);
+    const outputTokens = extractTokenCount(aiPayload?.usage?.completion_tokens);
+    if (inputTokens !== null && outputTokens !== null) {
+      await supabase
+        .from('llm_usage')
+        .insert({ restaurant_id: restaurantId, input_tokens: inputTokens, output_tokens: outputTokens })
+        .then(() => undefined);
+    }
+
+    const saved = insertedRows.map((row) => {
+      return {
+        ...row,
+        section: row.section ?? 'food',
+        category: row.category ?? 'main_courses',
+      };
+    });
+
+    return json({ dishes: saved, truncated });
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : 'Menu reading failed.' },
+      500
+    );
+  }
+});

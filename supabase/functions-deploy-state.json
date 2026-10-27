@@ -1,0 +1,33 @@
+{
+  "projectId": "71901240",
+  "functions": {
+    "admin-api": {
+      "hasChanged": false,
+      "hash": "1fc10d2d1d4bc78da806858f9a9543270c3a699307474ef22e7adb1be9f808b6"
+    },
+    "admin-cleanup": {
+      "hasChanged": false,
+      "hash": "06a9bc3f546351511b078ad13342bd529e0526101ee8dfd867efcbad9795699d"
+    },
+    "dish-image": {
+      "hasChanged": false,
+      "hash": "df5dd1e16894ea408d5960b367cdbcc3568722659652f35783431c1e4865da19"
+    },
+    "host-signup": {
+      "hasChanged": false,
+      "hash": "7af7c0aa415b2b0bac030517d9644a1e216192635e28bf914d91629b6a4293a0"
+    },
+    "menu-extract": {
+      "hasChanged": false,
+      "hash": "ffbd299e4c40269c81a8e3c2621e6d8c4c355f6e7a56d3e7bb398b44446d2c19"
+    },
+    "visitor-chat": {
+      "hasChanged": false,
+      "hash": "96cd1e15d36ede865cf9f42f7d2e3370c6493843bd4571f417e1c057e014c6e1"
+    },
+    "visitor-orders": {
+      "hasChanged": false,
+      "hash": "6d7327e93a43776fea891dd24498f952cbfe2214fc39c8558771d5c927d10e79"
+    }
+  }
+}

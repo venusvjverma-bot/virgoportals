@@ -1,0 +1,83 @@
+import { supabase } from '@/lib/supabase';
+import type { Department } from '@/types';
+
+const COLUMNS = 'id, restaurant_id, name, is_default, open_time, close_time, system_prompt, is_active, chat_background_asset_id, created_at';
+
+interface DepartmentRow {
+  id: string;
+  restaurant_id: string;
+  name: string;
+  is_default: boolean;
+  open_time: string | null;
+  close_time: string | null;
+  system_prompt: string;
+  is_active: boolean;
+  chat_background_asset_id: string | null;
+  created_at: string;
+}
+
+function mapDepartment(row: DepartmentRow): Department {
+  return {
+    id: row.id,
+    restaurantId: row.restaurant_id,
+    name: row.name,
+    isDefault: row.is_default,
+    openTime: row.open_time,
+    closeTime: row.close_time,
+    systemPrompt: row.system_prompt,
+    isActive: row.is_active,
+    chatBackgroundAssetId: row.chat_background_asset_id,
+    createdAt: row.created_at,
+  };
+}
+
+export async function listDepartments(restaurantId: string): Promise<Department[]> {
+  const { data, error } = await supabase
+    .from('departments')
+    .select(COLUMNS)
+    .eq('restaurant_id', restaurantId)
+    .order('is_default', { ascending: false })
+    .order('name', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => mapDepartment(row as DepartmentRow));
+}
+
+export async function createDepartment(
+  restaurantId: string,
+  name: string
+): Promise<Department> {
+  const { data, error } = await supabase
+    .from('departments')
+    .insert({ restaurant_id: restaurantId, name })
+    .select(COLUMNS)
+    .single();
+  if (error) throw error;
+  return mapDepartment(data as DepartmentRow);
+}
+
+export async function updateDepartment(
+  departmentId: string,
+  patch: Partial<Pick<Department, 'name' | 'openTime' | 'closeTime' | 'systemPrompt' | 'isActive' | 'chatBackgroundAssetId'>>
+): Promise<Department> {
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.name !== undefined) update.name = patch.name;
+  if (patch.openTime !== undefined) update.open_time = patch.openTime;
+  if (patch.closeTime !== undefined) update.close_time = patch.closeTime;
+  if (patch.systemPrompt !== undefined) update.system_prompt = patch.systemPrompt;
+  if (patch.isActive !== undefined) update.is_active = patch.isActive;
+  if (patch.chatBackgroundAssetId !== undefined) update.chat_background_asset_id = patch.chatBackgroundAssetId;
+
+  const { data, error } = await supabase
+    .from('departments')
+    .update(update)
+    .eq('id', departmentId)
+    .select(COLUMNS)
+    .single();
+  if (error) throw error;
+  return mapDepartment(data as DepartmentRow);
+}
+
+export async function deleteDepartment(departmentId: string): Promise<void> {
+  const { error } = await supabase.from('departments').delete().eq('id', departmentId);
+  if (error) throw error;
+}

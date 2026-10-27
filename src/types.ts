@@ -1,0 +1,236 @@
+export type Role = 'admin' | 'host' | 'no-portal';
+
+export interface Session {
+  userId: string;
+  email: string;
+  role: Role;
+}
+
+export interface ModelConfig {
+  provider: string;
+  apiKey: string;
+  model: string;
+  endpoint: string;
+  reasoningEnabled: boolean;
+  temperature: number;
+  maxOutputTokens: number;
+}
+
+export interface ModelState {
+  provider: string;
+  model: string;
+  endpoint: string;
+  hasApiKey: boolean;
+  reasoningEnabled: boolean;
+  temperature: number;
+  maxOutputTokens: number;
+}
+
+export interface AdminModels {
+  chatModel: ModelState;
+  imageModel: ModelState;
+}
+
+export type HostStatus = 'Active' | 'Blocked';
+
+export interface Host {
+  id: string;
+  restaurant: string;
+  email: string;
+  city: string;
+  signupDate: string;
+  dishes: number;
+  status: HostStatus;
+  welcomeText: string;
+  botPrompt: string;
+  visitorLink: string;
+}
+export interface RestaurantPortal {
+  id: string;
+  ownerEmail: string;
+  name: string;
+  city: string;
+  welcome: string;
+  systemPrompt: string;
+  status: HostStatus;
+  createdAt: string;
+  timezone: string;
+  currency: string;
+}
+
+export interface DishServingOption {
+  id: string;
+  dishId: string;
+  label: string;
+  price: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface DishRemovableIngredient {
+  id: string;
+  dishId: string;
+  label: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface Dish {
+  id: string;
+  restaurantId: string;
+  name: string;
+  description: string;
+  ingredients: string;
+  allergy: string;
+  price: string;
+  imageUrl: string | null;
+  sortOrder: number;
+  category: string;
+  section: string;
+  serving: string;
+  abv: string;
+  available: boolean;
+  departmentId: string | null;
+  eventId: string | null;
+  servingOptions: DishServingOption[];
+  removableIngredients: DishRemovableIngredient[];
+}
+
+export interface Department {
+  id: string;
+  restaurantId: string;
+  name: string;
+  isDefault: boolean;
+  openTime: string | null;
+  closeTime: string | null;
+  systemPrompt: string;
+  isActive: boolean;
+  chatBackgroundAssetId: string | null;
+  createdAt: string;
+}
+
+export interface EventItem {
+  id: string;
+  restaurantId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  startTime: string | null;
+  endTime: string | null;
+  systemPrompt: string;
+  status: 'upcoming' | 'active' | 'ended' | 'archived';
+  chatBackgroundAssetId: string | null;
+  createdAt: string;
+}
+
+export type ResourceType = 'department' | 'event' | 'restaurant';
+
+export interface PublicResource {
+  resourceId: string;
+  resourceName: string;
+  resourceType: ResourceType;
+  openTime: string | null;
+  closeTime: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  restaurantId: string;
+  restaurantName: string;
+  city: string;
+  welcome: string;
+  systemPrompt: string;
+  timezone: string;
+  currency: string;
+  chatBackgroundPath: string | null;
+}
+
+export interface UsageRow {
+  id: string;
+  host: string;
+  uploads: number;
+  images: number;
+  messages: number;
+}
+
+export type AdminView = 'home' | 'hosts' | 'credits' | 'chat' | 'image' | 'bot' | 'usage' | 'theme';
+export type HostView =
+  | 'dashboard'
+  | 'departments'
+  | 'events'
+  | 'orders'
+  | 'order-detail'
+  | 'department-detail'
+  | 'event-detail';
+
+export type ResourceView = 'details' | 'menu' | 'bot' | 'qr' | 'theme';
+
+export type OrderStatus = 'new' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+
+export interface OrderItem {
+  id: string;
+  orderId: string;
+  dishId: string;
+  name: string;
+  priceMinor: number;
+  quantity: number;
+  lineTotalMinor: number;
+  servingLabel: string | null;
+  removedIngredients: string;
+}
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  restaurantId: string;
+  departmentId: string | null;
+  eventId: string | null;
+  resourceType: ResourceType;
+  resourceName: string;
+  restaurantName: string;
+  status: OrderStatus;
+  paymentStatus: string;
+  totalMinor: number;
+  currency: string;
+  itemCount: number;
+  mobileNumber: string | null;
+  createdAt: string;
+  statusUpdatedAt: string;
+  items: OrderItem[];
+}
+
+export interface BasketItem {
+  dishId: string;
+  name: string;
+  price: string;
+  imageUrl: string | null;
+  quantity: number;
+  servingOptionId?: string | null;
+  servingLabel?: string | null;
+  removedIngredientIds?: string[];
+  removedIngredientLabels?: string[];
+}
+
+export interface ConfirmedOrderRef {
+  orderId: string;
+  orderNumber: string;
+}
+
+export interface CreditHost {
+  restaurantId: string;
+  email: string;
+  name: string;
+  city: string;
+  status: HostStatus;
+  balance: number;
+  llmActive: boolean;
+}
+
+export interface CreditAdjustment {
+  id: string;
+  operation: string;
+  amount: number;
+  previousBalance: number;
+  resultingBalance: number;
+  createdAt: string;
+}

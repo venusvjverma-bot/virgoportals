@@ -1,0 +1,20 @@
+[functions.menu-extract]
+verify_jwt = false
+
+[functions.dish-image]
+verify_jwt = false
+
+[functions.visitor-chat]
+verify_jwt = false
+
+[functions.admin-api]
+verify_jwt = false
+
+[functions.admin-cleanup]
+verify_jwt = false
+
+[functions.host-signup]
+verify_jwt = false
+
+[functions.visitor-orders]
+verify_jwt = false
