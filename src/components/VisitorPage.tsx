@@ -808,7 +808,7 @@ function DishResult({ dish, currency, onOpen }: { dish: Dish; currency: string; 
       type="button"
       onClick={onOpen}
       aria-label={`View details for ${dish.name || 'this item'}`}
-      className="flex w-full gap-3 overflow-hidden rounded-2xl bg-white p-3 text-left shadow-soft ring-1 ring-cream-200 transition-all duration-200 hover:shadow-lift hover:ring-olive-200 focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-[0.99]"
+      className="flex w-full gap-3 overflow-hidden rounded-2xl bg-white p-3 text-left shadow-lift ring-1 ring-olive-300 transition-all duration-200 hover:shadow-lift hover:ring-olive-500 focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-[0.99]"
     >
       {dish.imageUrl ? (
         <img
