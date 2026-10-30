@@ -99,7 +99,7 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket }: Item
       <div
         className={cn(
           'relative flex max-h-[92dvh] w-full flex-col overflow-hidden bg-cream-50 shadow-lift',
-          'rounded-t-3xl sm:max-h-[88dvh] sm:max-w-lg sm:rounded-3xl'
+          'mt-3 rounded-t-3xl sm:mt-0 sm:max-h-[88dvh] sm:max-w-lg sm:rounded-3xl'
         )}
       >
         <button
