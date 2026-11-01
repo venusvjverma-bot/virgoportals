@@ -6,6 +6,7 @@ import { LanguageSelector } from '@/components/visitor/LanguageSelector';
 import { BasketPanel } from '@/components/visitor/BasketPanel';
 import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/CheckoutView';
 import { OrderConfirmation } from '@/components/visitor/OrderConfirmation';
+import { basketLineKey } from '@/lib/basketLine';
 import { callFunction } from '@/lib/functions';
 import { getPublicPortal, getPublicResource, listPublicAddOns, listServingOptionsByDish, type PublicPortal } from '@/lib/portal';
 import { themeAssetUrl, mascotUrl } from '@/lib/themeAssets';
@@ -275,7 +276,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   // reply or product cards. We skip the initial basket restore and any in-flight
   // normal chat send (which already generates suggestions for this basket state).
   const basketSignature = basket
-    .map((i) => `${i.dishId}:${i.servingOptionId ?? ''}:${i.quantity}:${(i.removedIngredientIds ?? []).join(',')}`)
+    .map((i) => `${i.dishId}:${i.servingOptionId ?? ''}:${i.quantity}:${basketLineKey(i)}`)
     .join('|');
   const initialBasketRef = useRef(true);
   const suggestionsReqIdRef = useRef(0);
@@ -466,26 +467,28 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     quantity: number,
     servingOption?: { id: string; label: string; price: string } | null,
     removedIngredientIds?: string[],
-    removedIngredientLabels?: string[]
+    removedIngredientLabels?: string[],
+    additionalRequest?: string
   ) {
     const optionId = servingOption?.id ?? null;
     const optionLabel = servingOption?.label ?? null;
     const optionPrice = servingOption?.price ?? dish.price;
     const removedIds = removedIngredientIds ?? [];
     const removedLabels = removedIngredientLabels ?? [];
-    const removedKey = removedIds.join(',');
+    const request = additionalRequest ?? '';
+    const removedKey = basketLineKey({ removedIngredientIds: removedIds, additionalRequest: request });
     setBasket((prev) => {
       const existing = prev.find(
         (item) =>
           item.dishId === dish.id &&
           (item.servingOptionId ?? null) === optionId &&
-          (item.removedIngredientIds ?? []).join(',') === removedKey
+          basketLineKey(item) === removedKey
       );
       if (existing) {
         return prev.map((item) =>
           item.dishId === dish.id &&
           (item.servingOptionId ?? null) === optionId &&
-          (item.removedIngredientIds ?? []).join(',') === removedKey
+          basketLineKey(item) === removedKey
             ? { ...item, quantity: item.quantity + quantity }
             : item
         );
@@ -503,6 +506,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           servingLabel: optionLabel,
           removedIngredientIds: removedIds,
           removedIngredientLabels: removedLabels,
+          additionalRequest: request,
         },
       ];
     });
@@ -531,10 +535,10 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   function handleUpdateBasketQuantity(dishId: string, servingOptionId: string | null, quantity: number, removedKey?: string) {
     setBasket((prev) => {
       if (quantity <= 0) {
-        return prev.filter((item) => !(item.dishId === dishId && (item.servingOptionId ?? null) === servingOptionId && (item.removedIngredientIds ?? []).join(',') === (removedKey ?? '')));
+        return prev.filter((item) => !(item.dishId === dishId && (item.servingOptionId ?? null) === servingOptionId && basketLineKey(item) === (removedKey ?? '')));
       }
       return prev.map((item) =>
-        item.dishId === dishId && (item.servingOptionId ?? null) === servingOptionId && (item.removedIngredientIds ?? []).join(',') === (removedKey ?? '')
+        item.dishId === dishId && (item.servingOptionId ?? null) === servingOptionId && basketLineKey(item) === (removedKey ?? '')
           ? { ...item, quantity }
           : item
       );
@@ -547,7 +551,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         (item) =>
           item.dishId === dishId &&
           (item.servingOptionId ?? null) === currentOptionId &&
-          (item.removedIngredientIds ?? []).join(',') === removedKey
+          basketLineKey(item) === removedKey
       );
       if (!source || source.servingOptionId === option.id) return prev;
       const target = prev.find(
@@ -555,7 +559,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           item !== source &&
           item.dishId === dishId &&
           (item.servingOptionId ?? null) === option.id &&
-          (item.removedIngredientIds ?? []).join(',') === removedKey
+          basketLineKey(item) === removedKey
       );
       if (target) {
         return prev
@@ -569,7 +573,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   }
 
   function handleRemoveFromBasket(dishId: string, servingOptionId: string | null, removedKey?: string) {
-    setBasket((prev) => prev.filter((item) => !(item.dishId === dishId && (item.servingOptionId ?? null) === servingOptionId && (item.removedIngredientIds ?? []).join(',') === (removedKey ?? ''))));
+    setBasket((prev) => prev.filter((item) => !(item.dishId === dishId && (item.servingOptionId ?? null) === servingOptionId && basketLineKey(item) === (removedKey ?? ''))));
   }
 
   async function handleCheckoutConfirmed(result: ConfirmedOrder) {

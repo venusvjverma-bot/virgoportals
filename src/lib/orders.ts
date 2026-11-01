@@ -31,6 +31,7 @@ interface OrderItemRow {
   line_total_minor: number;
   serving_label: string | null;
   removed_ingredients: string | null;
+  additional_request: string | null;
 }
 
 function mapOrderItem(row: OrderItemRow): OrderItem {
@@ -44,6 +45,7 @@ function mapOrderItem(row: OrderItemRow): OrderItem {
     lineTotalMinor: row.line_total_minor,
     servingLabel: row.serving_label ?? null,
     removedIngredients: row.removed_ingredients ?? '',
+    additionalRequest: row.additional_request ?? '',
   };
 }
 
@@ -72,7 +74,7 @@ function mapOrder(row: OrderRow, items: OrderItem[]): Order {
 const ORDER_COLUMNS =
   'id, order_number, restaurant_id, department_id, event_id, resource_type, resource_name, restaurant_name, status, payment_status, total_minor, currency, item_count, mobile_number, created_at, status_updated_at';
 
-const ITEM_COLUMNS = 'id, order_id, dish_id, name, price_minor, quantity, line_total_minor, serving_label, removed_ingredients';
+const ITEM_COLUMNS = 'id, order_id, dish_id, name, price_minor, quantity, line_total_minor, serving_label, removed_ingredients, additional_request';
 
 export async function listOrders(restaurantId: string): Promise<Order[]> {
   const { data, error } = await supabase
@@ -142,7 +144,7 @@ export async function createOrder(params: {
   restaurantId: string;
   resourceId?: string;
   resourceType?: string;
-  items: { dishId: string; quantity: number; servingOptionId?: string | null; removedIngredientIds?: string[] }[];
+  items: { dishId: string; quantity: number; servingOptionId?: string | null; removedIngredientIds?: string[]; additionalRequest?: string | null }[];
   mobileNumber: string;
 }): Promise<CreateOrderResult> {
   return callFunction<CreateOrderResult>('visitor-orders', {
@@ -151,7 +153,7 @@ export async function createOrder(params: {
     restaurantId: params.restaurantId,
     resourceId: params.resourceId,
     resourceType: params.resourceType,
-    items: params.items.map((i) => ({ dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [] })),
+    items: params.items.map((i) => ({ dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? null })),
     mobileNumber: params.mobileNumber,
   });
 }

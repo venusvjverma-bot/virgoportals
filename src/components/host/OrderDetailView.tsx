@@ -197,6 +197,11 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
                     {item.removedIngredients}
                   </p>
                 ) : null}
+                {item.additionalRequest ? (
+                  <p className="mt-0.5 whitespace-pre-line text-xs font-medium text-olive-800">
+                    Request: {item.additionalRequest}
+                  </p>
+                ) : null}
               </div>
               <span className="shrink-0 text-sm font-semibold text-olive-700">
                 {formatMinor(item.lineTotalMinor, order.currency)}

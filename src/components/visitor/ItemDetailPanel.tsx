@@ -11,7 +11,14 @@ interface ItemDetailPanelProps {
   dish: Dish;
   currency: string;
   onClose: () => void;
-  onAddToBasket: (dish: Dish, quantity: number, servingOption?: DishServingOption | null, removedIngredientIds?: string[], removedIngredientLabels?: string[]) => void;
+  onAddToBasket: (dish: Dish, quantity: number, servingOption?: DishServingOption | null, removedIngredientIds?: string[], removedIngredientLabels?: string[], additionalRequest?: string) => void;
+}
+
+const MAX_REQUEST_WORDS = 50;
+const MAX_REQUEST_CHARS = 500;
+
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
 function defaultServingOptionIndex(options: DishServingOption[]): number {
@@ -37,6 +44,9 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket }: Item
 
   const activeRemovableIngredients = (dish.removableIngredients ?? []).filter((i) => i.isActive !== false);
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [additionalRequest, setAdditionalRequest] = useState('');
+  const requestWords = countWords(additionalRequest);
 
   const selectedOption = hasOptions
     ? activeOptions.find((o) => o.id === selectedOptionId) ?? activeOptions[defaultIdx] ?? null
@@ -74,7 +84,7 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket }: Item
     const selectedLabels = activeRemovableIngredients
       .filter((i) => removedIds.has(i.id))
       .map((i) => i.label);
-    onAddToBasket(dish, quantity, selectedOption ?? null, selectedIds, selectedLabels);
+    onAddToBasket(dish, quantity, selectedOption ?? null, selectedIds, selectedLabels, additionalRequest.trim());
     setAdded(true);
     window.setTimeout(() => setAdded(false), 2000);
   }
@@ -252,6 +262,62 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket }: Item
                 </div>
               </div>
             ) : null}
+
+            {/* ─── Additional request ─── */}
+            <div className="mt-5">
+              {requestOpen ? (
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <label htmlFor="additional-request" className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                      Additional request
+                    </label>
+                    <span
+                      aria-live="polite"
+                      className={cn(
+                        'text-xs font-medium tabular-nums',
+                        requestWords >= MAX_REQUEST_WORDS ? 'text-warning-700' : 'text-ink-faint'
+                      )}
+                    >
+                      {requestWords}/{MAX_REQUEST_WORDS} words
+                    </span>
+                  </div>
+                  <textarea
+                    id="additional-request"
+                    rows={2}
+                    value={additionalRequest}
+                    maxLength={MAX_REQUEST_CHARS}
+                    placeholder="For example: extra sauce on the side"
+                    onChange={(event) => {
+                      const next = event.target.value;
+                      if (countWords(next) <= MAX_REQUEST_WORDS) setAdditionalRequest(next);
+                    }}
+                    className="mt-2 w-full resize-none rounded-xl border-0 bg-white px-4 py-3 text-sm text-ink shadow-soft ring-1 ring-inset ring-cream-300 transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500"
+                  />
+                  <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+                    Note: Additional requests are subject to kitchen preparation standards and cannot be guaranteed. 😊
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdditionalRequest('');
+                      setRequestOpen(false);
+                    }}
+                    className="mt-2 text-xs font-semibold text-error-600 underline-offset-2 transition-colors duration-200 hover:underline"
+                  >
+                    Remove request
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setRequestOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-xs font-semibold text-olive-700 ring-1 ring-olive-300 transition-all duration-200 hover:bg-olive-50"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Additional Request
+                </button>
+              )}
+            </div>
 
             {/* ─── Ordering controls ─── */}
             <div className="mt-6 border-t border-cream-200 pt-5">

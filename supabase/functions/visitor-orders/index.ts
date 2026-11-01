@@ -11,7 +11,11 @@ interface IncomingItem {
   quantity: number;
   servingOptionId?: string | null;
   removedIngredientIds?: string[];
+  additionalRequest?: string;
 }
+
+const MAX_REQUEST_WORDS = 50;
+const MAX_REQUEST_CHARS = 500;
 
 interface OrderPayload {
   action: 'create' | 'status';
@@ -302,6 +306,10 @@ Deno.serve(async (req: Request) => {
         price_minor: number;
         quantity: number;
         line_total_minor: number;
+        serving_option_id: string | null;
+        serving_label: string | null;
+        removed_ingredients: string;
+        additional_request: string;
       }[] = [];
 
       for (const item of items) {
@@ -314,6 +322,7 @@ Deno.serve(async (req: Request) => {
         let servingLabel: string | null = null;
         let servingOptionId: string | null = null;
         let removedIngredientsText = '';
+        let additionalRequest = '';
 
         if (item.servingOptionId) {
           const opt = optionMap.get(item.servingOptionId);
@@ -353,6 +362,16 @@ Deno.serve(async (req: Request) => {
           removedIngredientsText = validatedLabels.join(', ');
         }
 
+        if (item.additionalRequest !== undefined && item.additionalRequest !== null) {
+          if (typeof item.additionalRequest !== 'string') {
+            return json({ error: 'Invalid request for an item.' }, 400);
+          }
+          additionalRequest = item.additionalRequest.trim();
+          if (additionalRequest.length > MAX_REQUEST_CHARS || additionalRequest.split(/\s+/).filter(Boolean).length > MAX_REQUEST_WORDS) {
+            return json({ error: `The request for "${dish.name}" can be at most ${MAX_REQUEST_WORDS} words.` }, 400);
+          }
+        }
+
         if (priceMinor === null) {
           return json({ error: `Could not determine the price for "${dish.name}".` }, 400);
         }
@@ -368,6 +387,7 @@ Deno.serve(async (req: Request) => {
           serving_option_id: servingOptionId,
           serving_label: servingLabel,
           removed_ingredients: removedIngredientsText,
+          additional_request: additionalRequest,
         });
       }
 
@@ -463,6 +483,7 @@ Deno.serve(async (req: Request) => {
         serving_option_id: i.serving_option_id ?? null,
         serving_label: i.serving_label ?? null,
         removed_ingredients: i.removed_ingredients,
+        additional_request: i.additional_request,
       }));
 
       const { error: itemsError } = await supabase

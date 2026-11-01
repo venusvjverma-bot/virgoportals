@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, Check, Loader2, AlertCircle, Search, ChevronDown } from 'lucide-react';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { cn } from '@/lib/cn';
+import { basketLineKey } from '@/lib/basketLine';
 import { createOrder } from '@/lib/orders';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
 import { Notice } from '@/components/ui/Notice';
@@ -185,7 +186,7 @@ export function CheckoutView({
         restaurantId,
         resourceId,
         resourceType: resourceType ?? 'restaurant',
-        items: items.map((i) => ({ dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [] })),
+        items: items.map((i) => ({ dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? '' })),
         mobileNumber: normalizedMobile,
       });
       sessionStorage.removeItem('vp_checkout_key');
@@ -248,7 +249,7 @@ export function CheckoutView({
             </div>
             <ul className="divide-y divide-cream-200">
               {items.map((item) => (
-                <li key={`${item.dishId}-${item.servingOptionId ?? ""}-${(item.removedIngredientIds ?? []).join(",")}`} className="flex items-center gap-3 px-4 py-3">
+                <li key={`${item.dishId}-${item.servingOptionId ?? ""}-${basketLineKey(item)}`} className="flex items-center gap-3 px-4 py-3">
                   {item.imageUrl ? (
                     <img
                       src={item.imageUrl}
@@ -264,6 +265,11 @@ export function CheckoutView({
                     {item.removedIngredientLabels && item.removedIngredientLabels.length > 0 ? (
                       <p className="mt-0.5 text-xs font-medium text-ink-faint">
                         {item.removedIngredientLabels.map((l) => `No ${l}`).join(' · ')}
+                      </p>
+                    ) : null}
+                    {item.additionalRequest ? (
+                      <p className="mt-0.5 text-xs text-ink-muted">
+                        <span className="font-medium text-ink">Request:</span> {item.additionalRequest}
                       </p>
                     ) : null}
                   </div>

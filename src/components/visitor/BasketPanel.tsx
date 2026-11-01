@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Minus, Plus, ShoppingBag, Trash2, X, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { basketLineKey } from '@/lib/basketLine';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
 import type { AddOnOption, BasketItem, DishServingOption } from '@/types';
 
@@ -110,7 +111,7 @@ export function BasketPanel({
           ) : (
             <ul className="divide-y divide-cream-200">
               {items.map((item) => {
-                const removedKey = (item.removedIngredientIds ?? []).join(',');
+                const removedKey = basketLineKey(item);
                 const lineKey = `${item.dishId}-${item.servingOptionId ?? ''}-${removedKey}`;
                 const sizeOptions = (servingOptionsByDish[item.dishId] ?? []).filter((o) => o.isActive !== false);
                 const isEditingSize = editingKey === lineKey;
@@ -136,6 +137,11 @@ export function BasketPanel({
                     {item.removedIngredientLabels && item.removedIngredientLabels.length > 0 ? (
                       <p className="mt-0.5 text-xs font-medium text-ink-faint">
                         {item.removedIngredientLabels.map((l) => `No ${l}`).join(' · ')}
+                      </p>
+                    ) : null}
+                    {item.additionalRequest ? (
+                      <p className="mt-0.5 text-xs text-ink-muted">
+                        <span className="font-medium text-ink">Request:</span> {item.additionalRequest}
                       </p>
                     ) : null}
                     {sizeOptions.length > 1 ? (
@@ -180,7 +186,7 @@ export function BasketPanel({
                     <div className="mt-2 flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => onUpdateQuantity(item.dishId, item.servingOptionId ?? null, Math.max(0, item.quantity - 1), (item.removedIngredientIds ?? []).join(','))}
+                        onClick={() => onUpdateQuantity(item.dishId, item.servingOptionId ?? null, Math.max(0, item.quantity - 1), basketLineKey(item))}
                         aria-label={`Decrease ${item.name}`}
                         className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-ink shadow-soft ring-1 ring-cream-300 transition-all duration-200 hover:ring-olive-300"
                       >
@@ -191,7 +197,7 @@ export function BasketPanel({
                       </span>
                       <button
                         type="button"
-                        onClick={() => onUpdateQuantity(item.dishId, item.servingOptionId ?? null, Math.min(99, item.quantity + 1), (item.removedIngredientIds ?? []).join(','))}
+                        onClick={() => onUpdateQuantity(item.dishId, item.servingOptionId ?? null, Math.min(99, item.quantity + 1), basketLineKey(item))}
                         aria-label={`Increase ${item.name}`}
                         className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-ink shadow-soft ring-1 ring-cream-300 transition-all duration-200 hover:ring-olive-300"
                       >
@@ -199,7 +205,7 @@ export function BasketPanel({
                       </button>
                       <button
                         type="button"
-                        onClick={() => onRemove(item.dishId, item.servingOptionId ?? null, (item.removedIngredientIds ?? []).join(','))}
+                        onClick={() => onRemove(item.dishId, item.servingOptionId ?? null, basketLineKey(item))}
                         aria-label={`Remove ${item.name}`}
                         className="ml-auto flex h-7 w-7 items-center justify-center rounded-full text-error-500 transition-all duration-200 hover:bg-error-50"
                       >

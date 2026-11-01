@@ -177,6 +177,7 @@ export interface OrderItem {
   lineTotalMinor: number;
   servingLabel: string | null;
   removedIngredients: string;
+  additionalRequest: string;
 }
 
 export interface Order {
@@ -210,6 +211,7 @@ export interface BasketItem {
   servingLabel?: string | null;
   removedIngredientIds?: string[];
   removedIngredientLabels?: string[];
+  additionalRequest?: string | null;
 }
 
 export interface AddOnOption {
