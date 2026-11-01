@@ -335,20 +335,30 @@ function mapServingOption(row: ServingOptionRow): DishServingOption {
   };
 }
 
-async function fillServingOptions(dishes: Dish[]): Promise<void> {
-  if (dishes.length === 0) return;
-  const dishIds = dishes.map((d) => d.id);
+export async function listServingOptionsByDish(dishIds: string[]): Promise<Map<string, DishServingOption[]>> {
+  const optionsByDish = new Map<string, DishServingOption[]>();
+  if (dishIds.length === 0) return optionsByDish;
   const { data, error } = await supabase
     .from('dish_serving_options')
     .select(SERVING_OPTION_COLUMNS)
     .in('dish_id', dishIds)
     .order('sort_order', { ascending: true });
-  if (error) return;
-  const optionsByDish = new Map<string, DishServingOption[]>();
+  if (error) throw error;
   for (const row of (data ?? []) as ServingOptionRow[]) {
     const list = optionsByDish.get(row.dish_id) ?? [];
     list.push(mapServingOption(row));
     optionsByDish.set(row.dish_id, list);
+  }
+  return optionsByDish;
+}
+
+async function fillServingOptions(dishes: Dish[]): Promise<void> {
+  if (dishes.length === 0) return;
+  let optionsByDish: Map<string, DishServingOption[]>;
+  try {
+    optionsByDish = await listServingOptionsByDish(dishes.map((d) => d.id));
+  } catch {
+    return;
   }
   for (const dish of dishes) {
     dish.servingOptions = optionsByDish.get(dish.id) ?? [];

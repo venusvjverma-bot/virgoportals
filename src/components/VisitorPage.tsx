@@ -7,7 +7,7 @@ import { BasketPanel } from '@/components/visitor/BasketPanel';
 import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/CheckoutView';
 import { OrderConfirmation } from '@/components/visitor/OrderConfirmation';
 import { callFunction } from '@/lib/functions';
-import { getPublicPortal, getPublicResource, type PublicPortal } from '@/lib/portal';
+import { getPublicPortal, getPublicResource, listServingOptionsByDish, type PublicPortal } from '@/lib/portal';
 import { themeAssetUrl, mascotUrl } from '@/lib/themeAssets';
 import {
   loadChatHistory,
@@ -22,7 +22,7 @@ import {
 import { createOrder } from '@/lib/orders';
 import { cn } from '@/lib/cn';
 import { formatPriceInput, normalizeCurrency } from '@/lib/currency';
-import type { BasketItem, Dish, ResourceType } from '@/types';
+import type { BasketItem, Dish, DishServingOption, ResourceType } from '@/types';
 
 interface VisitorPageProps {
   portalId?: string;
@@ -96,6 +96,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   const [showSelector, setShowSelector] = useState(false);
   const [backgroundFailed, setBackgroundFailed] = useState(false);
   const [basket, setBasket] = useState<BasketItem[]>([]);
+  const [basketServingOptions, setBasketServingOptions] = useState<Record<string, DishServingOption[]>>({});
   const [overlay, setOverlay] = useState<VisitorOverlay>(null);
   const [confirmedOrder, setConfirmedOrder] = useState<ConfirmedOrder | null>(null);
   const [basketBadge, setBasketBadge] = useState(false);
@@ -212,6 +213,27 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     saveBasket(scopeRef.current, basket);
     if (basket.length > 0) setBasketBadge(true);
   }, [basket]);
+
+  // ── Load host serving options for basket dishes (drives the Edit size control) ──
+  const basketDishKey = Array.from(new Set(basket.map((item) => item.dishId))).sort().join(',');
+  useEffect(() => {
+    const dishIds = basketDishKey ? basketDishKey.split(',') : [];
+    if (dishIds.length === 0) {
+      setBasketServingOptions({});
+      return;
+    }
+    let active = true;
+    listServingOptionsByDish(dishIds)
+      .then((map) => {
+        if (active) setBasketServingOptions(Object.fromEntries(map));
+      })
+      .catch(() => {
+        if (active) setBasketServingOptions({});
+      });
+    return () => {
+      active = false;
+    };
+  }, [basketDishKey]);
 
   // ── Auto-scroll ──
   useEffect(() => {
@@ -478,6 +500,33 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     });
   }
 
+  function handleChangeServingSize(dishId: string, currentOptionId: string | null, removedKey: string, option: DishServingOption) {
+    setBasket((prev) => {
+      const source = prev.find(
+        (item) =>
+          item.dishId === dishId &&
+          (item.servingOptionId ?? null) === currentOptionId &&
+          (item.removedIngredientIds ?? []).join(',') === removedKey
+      );
+      if (!source || source.servingOptionId === option.id) return prev;
+      const target = prev.find(
+        (item) =>
+          item !== source &&
+          item.dishId === dishId &&
+          (item.servingOptionId ?? null) === option.id &&
+          (item.removedIngredientIds ?? []).join(',') === removedKey
+      );
+      if (target) {
+        return prev
+          .filter((item) => item !== source)
+          .map((item) => (item === target ? { ...item, quantity: Math.min(99, item.quantity + source.quantity) } : item));
+      }
+      return prev.map((item) =>
+        item === source ? { ...item, servingOptionId: option.id, servingLabel: option.label, price: option.price } : item
+      );
+    });
+  }
+
   function handleRemoveFromBasket(dishId: string, servingOptionId: string | null, removedKey?: string) {
     setBasket((prev) => prev.filter((item) => !(item.dishId === dishId && (item.servingOptionId ?? null) === servingOptionId && (item.removedIngredientIds ?? []).join(',') === (removedKey ?? ''))));
   }
@@ -711,8 +760,10 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           currency={view.currency}
           onClose={() => setOverlay(null)}
           onCheckout={() => setOverlay('checkout')}
+          servingOptionsByDish={basketServingOptions}
           onUpdateQuantity={handleUpdateBasketQuantity}
           onRemove={handleRemoveFromBasket}
+          onChangeServingSize={handleChangeServingSize}
         />
       ) : null}
 

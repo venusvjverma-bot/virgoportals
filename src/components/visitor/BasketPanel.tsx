@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Minus, Plus, ShoppingBag, Trash2, X, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
-import type { BasketItem } from '@/types';
+import type { BasketItem, DishServingOption } from '@/types';
 
 interface BasketPanelProps {
   items: BasketItem[];
@@ -13,6 +13,8 @@ interface BasketPanelProps {
   onCheckout: () => void;
   onUpdateQuantity: (dishId: string, servingOptionId: string | null, quantity: number, removedKey?: string) => void;
   onRemove: (dishId: string, servingOptionId: string | null, removedKey?: string) => void;
+  servingOptionsByDish: Record<string, DishServingOption[]>;
+  onChangeServingSize: (dishId: string, servingOptionId: string | null, removedKey: string, option: DishServingOption) => void;
 }
 
 export function BasketPanel({
@@ -24,8 +26,11 @@ export function BasketPanel({
   onCheckout,
   onUpdateQuantity,
   onRemove,
+  servingOptionsByDish,
+  onChangeServingSize,
 }: BasketPanelProps) {
   const [closing, setClosing] = useState(false);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
 
   function requestClose() {
     setClosing((already) => {
@@ -93,8 +98,13 @@ export function BasketPanel({
             </div>
           ) : (
             <ul className="divide-y divide-cream-200">
-              {items.map((item) => (
-                <li key={`${item.dishId}-${item.servingOptionId ?? ''}-${(item.removedIngredientIds ?? []).join(',')}`} className="flex gap-3 px-5 py-4 sm:px-6">
+              {items.map((item) => {
+                const removedKey = (item.removedIngredientIds ?? []).join(',');
+                const lineKey = `${item.dishId}-${item.servingOptionId ?? ''}-${removedKey}`;
+                const sizeOptions = (servingOptionsByDish[item.dishId] ?? []).filter((o) => o.isActive !== false);
+                const isEditingSize = editingKey === lineKey;
+                return (
+                <li key={lineKey} className="flex gap-3 px-5 py-4 sm:px-6">
                   {item.imageUrl ? (
                     <img
                       src={item.imageUrl}
@@ -116,6 +126,45 @@ export function BasketPanel({
                       <p className="mt-0.5 text-xs font-medium text-ink-faint">
                         {item.removedIngredientLabels.map((l) => `No ${l}`).join(' · ')}
                       </p>
+                    ) : null}
+                    {sizeOptions.length > 1 ? (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingKey(isEditingSize ? null : lineKey)}
+                          aria-expanded={isEditingSize}
+                          className="text-xs font-semibold text-olive-700 underline-offset-2 transition-colors duration-200 hover:text-olive-800 hover:underline"
+                        >
+                          {isEditingSize ? 'Cancel' : 'Edit size'}
+                        </button>
+                        {isEditingSize ? (
+                          <div role="radiogroup" aria-label={`Sizes for ${item.name}`} className="mt-2 flex flex-wrap gap-2">
+                            {sizeOptions.map((option) => {
+                              const isCurrent = option.id === item.servingOptionId;
+                              return (
+                                <button
+                                  key={option.id}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={isCurrent}
+                                  onClick={() => {
+                                    setEditingKey(null);
+                                    if (!isCurrent) onChangeServingSize(item.dishId, item.servingOptionId ?? null, removedKey, option);
+                                  }}
+                                  className={cn(
+                                    'rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition-all duration-200',
+                                    isCurrent
+                                      ? 'bg-olive-700 text-white ring-olive-700'
+                                      : 'bg-white text-ink ring-cream-300 hover:ring-olive-400'
+                                  )}
+                                >
+                                  {option.label} · {formatPriceInput(option.price, currency)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
                     ) : null}
                     <div className="mt-2 flex items-center gap-2">
                       <button
@@ -153,7 +202,8 @@ export function BasketPanel({
                     </span>
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>
