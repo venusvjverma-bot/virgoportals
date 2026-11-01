@@ -908,7 +908,7 @@ function DishResult({ dish, currency, onOpen }: { dish: Dish; currency: string; 
       aria-label={`View details for ${dish.name || 'this item'}`}
       className="flex w-full gap-3 overflow-hidden rounded-2xl bg-white p-3 text-left shadow-lift ring-1 ring-olive-300 transition-all duration-200 hover:shadow-lift hover:ring-olive-500 focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-[0.99]"
     >
-      <div className="flex w-24 shrink-0 flex-col">
+      <div className="flex w-max shrink-0 flex-col">
         {dish.imageUrl ? (
           <img
             src={dish.imageUrl}
@@ -921,15 +921,21 @@ function DishResult({ dish, currency, onOpen }: { dish: Dish; currency: string; 
           </div>
         )}
         {dish.price ? (
-          <span className="mt-1.5 text-center text-sm font-medium leading-snug text-olive-700">
-            {(() => {
-              const activeOptions = (dish.servingOptions ?? []).filter((o) => o.isActive !== false);
-              if (activeOptions.length > 1) {
-                return activeOptions.map((o) => formatPriceInput(o.price, cur)).join(' · ');
-              }
-              return formatPriceInput(dish.price, cur);
-            })()}
-          </span>
+          (() => {
+            const activeOptions = (dish.servingOptions ?? []).filter((o) => o.isActive !== false);
+            if (activeOptions.length > 1) {
+              return (
+                <span className="mt-1.5 whitespace-nowrap text-xs font-medium text-olive-700">
+                  {activeOptions.map((o) => formatPriceInput(o.price, cur)).join(' · ')}
+                </span>
+              );
+            }
+            return (
+              <span className="mt-1.5 whitespace-nowrap text-center text-sm font-medium text-olive-700">
+                {formatPriceInput(dish.price, cur)}
+              </span>
+            );
+          })()
         ) : null}
       </div>
       <div className="min-w-0 flex-1">
