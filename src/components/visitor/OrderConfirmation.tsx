@@ -102,11 +102,18 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
       y += 6;
     }
 
-    // Total
+    // Tip and total
     y += 2;
     doc.setDrawColor(200, 200, 200);
     doc.line(margin, y, margin + contentW, y);
     y += 6;
+    if (order.tipMinor > 0) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text('Tip', margin, y);
+      doc.text(formatMinor(order.tipMinor, order.currency), margin + contentW - 2, y, { align: 'right' });
+      y += 8;
+    }
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.text('Total', margin, y);
@@ -283,6 +290,12 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
                 </li>
               ))}
             </ul>
+            {order.tipMinor > 0 ? (
+              <div className="flex items-center justify-between border-t border-cream-200 px-5 py-3">
+                <span className="text-sm text-ink-soft">Tip</span>
+                <span className="text-sm font-medium text-ink">{formatMinor(order.tipMinor, order.currency)}</span>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between border-t border-cream-200 px-5 py-3">
               <span className="text-sm font-semibold text-ink">Total</span>
               <span className="font-display text-lg font-semibold text-ink">
