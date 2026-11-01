@@ -901,56 +901,53 @@ function MessageBubble({ message, currency, onOpen }: { message: ChatMessage; cu
 
 function DishResult({ dish, currency, onOpen }: { dish: Dish; currency: string; onOpen: () => void }) {
   const cur = normalizeCurrency(currency);
+  const activeOptions = (dish.servingOptions ?? []).filter((o) => o.isActive !== false);
+  const hasMultiplePrices = activeOptions.length > 1;
   return (
     <button
       type="button"
       onClick={onOpen}
       aria-label={`View details for ${dish.name || 'this item'}`}
-      className="flex w-full gap-3 overflow-hidden rounded-2xl bg-white p-3 text-left shadow-lift ring-1 ring-olive-300 transition-all duration-200 hover:shadow-lift hover:ring-olive-500 focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-[0.99]"
+      className="flex w-full flex-col gap-2 overflow-hidden rounded-2xl bg-white p-3 text-left shadow-lift ring-1 ring-olive-300 transition-all duration-200 hover:shadow-lift hover:ring-olive-500 focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-[0.99]"
     >
-      <div className="flex w-max shrink-0 flex-col">
-        {dish.imageUrl ? (
-          <img
-            src={dish.imageUrl}
-            alt={dish.name}
-            className="h-24 w-24 shrink-0 rounded-xl object-cover ring-1 ring-cream-200"
-          />
-        ) : (
-          <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-cream-100 text-[11px] text-ink-faint ring-1 ring-inset ring-cream-200">
-            No image
-          </div>
-        )}
-        {dish.price ? (
-          (() => {
-            const activeOptions = (dish.servingOptions ?? []).filter((o) => o.isActive !== false);
-            if (activeOptions.length > 1) {
-              return (
-                <span className="mt-1.5 whitespace-nowrap text-xs font-medium text-olive-700">
-                  {activeOptions.map((o) => formatPriceInput(o.price, cur)).join(' · ')}
-                </span>
-              );
-            }
-            return (
-              <span className="mt-1.5 whitespace-nowrap text-center text-sm font-medium text-olive-700">
-                {formatPriceInput(dish.price, cur)}
-              </span>
-            );
-          })()
-        ) : null}
+      <div className="flex gap-3">
+        <div className="flex w-24 shrink-0 flex-col">
+          {dish.imageUrl ? (
+            <img
+              src={dish.imageUrl}
+              alt={dish.name}
+              className="h-24 w-24 shrink-0 rounded-xl object-cover ring-1 ring-cream-200"
+            />
+          ) : (
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-cream-100 text-[11px] text-ink-faint ring-1 ring-inset ring-cream-200">
+              No image
+            </div>
+          )}
+          {dish.price && !hasMultiplePrices ? (
+            <span className="mt-1.5 text-center text-sm font-medium text-olive-700">
+              {formatPriceInput(dish.price, cur)}
+            </span>
+          ) : null}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-display text-base font-semibold text-ink">{dish.name}</h3>
+          {dish.description ? (
+            <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-ink-soft">
+              {dish.description}
+            </p>
+          ) : null}
+          {dish.allergy ? (
+            <p className="mt-1.5 text-xs font-medium text-warning-700">
+              Allergy: {dish.allergy}
+            </p>
+          ) : null}
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <h3 className="font-display text-base font-semibold text-ink">{dish.name}</h3>
-        {dish.description ? (
-          <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-ink-soft">
-            {dish.description}
-          </p>
-        ) : null}
-        {dish.allergy ? (
-          <p className="mt-1.5 text-xs font-medium text-warning-700">
-            Allergy: {dish.allergy}
-          </p>
-        ) : null}
-      </div>
+      {hasMultiplePrices ? (
+        <p className="text-xs font-medium leading-relaxed text-olive-700">
+          {activeOptions.map((o) => formatPriceInput(o.price, cur)).join(' · ')}
+        </p>
+      ) : null}
     </button>
   );
 }
