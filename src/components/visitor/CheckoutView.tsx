@@ -313,6 +313,12 @@ export function CheckoutView({
                 </li>
               ))}
             </ul>
+            {tipMinor > 0 ? (
+              <div className="flex items-center justify-between border-t border-cream-200 px-4 py-3">
+                <span className="text-sm text-ink-soft">Tip</span>
+                <span className="text-sm font-medium text-ink">{formatMinor(tipMinor, currency)}</span>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between border-t border-cream-200 px-4 py-3">
               <span className="text-sm font-semibold text-ink">Total</span>
               <span className="font-display text-lg font-semibold text-ink">
