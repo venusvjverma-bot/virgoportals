@@ -1,10 +1,39 @@
 import type { BasketItem, ConfirmedOrderRef, Dish } from '@/types';
 
+type StoredDish = Partial<Dish> & { dishId?: string };
+
 interface StoredMessage {
   id: string;
   role: 'visitor' | 'bot';
   text: string;
-  dishes: { dishId: string; name: string; price: string; imageUrl: string | null; quantity: number }[];
+  dishes: StoredDish[];
+}
+
+function textOr(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function restoreDish(raw: StoredDish): Dish {
+  return {
+    id: textOr(raw.id, textOr(raw.dishId)),
+    restaurantId: textOr(raw.restaurantId),
+    name: textOr(raw.name),
+    description: textOr(raw.description),
+    ingredients: textOr(raw.ingredients),
+    allergy: textOr(raw.allergy),
+    price: textOr(raw.price),
+    imageUrl: typeof raw.imageUrl === 'string' ? raw.imageUrl : null,
+    sortOrder: typeof raw.sortOrder === 'number' ? raw.sortOrder : 0,
+    category: textOr(raw.category),
+    section: textOr(raw.section),
+    serving: textOr(raw.serving),
+    abv: textOr(raw.abv),
+    available: typeof raw.available === 'boolean' ? raw.available : true,
+    departmentId: typeof raw.departmentId === 'string' ? raw.departmentId : null,
+    eventId: typeof raw.eventId === 'string' ? raw.eventId : null,
+    servingOptions: Array.isArray(raw.servingOptions) ? raw.servingOptions : [],
+    removableIngredients: Array.isArray(raw.removableIngredients) ? raw.removableIngredients : [],
+  };
 }
 
 function scopeKey(restaurantId: string, resourceId?: string, resourceType?: string): string {
@@ -43,26 +72,7 @@ export function loadChatHistory(scope: string): { id: string; role: 'visitor' | 
     id: m.id,
     role: m.role,
     text: m.text,
-    dishes: (m.dishes ?? []).map((d) => ({
-      id: d.dishId ?? '',
-      restaurantId: '',
-      name: d.name ?? '',
-      description: '',
-      ingredients: '',
-      allergy: '',
-      price: d.price ?? '',
-      imageUrl: d.imageUrl ?? null,
-      sortOrder: 0,
-      category: '',
-      section: '',
-      serving: '',
-      abv: '',
-      available: true,
-      departmentId: null,
-      eventId: null,
-      servingOptions: [],
-      removableIngredients: [],
-    })),
+    dishes: (Array.isArray(m.dishes) ? m.dishes : []).map(restoreDish),
   }));
 }
 
@@ -71,13 +81,7 @@ export function saveChatHistory(scope: string, messages: { id: string; role: 'vi
     id: m.id,
     role: m.role,
     text: m.text,
-    dishes: m.dishes.map((d) => ({
-      dishId: d.id,
-      name: d.name,
-      price: d.price,
-      imageUrl: d.imageUrl,
-      quantity: 0,
-    })),
+    dishes: m.dishes,
   }));
   try {
     localStorage.setItem(chatKey(scope), JSON.stringify(stored));
