@@ -8,8 +8,11 @@ import {
   statusLabel,
   nextStatus,
   STATUS_FLOW,
+  groupOrdersByScope,
 } from '@/lib/orders';
-import type { Order, OrderStatus, RestaurantPortal } from '@/types';
+import { listDepartments } from '@/lib/departments';
+import { listEvents } from '@/lib/events';
+import type { Department, EventItem, Order, OrderStatus, RestaurantPortal } from '@/types';
 import { cn } from '@/lib/cn';
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
@@ -56,6 +59,8 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
   const [openedIds, setOpenedIds] = useState<Set<string>>(() => loadOpenedOrderIds(restaurant.id));
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
 
   const hasLoadedRef = useRef(false);
   const loadingRef = useRef(false);
@@ -93,6 +98,22 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([listDepartments(restaurant.id), listEvents(restaurant.id)])
+      .then(([nextDepartments, nextEvents]) => {
+        if (!active) return;
+        setDepartments(nextDepartments);
+        setEvents(nextEvents);
+      })
+      .catch(() => {
+        // Orders still display; their groups fall back to generic headings.
+      });
+    return () => {
+      active = false;
+    };
+  }, [restaurant.id]);
 
   const subscribeOrders = useCallback(() => {
     const gen = channelGenRef.current;
@@ -188,6 +209,8 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
     ? orders
     : orders.filter((o) => o.status === filter);
 
+  const groups = groupOrdersByScope(filtered, departments, events);
+
   const counts = {
     new: orders.filter((o) => o.status === 'new').length,
     inProgress: orders.filter((o) => ['accepted', 'preparing', 'ready'].includes(o.status)).length,
@@ -259,7 +282,7 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
       </div>
 
       {/* Order list */}
-      {filtered.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl bg-white py-16 shadow-soft ring-1 ring-cream-200">
           <ShoppingBag className="h-10 w-10 text-cream-300" />
           <p className="mt-3 text-sm text-ink-muted">No orders here yet.</p>
@@ -268,50 +291,62 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
           </p>
         </div>
       ) : (
-        <ul className="space-y-3">
-          {filtered.map((order) => {
-            const isOpened = openedIds.has(order.id);
-            return (
-              <li key={order.id}>
-                <button
-                  type="button"
-                  onClick={() => handleOpenOrder(order)}
-                  className={cn(
-                    'flex w-full items-center gap-4 rounded-2xl p-4 text-left shadow-soft ring-1 transition-all duration-200 hover:shadow-lift hover:ring-olive-200 active:scale-[0.99] sm:p-5',
-                    isOpened
-                      ? 'bg-white ring-cream-200'
-                      : 'bg-olive-50 ring-olive-200'
-                  )}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-display text-sm font-bold text-olive-700">
-                        {order.orderNumber}
-                      </span>
-                      <span
+        <div className="space-y-8">
+          {groups.map((group) => (
+            <section key={group.key} aria-label={group.title}>
+              <div className="mb-3 flex items-center justify-between gap-3 px-1">
+                <h3 className="font-display text-base font-semibold text-ink">{group.title}</h3>
+                <span className="text-xs font-medium text-ink-muted">
+                  {group.orders.length} {group.orders.length === 1 ? 'order' : 'orders'}
+                </span>
+              </div>
+              <ul className="space-y-3">
+                {group.orders.map((order) => {
+                  const isOpened = openedIds.has(order.id);
+                  return (
+                    <li key={order.id}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenOrder(order)}
                         className={cn(
-                          'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold capitalize',
-                          STATUS_COLORS[order.status]
+                          'flex w-full items-center gap-4 rounded-2xl p-4 text-left shadow-soft ring-1 transition-all duration-200 hover:shadow-lift hover:ring-olive-200 active:scale-[0.99] sm:p-5',
+                          isOpened
+                            ? 'bg-white ring-cream-200'
+                            : 'bg-olive-50 ring-olive-200'
                         )}
                       >
-                        {statusLabel(order.status)}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-ink-muted">
-                      {order.itemCount} {order.itemCount === 1 ? 'item' : 'items'}
-                      {' · '}
-                      {formatMinor(order.totalMinor, order.currency)}
-                    </p>
-                    <p className="mt-0.5 text-xs text-ink-faint">
-                      {new Date(order.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-5 w-5 shrink-0 text-ink-faint" />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-display text-sm font-bold text-olive-700">
+                              {order.orderNumber}
+                            </span>
+                            <span
+                              className={cn(
+                                'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold capitalize',
+                                STATUS_COLORS[order.status]
+                              )}
+                            >
+                              {statusLabel(order.status)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-ink-muted">
+                            {order.itemCount} {order.itemCount === 1 ? 'item' : 'items'}
+                            {' · '}
+                            {formatMinor(order.totalMinor, order.currency)}
+                          </p>
+                          <p className="mt-0.5 text-xs text-ink-faint">
+                            {new Date(order.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-5 w-5 shrink-0 text-ink-faint" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
     </div>
   );

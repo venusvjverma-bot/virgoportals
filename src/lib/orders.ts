@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { callFunction } from '@/lib/functions';
-import type { Order, OrderStatus, OrderItem, ResourceType } from '@/types';
+import type { Department, EventItem, Order, OrderStatus, OrderItem, ResourceType } from '@/types';
 
 interface OrderRow {
   id: string;
@@ -175,6 +175,50 @@ export function nextStatus(current: OrderStatus): OrderStatus | null {
   const idx = STATUS_FLOW.indexOf(current);
   if (idx < 0 || idx >= STATUS_FLOW.length - 1) return null;
   return STATUS_FLOW[idx + 1];
+}
+
+export interface OrderGroup {
+  key: string;
+  title: string;
+  orders: Order[];
+}
+
+const RESTAURANT_GROUP_KEY = 'restaurant';
+
+export function groupOrdersByScope(orders: Order[], departments: Department[], events: EventItem[]): OrderGroup[] {
+  const departmentNames = new Map(departments.map((d) => [d.id, d.name]));
+  const eventNames = new Map(events.map((e) => [e.id, e.name]));
+  const groups = new Map<string, OrderGroup>();
+
+  const ensureGroup = (key: string, title: string): OrderGroup => {
+    const existing = groups.get(key);
+    if (existing) return existing;
+    const group = { key, title, orders: [] };
+    groups.set(key, group);
+    return group;
+  };
+
+  const newestFirst = [...orders].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  for (const order of newestFirst) {
+    if (order.eventId) {
+      const title = eventNames.get(order.eventId) ?? 'Unknown event';
+      ensureGroup(`event:${order.eventId}`, title).orders.push(order);
+    } else if (order.departmentId) {
+      const title = departmentNames.get(order.departmentId) ?? 'Unknown department';
+      ensureGroup(`department:${order.departmentId}`, title).orders.push(order);
+    } else {
+      ensureGroup(RESTAURANT_GROUP_KEY, 'Restaurant').orders.push(order);
+    }
+  }
+
+  const orderedKeys = [
+    RESTAURANT_GROUP_KEY,
+    ...departments.map((d) => `department:${d.id}`),
+    ...events.map((e) => `event:${e.id}`),
+  ];
+  const known = orderedKeys.map((key) => groups.get(key)).filter((g): g is OrderGroup => Boolean(g));
+  const unknown = [...groups.values()].filter((g) => !orderedKeys.includes(g.key));
+  return [...known, ...unknown].filter((g) => g.orders.length > 0);
 }
 
 export function statusLabel(status: OrderStatus): string {
