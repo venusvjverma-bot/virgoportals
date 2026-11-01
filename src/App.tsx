@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AdminDashboard } from '@/components/admin/AdminDashboard';
 import { HostDashboard } from '@/components/host/HostDashboard';
@@ -36,6 +36,7 @@ function App() {
   const [loginNotice, setLoginNotice] = useState<string | null>(null);
   const [portalId] = useState<string | null>(() => readPortalIdFromUrl());
   const [resourceParams] = useState(() => readVisitorParamsFromUrl());
+  const signedOutRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -59,7 +60,7 @@ function App() {
     });
 
     const unsubscribe = onAuthChange((next) => {
-      if (!active) return;
+      if (!active || signedOutRef.current) return;
       setSession(next);
       setReady(true);
     });
@@ -111,6 +112,7 @@ function App() {
   }
 
   async function handleLogin(email: string, password: string) {
+    signedOutRef.current = false;
     try {
       await signIn(email, password);
       setLoginError(null);
@@ -121,6 +123,7 @@ function App() {
   }
 
   async function handleLogout() {
+    signedOutRef.current = true;
     setSession(null);
     setLoginError(null);
     setLoginNotice(null);
