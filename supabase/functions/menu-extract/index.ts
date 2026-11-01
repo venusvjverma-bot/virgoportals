@@ -119,34 +119,49 @@ function normalizeName(name: string): string {
 }
 
 /**
- * Groups extraction drafts that represent the same product offered in
- * multiple serving sizes. Two drafts are merged into a single dish ONLY when
- * their identity fields (name, section, category, description, ingredients,
- * allergy, abv) are equal after normalization and the ONLY differing fields
- * are `serving` and `price`. Any other difference (e.g. "Zero" vs regular,
- * different ingredients, different ABV) keeps them as separate products so
- * genuinely distinct items are never collapsed.
+ * Expands one line that lists several sizes with slashes, such as "25 cl / 50 cl"
+ * priced "SEK 74 / 114", into one draft per size. A line is only split when its
+ * size and price parts line up one to one and every size names a unit, so a
+ * fraction like "1/2 l" is left alone.
+ */
+function splitCombinedDrafts(drafts: DishDraft[]): DishDraft[] {
+  return drafts.flatMap((draft) => {
+    if (!draft.serving.includes('/') || !draft.price.includes('/')) return [draft];
+    const servings = draft.serving.split('/').map((part) => part.trim());
+    const prices = draft.price.split('/').map((part) => part.trim());
+    if (servings.length < 2 || servings.length !== prices.length) return [draft];
+    if (servings.some((part) => !/[a-z]/i.test(part)) || prices.some((part) => part.length === 0)) {
+      return [draft];
+    }
+    return servings.map((serving, index) => ({ ...draft, serving, price: prices[index] }));
+  });
+}
+
+/**
+ * Groups drafts that are the same product in several serving sizes. Drafts are
+ * matched on normalized name, section and category only, so differing wording
+ * in description or ingredients for one drink does not split its sizes. Names
+ * that differ ("Coca-Cola" vs "Coca-Cola Zero") never merge.
  *
- * The first draft in a group becomes the representative dish row; its
- * `serving` is cleared (sizes now live in dish_serving_options) and its
- * `price` is kept as the headline price. Subsequent members contribute
- * their serving/price as options, ordered by their original position.
+ * A draft with no serving size is never merged: there is no size to offer, so it
+ * stays a standalone dish with its own price and no size label is invented.
+ * The first sized draft becomes the representative dish row, its serving is
+ * cleared (sizes now live in dish_serving_options) and its price is kept as the
+ * headline price. Later members contribute their serving and price as options,
+ * in document order.
  */
 function groupDraftsByVariant(drafts: DishDraft[]): GroupedDraft[] {
   const groups: GroupedDraft[] = [];
   const keyToIndex = new Map<string, number>();
 
   for (const draft of drafts) {
-    const identityKey = [
-      normalizeName(draft.name),
-      draft.section,
-      draft.category,
-      draft.description.trim().toLowerCase(),
-      draft.ingredients.trim().toLowerCase(),
-      draft.allergy.trim().toLowerCase(),
-      draft.abv.trim().toLowerCase(),
-    ].join('\u0000');
+    const serving = draft.serving.trim();
+    if (serving.length === 0) {
+      groups.push({ draft, variants: [] });
+      continue;
+    }
 
+    const identityKey = [normalizeName(draft.name), draft.section, draft.category].join('\u0000');
     const existingIndex = keyToIndex.get(identityKey);
     if (existingIndex === undefined) {
       keyToIndex.set(identityKey, groups.length);
@@ -155,20 +170,11 @@ function groupDraftsByVariant(drafts: DishDraft[]): GroupedDraft[] {
     }
 
     const group = groups[existingIndex];
-    const serving = draft.serving.trim();
-    const price = draft.price.trim();
-    // A member with no serving size carries no size information; keep it as a
-    // standalone dish rather than merging a price-only duplicate.
-    if (serving.length === 0) {
-      groups.push({ draft, variants: [] });
-      continue;
-    }
-    // Avoid duplicate serving labels within the same group.
     if (group.variants.some((v) => v.serving === serving) || serving === group.draft.serving.trim()) {
       groups.push({ draft, variants: [] });
       continue;
     }
-    group.variants.push({ serving, price });
+    group.variants.push({ serving, price: draft.price.trim() });
   }
 
   return groups;
@@ -338,6 +344,13 @@ function extractionInstruction(): string {
     '  "allergy"     - allergens, ONLY when the document states them for that item, or ""\n' +
     '  "serving"     - serving size or volume as printed, e.g. "40 cl", or ""\n' +
     '  "abv"         - alcohol percentage as printed, e.g. "5.0%", or ""\n\n' +
+    'Sizes: when one item is offered in several sizes or volumes, return ONE object per size. ' +
+    'Every object for that item must repeat the same "name", "section", "category", "description", ' +
+    '"ingredients", "allergy" and "abv" text, and only "serving" and "price" may differ. ' +
+    'Never combine sizes into one object. A line such as "25 cl / 50 cl" priced "SEK 74 / 114" ' +
+    'becomes two objects: serving "25 cl" with price "SEK 74", and serving "50 cl" with price "SEK 114". ' +
+    'If an item has a price but no printed size, use serving "" and keep its own object. ' +
+    'Never guess a size from the item name.\n\n' +
     'Choose Section first, then choose a Category belonging to that Section. Use the original ' +
     'heading and surrounding context as evidence, but classify the item by what it actually is ' +
     'using its name, description, ingredients and preparation details. A Drinks heading may contain ' +
@@ -593,6 +606,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const scopeDepartmentId = departmentId || null;
+    const scopeEventId = eventId || null;
+
     const { data: lastDish } = await supabase
       .from('dishes')
       .select('sort_order')
@@ -602,63 +618,59 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     const base = (lastDish?.sort_order ?? -1) + 1;
 
-    const grouped = groupDraftsByVariant(drafts);
+    let existingQuery = supabase.from('dishes').select('name').eq('restaurant_id', restaurantId);
+    existingQuery = scopeDepartmentId
+      ? existingQuery.eq('department_id', scopeDepartmentId)
+      : existingQuery.is('department_id', null);
+    existingQuery = scopeEventId ? existingQuery.eq('event_id', scopeEventId) : existingQuery.is('event_id', null);
+    const { data: existing, error: existingError } = await existingQuery;
+    if (existingError) throw existingError;
+    const existingNames = new Set((existing ?? []).map((row) => normalizeName(String(row.name ?? ''))));
 
-    const rows = grouped.map((group, index) => {
+    const grouped = groupDraftsByVariant(splitCombinedDrafts(drafts));
+    const fresh = grouped.filter((group) => !existingNames.has(normalizeName(group.draft.name)));
+    const skipped = grouped.length - fresh.length;
+
+    const payload = fresh.map((group) => {
       const dish = group.draft;
       const hasVariants = group.variants.length > 0;
+      // The representative's own serving and price become the first size option,
+      // so every size of a grouped drink is preserved.
+      const options = hasVariants
+        ? [
+            { label: dish.serving.trim(), price: dish.price },
+            ...group.variants.map((variant) => ({ label: variant.serving, price: variant.price })),
+          ]
+        : [];
       return {
-        restaurant_id: restaurantId,
-        department_id: departmentId ?? null,
-        event_id: eventId ?? null,
         name: dish.name,
         section: dish.section,
         category: dish.category,
         description: dish.description,
         ingredients: dish.ingredients,
         allergy: dish.allergy,
-        // The headline price stays on the dish row so cards without variants
-        // display as before. When variants exist, the visitor UI prefers the
-        // serving-option prices; the row price is the first variant's price.
+        // The headline price stays on the dish row so cards without sizes display
+        // as before. For grouped drinks the visitor UI prefers the size prices.
         price: dish.price,
-        // Serving sizes for variant groups live in dish_serving_options, so
-        // the row's serving text is cleared to avoid a misleading duplicate.
+        // Sizes for grouped drinks live in dish_serving_options, so the row's
+        // serving text is cleared to avoid a misleading duplicate.
         serving: hasVariants ? '' : dish.serving,
         abv: dish.abv,
-        sort_order: base + index,
+        options,
       };
     });
 
-    const { data: inserted, error: insertError } = await supabase
-      .from('dishes')
-      .insert(rows)
-      .select();
-    if (insertError) throw insertError;
-
-    // For each grouped dish with size variants, insert the per-size rows into
-    // dish_serving_options. The representative dish's own serving/price
-    // becomes the first option so every size is preserved.
-    const insertedRows = (inserted ?? []) as Array<Record<string, unknown>>;
-    const optionRows: Array<{ dish_id: string; label: string; price: string; sort_order: number }> = [];
-    grouped.forEach((group, groupIndex) => {
-      if (group.variants.length === 0) return;
-      const row = insertedRows[groupIndex];
-      const dishId = row?.id as string | undefined;
-      if (!dishId) return;
-      const baseServing = group.draft.serving.trim();
-      const basePrice = group.draft.price;
-      let order = 0;
-      if (baseServing.length > 0) {
-        optionRows.push({ dish_id: dishId, label: baseServing, price: basePrice, sort_order: order++ });
-      }
-      for (const variant of group.variants) {
-        optionRows.push({ dish_id: dishId, label: variant.serving, price: variant.price, sort_order: order++ });
-      }
-    });
-
-    if (optionRows.length > 0) {
-      const { error: optionError } = await supabase.from('dish_serving_options').insert(optionRows);
-      if (optionError) throw optionError;
+    let savedRows: Array<Record<string, unknown>> = [];
+    if (payload.length > 0) {
+      const { data, error: saveError } = await supabase.rpc('save_extracted_menu_dishes', {
+        p_restaurant_id: restaurantId,
+        p_department_id: scopeDepartmentId,
+        p_event_id: scopeEventId,
+        p_base_sort: base,
+        p_dishes: payload,
+      });
+      if (saveError) throw saveError;
+      savedRows = (data ?? []) as Array<Record<string, unknown>>;
     }
 
     await supabase.from('usage_events').insert({ restaurant_id: restaurantId, kind: 'upload' });
@@ -672,7 +684,7 @@ Deno.serve(async (req: Request) => {
         .then(() => undefined);
     }
 
-    const saved = insertedRows.map((row) => {
+    const saved = savedRows.map((row) => {
       return {
         ...row,
         section: row.section ?? 'food',
@@ -680,7 +692,7 @@ Deno.serve(async (req: Request) => {
       };
     });
 
-    return json({ dishes: saved, truncated });
+    return json({ dishes: saved, truncated, skipped });
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : 'Menu reading failed.' },

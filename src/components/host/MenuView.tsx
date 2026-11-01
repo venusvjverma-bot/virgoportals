@@ -15,6 +15,7 @@ import { SECTIONS, categoriesForSection, categoryBelongsToSection } from '@/lib/
 interface ExtractResult {
   dishes: Dish[];
   truncated?: boolean;
+  skipped?: number;
 }
 
 interface MenuViewProps {
@@ -109,9 +110,16 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
       });
       await onReload();
       const count = result.dishes.length;
-      setUploadSuccess(
-        `Read ${count} item${count === 1 ? '' : 's'} from ${file.name}. Review them below.`
-      );
+      const skipped = result.skipped ?? 0;
+      if (count === 0 && skipped > 0) {
+        setUploadSuccess(
+          `${skipped} item${skipped === 1 ? '' : 's'} from ${file.name} ${skipped === 1 ? 'is' : 'are'} already on your menu, so nothing was added.`
+        );
+      } else {
+        setUploadSuccess(
+          `Read ${count} item${count === 1 ? '' : 's'} from ${file.name}${skipped > 0 ? `, skipping ${skipped} already on your menu` : ''}. Review them below.`
+        );
+      }
       if (result.truncated) {
         setUploadWarning(
           'This menu was longer than we could read in one pass, so the last few items may be missing. Check the list below and upload the rest separately if needed.'
