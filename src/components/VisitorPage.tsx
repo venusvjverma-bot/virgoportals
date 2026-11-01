@@ -921,7 +921,15 @@ function DishResult({ dish, currency, onOpen }: { dish: Dish; currency: string; 
           </div>
         )}
         {dish.price ? (
-          <span className="mt-1.5 truncate text-center text-sm font-medium text-olive-700">{formatPriceInput(dish.price, cur)}</span>
+          <span className="mt-1.5 text-center text-sm font-medium leading-snug text-olive-700">
+            {(() => {
+              const activeOptions = (dish.servingOptions ?? []).filter((o) => o.isActive !== false);
+              if (activeOptions.length > 1) {
+                return activeOptions.map((o) => formatPriceInput(o.price, cur)).join(' · ');
+              }
+              return formatPriceInput(dish.price, cur);
+            })()}
+          </span>
         ) : null}
       </div>
       <div className="min-w-0 flex-1">
