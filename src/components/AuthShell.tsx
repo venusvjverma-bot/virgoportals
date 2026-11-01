@@ -31,24 +31,18 @@ export function AuthShell({ subtitle, children, animatedBg = false, mascotUrl, w
   );
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-12">
-      {animatedBg && (
-        <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+    <div className="relative flex min-h-screen items-center justify-center px-5 py-12">
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
+        {animatedBg && (
           <ParticleNetworkBg
             config={particleConfig}
             className="h-full w-full"
             style={{ background: 'transparent' }}
           />
-        </div>
-      )}
-      <div
-        className="pointer-events-none absolute -left-40 -top-40 h-[32rem] w-[32rem] rounded-full bg-olive-200/35 blur-3xl"
-        aria-hidden="true"
-      />
-      <div
-        className="pointer-events-none absolute -bottom-52 -right-32 h-[30rem] w-[30rem] rounded-full bg-warning-100/60 blur-3xl"
-        aria-hidden="true"
-      />
+        )}
+        <div className="absolute -left-40 -top-40 h-[32rem] w-[32rem] rounded-full bg-olive-200/35 blur-3xl" />
+        <div className="absolute -bottom-52 -right-32 h-[30rem] w-[30rem] rounded-full bg-warning-100/60 blur-3xl" />
+      </div>
 
       <div className={`relative z-10 w-full animate-fade-in ${wide ? 'max-w-3xl' : 'max-w-md'}`}>
         <div className="mb-8 flex flex-col items-center text-center">
