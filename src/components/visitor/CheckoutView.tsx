@@ -5,8 +5,10 @@ import { cn } from '@/lib/cn';
 import { basketLineKey } from '@/lib/basketLine';
 import { createOrder } from '@/lib/orders';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
+import { computeTipMinor } from '@/lib/tip';
 import { Notice } from '@/components/ui/Notice';
-import type { BasketItem, ResourceType } from '@/types';
+import { TipSelector } from '@/components/visitor/TipSelector';
+import type { BasketItem, ResourceType, TipOption } from '@/types';
 
 interface CheckoutViewProps {
   items: BasketItem[];
@@ -25,6 +27,9 @@ export interface ConfirmedOrder {
   orderNumber: string;
   status: string;
   paymentStatus: string;
+  subtotalMinor: number;
+  tipOption: TipOption;
+  tipMinor: number;
   totalMinor: number;
   currency: string;
   itemCount: number;
@@ -123,6 +128,8 @@ export function CheckoutView({
   const [countrySearch, setCountrySearch] = useState('');
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [nationalNumber, setNationalNumber] = useState('');
+  const [tipOption, setTipOption] = useState<TipOption>('none');
+  const [customTipInput, setCustomTipInput] = useState('');
   const [idempotencyKey] = useState(() => {
     const existing = sessionStorage.getItem('vp_checkout_key');
     if (existing) return existing;
@@ -131,9 +138,19 @@ export function CheckoutView({
     return key;
   });
 
-  const totalMinor = items.reduce((sum, item) => {
+  const subtotalMinor = items.reduce((sum, item) => {
     return sum + (parsePriceToMinor(item.price) ?? 0) * item.quantity;
   }, 0);
+
+  const customTipMinor = parsePriceToMinor(customTipInput);
+  const customTipError =
+    tipOption === 'custom' && customTipInput.trim() !== '' && customTipMinor === null
+      ? 'Please enter a valid amount.'
+      : null;
+  const effectiveTipOption: TipOption =
+    tipOption === 'custom' && customTipMinor === null ? 'none' : tipOption;
+  const tipMinor = computeTipMinor(effectiveTipOption, customTipMinor ?? 0, subtotalMinor);
+  const grandTotalMinor = subtotalMinor + tipMinor;
 
   function normalizePhone(): string | null {
     if (!nationalNumber.trim() || !selectedCountry) return null;
@@ -188,6 +205,10 @@ export function CheckoutView({
         resourceType: resourceType ?? 'restaurant',
         items: items.map((i) => ({ dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? '' })),
         mobileNumber: normalizedMobile,
+        tip: {
+          option: effectiveTipOption,
+          customMinor: effectiveTipOption === 'custom' ? customTipMinor ?? undefined : undefined,
+        },
       });
       sessionStorage.removeItem('vp_checkout_key');
       onConfirmed(result as ConfirmedOrder);
@@ -242,6 +263,19 @@ export function CheckoutView({
             ) : null}
           </div>
 
+          {/* Tip */}
+          <TipSelector
+            currency={currency}
+            subtotalMinor={subtotalMinor}
+            selectedOption={tipOption}
+            customInput={customTipInput}
+            customError={customTipError}
+            tipMinor={tipMinor}
+            totalMinor={grandTotalMinor}
+            onSelectOption={setTipOption}
+            onCustomInputChange={setCustomTipInput}
+          />
+
           {/* Items */}
           <div className="mb-5 overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-cream-200">
             <div className="border-b border-cream-200 px-4 py-3">
@@ -282,7 +316,7 @@ export function CheckoutView({
             <div className="flex items-center justify-between border-t border-cream-200 px-4 py-3">
               <span className="text-sm font-semibold text-ink">Total</span>
               <span className="font-display text-lg font-semibold text-ink">
-                {formatMinor(totalMinor, currency)}
+                {formatMinor(grandTotalMinor, currency)}
               </span>
             </div>
           </div>
@@ -395,7 +429,7 @@ export function CheckoutView({
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={submitting || items.length === 0 || !phoneValid}
+            disabled={submitting || items.length === 0 || !phoneValid || customTipError !== null}
             className={cn(
               'flex w-full items-center justify-center gap-2 rounded-xl py-4 text-sm font-semibold text-white shadow-soft transition-all duration-200',
               'bg-olive-700 hover:bg-olive-800 hover:shadow-lift active:scale-[0.99]',

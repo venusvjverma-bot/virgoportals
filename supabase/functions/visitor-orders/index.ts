@@ -17,9 +17,15 @@ interface IncomingItem {
 const MAX_REQUEST_WORDS = 50;
 const MAX_REQUEST_CHARS = 500;
 
+interface TipInput {
+  option?: string;
+  customMinor?: number;
+}
+
 interface OrderPayload {
   action: 'create' | 'status';
   idempotencyKey: string;
+  tip?: TipInput;
   restaurantId: string;
   resourceId?: string;
   resourceType?: string;
@@ -76,6 +82,29 @@ function parsePriceMinor(priceText: string): number | null {
   const num = parseFloat(s);
   if (isNaN(num) || num < 0) return null;
   return Math.round(num * 100);
+}
+
+const TIP_PERCENTS = new Map<string, number>([['5', 5], ['10', 10], ['13', 13], ['20', 20]]);
+const MAX_CUSTOM_TIP_MINOR = 1_000_000;
+
+function resolveTip(
+  tip: TipInput | undefined,
+  subtotalMinor: number,
+): { tipOption: string; tipMinor: number } | { error: string } {
+  const option = tip?.option ?? 'none';
+  if (option === 'none') return { tipOption: 'none', tipMinor: 0 };
+  const percent = TIP_PERCENTS.get(option);
+  if (percent !== undefined) {
+    return { tipOption: option, tipMinor: Math.round((subtotalMinor * percent) / 100) };
+  }
+  if (option === 'custom') {
+    const amount = tip?.customMinor;
+    if (typeof amount !== 'number' || !Number.isInteger(amount) || amount < 0 || amount > MAX_CUSTOM_TIP_MINOR) {
+      return { error: 'Please enter a valid tip amount.' };
+    }
+    return { tipOption: 'custom', tipMinor: amount };
+  }
+  return { error: 'Invalid tip option.' };
 }
 
 interface DishRow {
@@ -158,7 +187,7 @@ Deno.serve(async (req: Request) => {
       // ── Idempotency check: if an order already exists with this key, return it ──
       const { data: existing } = await supabase
         .from('orders')
-        .select('id, order_number, status, payment_status, total_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number')
+        .select('id, order_number, status, payment_status, total_minor, subtotal_minor, tip_option, tip_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number')
         .eq('idempotency_key', idempotencyKey)
         .maybeSingle();
 
@@ -176,6 +205,9 @@ Deno.serve(async (req: Request) => {
           status: existing.status,
           paymentStatus: existing.payment_status,
           totalMinor: existing.total_minor,
+          subtotalMinor: existing.subtotal_minor,
+          tipOption: existing.tip_option,
+          tipMinor: existing.tip_minor,
           currency: existing.currency,
           itemCount: existing.item_count,
           createdAt: existing.created_at,
@@ -391,6 +423,12 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      const tipResult = resolveTip(body.tip, totalMinor);
+      if ('error' in tipResult) {
+        return json({ error: tipResult.error }, 400);
+      }
+      const subtotalMinor = totalMinor;
+
       // ── Generate unique order number ──
       let orderNumber = '';
       let attempts = 0;
@@ -423,13 +461,16 @@ Deno.serve(async (req: Request) => {
           restaurant_name: restaurant.name,
           status: 'new',
           payment_status: 'test_unpaid',
-          total_minor: totalMinor,
+          subtotal_minor: subtotalMinor,
+          tip_option: tipResult.tipOption,
+          tip_minor: tipResult.tipMinor,
+          total_minor: subtotalMinor + tipResult.tipMinor,
           currency: orderCurrency,
           idempotency_key: idempotencyKey,
           item_count: itemCount,
           mobile_number: mobileNumber,
         })
-        .select('id, order_number, status, payment_status, total_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number')
+        .select('id, order_number, status, payment_status, total_minor, subtotal_minor, tip_option, tip_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number')
         .single();
 
       if (orderError) {
@@ -438,7 +479,7 @@ Deno.serve(async (req: Request) => {
         if (orderError.code === '23505') {
           const { data: raced } = await supabase
             .from('orders')
-            .select('id, order_number, status, payment_status, total_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number')
+            .select('id, order_number, status, payment_status, total_minor, subtotal_minor, tip_option, tip_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number')
             .eq('idempotency_key', idempotencyKey)
             .maybeSingle();
           if (raced) {
@@ -452,6 +493,9 @@ Deno.serve(async (req: Request) => {
               status: raced.status,
               paymentStatus: raced.payment_status,
               totalMinor: raced.total_minor,
+              subtotalMinor: raced.subtotal_minor,
+              tipOption: raced.tip_option,
+              tipMinor: raced.tip_minor,
               currency: raced.currency,
               itemCount: raced.item_count,
               createdAt: raced.created_at,
@@ -508,6 +552,9 @@ Deno.serve(async (req: Request) => {
         status: order!.status,
         paymentStatus: order!.payment_status,
         totalMinor: order!.total_minor,
+        subtotalMinor: order!.subtotal_minor,
+        tipOption: order!.tip_option,
+        tipMinor: order!.tip_minor,
         currency: order!.currency,
         itemCount: order!.item_count,
         createdAt: order!.created_at,

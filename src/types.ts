@@ -167,6 +167,8 @@ export type ResourceView = 'details' | 'menu' | 'bot' | 'qr' | 'theme';
 
 export type OrderStatus = 'new' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'cancelled';
 
+export type TipOption = 'none' | '5' | '10' | '13' | '20' | 'custom';
+
 export interface OrderItem {
   id: string;
   orderId: string;
@@ -191,6 +193,9 @@ export interface Order {
   restaurantName: string;
   status: OrderStatus;
   paymentStatus: string;
+  subtotalMinor: number;
+  tipOption: TipOption;
+  tipMinor: number;
   totalMinor: number;
   currency: string;
   itemCount: number;

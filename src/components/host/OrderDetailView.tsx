@@ -108,6 +108,7 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
   const next = nextStatus(order.status);
   const created = new Date(order.createdAt);
   const statusUpdated = new Date(order.statusUpdatedAt);
+  const tipDescriptor = order.tipOption === 'custom' ? 'custom amount' : `${order.tipOption}%`;
 
   return (
     <div className="space-y-5">
@@ -209,6 +210,20 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
             </li>
           ))}
         </ul>
+        {order.tipMinor > 0 ? (
+          <div className="space-y-1.5 border-t border-cream-200 px-4 py-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-ink-soft">Subtotal</span>
+              <span className="font-medium text-ink">{formatMinor(order.subtotalMinor, order.currency)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-ink-soft">
+                Tip <span className="text-xs text-ink-faint">({tipDescriptor})</span>
+              </span>
+              <span className="font-medium text-ink">{formatMinor(order.tipMinor, order.currency)}</span>
+            </div>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between border-t border-cream-200 px-4 py-3">
           <span className="text-sm font-semibold text-ink">Total</span>
           <span className="font-display text-lg font-semibold text-ink">
