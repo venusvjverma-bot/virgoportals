@@ -116,7 +116,7 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket }: Item
             <img
               src={dish.imageUrl}
               alt={dish.name}
-              className="mx-auto h-72 w-full bg-cream-100 object-contain sm:h-80"
+              className="mx-auto h-72 w-full rounded-t-3xl border border-cream-300 bg-cream-100 object-contain sm:h-80"
             />
           ) : (
             <div className="flex h-40 w-full items-center justify-center bg-cream-100 text-olive-500 sm:h-48">
