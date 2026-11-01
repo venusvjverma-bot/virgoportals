@@ -8,6 +8,7 @@ interface AuthShellProps {
   children: React.ReactNode;
   animatedBg?: boolean;
   mascotUrl?: string;
+  wide?: boolean;
 }
 
 function particleCountForViewport(): number {
@@ -15,7 +16,7 @@ function particleCountForViewport(): number {
   return window.innerWidth < 768 ? 45 : 80;
 }
 
-export function AuthShell({ subtitle, children, animatedBg = false, mascotUrl }: AuthShellProps) {
+export function AuthShell({ subtitle, children, animatedBg = false, mascotUrl, wide = false }: AuthShellProps) {
   const particleConfig = useMemo<Partial<ParticleNetworkConfig>>(
     () => ({
       particleCount: particleCountForViewport(),
@@ -49,7 +50,7 @@ export function AuthShell({ subtitle, children, animatedBg = false, mascotUrl }:
         aria-hidden="true"
       />
 
-      <div className="relative z-10 w-full max-w-md animate-fade-in">
+      <div className={`relative z-10 w-full animate-fade-in ${wide ? 'max-w-3xl' : 'max-w-md'}`}>
         <div className="mb-8 flex flex-col items-center text-center">
           {mascotUrl ? (
             <div className="relative flex flex-col items-center">
