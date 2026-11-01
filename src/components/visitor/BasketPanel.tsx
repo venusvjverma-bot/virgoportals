@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Minus, Plus, ShoppingBag, Trash2, X, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
-import type { BasketItem, DishServingOption } from '@/types';
+import type { AddOnOption, BasketItem, DishServingOption } from '@/types';
 
 interface BasketPanelProps {
   items: BasketItem[];
@@ -15,6 +15,8 @@ interface BasketPanelProps {
   onRemove: (dishId: string, servingOptionId: string | null, removedKey?: string) => void;
   servingOptionsByDish: Record<string, DishServingOption[]>;
   onChangeServingSize: (dishId: string, servingOptionId: string | null, removedKey: string, option: DishServingOption) => void;
+  addOns: AddOnOption[];
+  onAddAddOn: (addOn: AddOnOption) => void;
 }
 
 export function BasketPanel({
@@ -28,6 +30,8 @@ export function BasketPanel({
   onRemove,
   servingOptionsByDish,
   onChangeServingSize,
+  addOns,
+  onAddAddOn,
 }: BasketPanelProps) {
   const [closing, setClosing] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -38,6 +42,13 @@ export function BasketPanel({
       return true;
     });
   }
+
+  const hasFoodItem = items.some((item) => item.section === 'food');
+  const addOnQuantities = new Map(
+    items
+      .filter((item) => item.section === 'add_on' && (item.servingOptionId ?? null) === null)
+      .map((item) => [item.dishId, item.quantity] as const)
+  );
 
   const totalMinor = items.reduce((sum, item) => {
     const unit = parsePriceToMinor(item.price) ?? 0;
@@ -206,6 +217,55 @@ export function BasketPanel({
               })}
             </ul>
           )}
+
+          {items.length > 0 && hasFoodItem && addOns.length > 0 ? (
+            <div className="border-t border-cream-200 px-5 py-4 sm:px-6">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Add-ons</h3>
+              <div className="mt-2 divide-y divide-cream-200">
+                {addOns.map((addOn) => {
+                  const quantity = addOnQuantities.get(addOn.id) ?? 0;
+                  return (
+                    <div key={addOn.id} className="flex items-center gap-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-ink">{addOn.name}</p>
+                        <p className="text-xs text-ink-muted">{formatPriceInput(addOn.price, currency)}</p>
+                      </div>
+                      {quantity === 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => onAddAddOn(addOn)}
+                          aria-label={`Add ${addOn.name}`}
+                          className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-olive-700 ring-1 ring-olive-300 transition-all duration-200 hover:bg-olive-50"
+                        >
+                          Add
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onUpdateQuantity(addOn.id, null, quantity - 1, '')}
+                            aria-label={`Decrease ${addOn.name}`}
+                            className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-ink shadow-soft ring-1 ring-cream-300 transition-all duration-200 hover:ring-olive-300"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="min-w-[1.5rem] text-center text-sm font-semibold text-ink">{quantity}</span>
+                          <button
+                            type="button"
+                            onClick={() => onUpdateQuantity(addOn.id, null, Math.min(99, quantity + 1), '')}
+                            aria-label={`Increase ${addOn.name}`}
+                            className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-ink shadow-soft ring-1 ring-cream-300 transition-all duration-200 hover:ring-olive-300"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {items.length > 0 ? (

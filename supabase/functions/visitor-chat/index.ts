@@ -64,6 +64,7 @@ interface DishRow {
 const SECTION_LABELS: Record<string, string> = {
   food: 'Food',
   drinks: 'Drinks',
+  add_on: 'Add-on',
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -339,7 +340,7 @@ function cardInstructions(): string {
     'copied exactly from the item names above:\n' +
     'CARDS: <exact item name>, <exact item name>\n' +
     'Use CARDS: ALL when the guest asks for the whole menu or everything you have. ' +
-    'When the guest asks for a specific section (Drinks or Food), name every item in that section only and do not include items from the other section. ' +
+    'When the guest asks for a specific section (Drinks, Food or Add-on), name every item in that section only and do not include items from the other sections. ' +
     'Use CARDS: none when no card is useful, such as a greeting, a general question, ' +
     'or an item that is not on the menu.\n' +
     'Always include the item the guest is currently asking about, and keep the item from the ' +
@@ -516,6 +517,11 @@ const SECTION_SYNONYMS: Record<string, string[]> = {
     'drycker', 'dryck', 'öl', 'vin', 'viner', 'drinkar',
     'sprit', 'alkohol', 'alkoholfritt', 'läsk', 'läskedrycker',
     'vatten', 'kaffe', 'te', 'juicer',
+  ],
+  add_on: [
+    'add-on', 'add-ons', 'add on', 'add ons', 'addon', 'addons', 'extras',
+    // Swedish
+    'tillägg', 'tillval',
   ],
   food: [
     'food', 'eat', 'eating', 'meal', 'meals', 'hungry', 'appetite',
@@ -797,7 +803,7 @@ Deno.serve(async (req: Request) => {
               content:
                 `${resourceBlock}${systemPrompt}\n\nYou may only use the menu below. Never take orders or payments. ` +
                 `If a guest asks for something not on the menu, say so politely. ` +
-                `The menu lists both food and drinks; each item is labelled with its type, so ` +
+                `The menu lists food, drinks and add-ons; each item is labelled with its type, so ` +
                 `answer drink questions from the same list.\n\n` +
                 `${cardInstructions()}\n\n` +
                 `${langInstruction}\n\n` +

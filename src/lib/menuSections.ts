@@ -1,4 +1,4 @@
-export type SectionValue = 'food' | 'drinks';
+export type SectionValue = 'food' | 'drinks' | 'add_on';
 
 export interface CategoryOption {
   value: string;
@@ -41,6 +41,13 @@ export const SECTIONS: SectionOption[] = [
       { value: 'non_alcoholic_beer', label: 'Non-alcoholic Beer' },
     ],
   },
+  {
+    value: 'add_on',
+    label: 'Add-on',
+    categories: [
+      { value: 'add_ons', label: 'Add-ons' },
+    ],
+  },
 ];
 
 const ALL_CATEGORIES: CategoryOption[] = SECTIONS.flatMap((s) => s.categories);
@@ -66,7 +73,7 @@ export function categoriesForSection(section: string): CategoryOption[] {
 }
 
 export function isValidSection(value: string): value is SectionValue {
-  return value === 'food' || value === 'drinks';
+  return value === 'food' || value === 'drinks' || value === 'add_on';
 }
 
 export function categoryBelongsToSection(category: string, section: string): boolean {

@@ -37,6 +37,7 @@ const SECTION_FILTERS: { value: string; label: string }[] = [
   { value: 'all', label: 'All sections' },
   { value: 'food', label: 'Food' },
   { value: 'drinks', label: 'Drinks' },
+  { value: 'add_on', label: 'Add-on' },
 ];
 
 const AVAILABILITY_FILTERS: { value: string; label: string }[] = [
@@ -84,7 +85,7 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
     // Section-aware ordering: food dishes first, then drinks, preserving the
     // existing sortOrder within each section. This keeps new dishes next to
     // their section peers instead of appended after the other section.
-    const sectionRank: Record<string, number> = { food: 0, drinks: 1 };
+    const sectionRank: Record<string, number> = { food: 0, drinks: 1, add_on: 2 };
     return [...matched].sort((a, b) => {
       const ra = sectionRank[a.section] ?? 2;
       const rb = sectionRank[b.section] ?? 2;

@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { Dish, DishServingOption, DishRemovableIngredient, RestaurantPortal, PublicResource, ResourceType } from '@/types';
+import type { AddOnOption, Dish, DishServingOption, DishRemovableIngredient, RestaurantPortal, PublicResource, ResourceType } from '@/types';
 import type { UsageRow } from '@/lib/dailyTokenUsage';
 
 const RESTAURANT_COLUMNS = 'id, owner_email, name, city, welcome, system_prompt, status, created_at, timezone, currency';
@@ -172,6 +172,19 @@ export async function getPublicResource(
   if (error) throw error;
   const row = (data as PublicResourceRow[] | null)?.[0];
   return row ? mapPublicResource(row) : null;
+}
+
+export async function listPublicAddOns(restaurantId: string): Promise<AddOnOption[]> {
+  const { data, error } = await supabase.rpc('get_public_add_ons', { p_restaurant_id: restaurantId });
+  if (error) throw error;
+  return ((data ?? []) as { id: unknown; name: unknown; price: unknown; image_url: unknown }[])
+    .filter((row) => typeof row.id === 'string' && typeof row.name === 'string')
+    .map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      price: typeof row.price === 'string' ? row.price : '',
+      imageUrl: typeof row.image_url === 'string' ? row.image_url : null,
+    }));
 }
 
 export async function updatePortal(

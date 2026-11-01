@@ -204,11 +204,19 @@ export interface BasketItem {
   name: string;
   price: string;
   imageUrl: string | null;
+  section?: string | null;
   quantity: number;
   servingOptionId?: string | null;
   servingLabel?: string | null;
   removedIngredientIds?: string[];
   removedIngredientLabels?: string[];
+}
+
+export interface AddOnOption {
+  id: string;
+  name: string;
+  price: string;
+  imageUrl: string | null;
 }
 
 export interface ConfirmedOrderRef {

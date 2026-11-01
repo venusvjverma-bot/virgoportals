@@ -7,7 +7,7 @@ import { BasketPanel } from '@/components/visitor/BasketPanel';
 import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/CheckoutView';
 import { OrderConfirmation } from '@/components/visitor/OrderConfirmation';
 import { callFunction } from '@/lib/functions';
-import { getPublicPortal, getPublicResource, listServingOptionsByDish, type PublicPortal } from '@/lib/portal';
+import { getPublicPortal, getPublicResource, listPublicAddOns, listServingOptionsByDish, type PublicPortal } from '@/lib/portal';
 import { themeAssetUrl, mascotUrl } from '@/lib/themeAssets';
 import {
   loadChatHistory,
@@ -22,7 +22,7 @@ import {
 import { createOrder } from '@/lib/orders';
 import { cn } from '@/lib/cn';
 import { formatPriceInput, normalizeCurrency } from '@/lib/currency';
-import type { BasketItem, Dish, DishServingOption, ResourceType } from '@/types';
+import type { AddOnOption, BasketItem, Dish, DishServingOption, ResourceType } from '@/types';
 
 interface VisitorPageProps {
   portalId?: string;
@@ -97,6 +97,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   const [backgroundFailed, setBackgroundFailed] = useState(false);
   const [basket, setBasket] = useState<BasketItem[]>([]);
   const [basketServingOptions, setBasketServingOptions] = useState<Record<string, DishServingOption[]>>({});
+  const [addOns, setAddOns] = useState<AddOnOption[]>([]);
   const [overlay, setOverlay] = useState<VisitorOverlay>(null);
   const [confirmedOrder, setConfirmedOrder] = useState<ConfirmedOrder | null>(null);
   const [basketBadge, setBasketBadge] = useState(false);
@@ -213,6 +214,26 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     saveBasket(scopeRef.current, basket);
     if (basket.length > 0) setBasketBadge(true);
   }, [basket]);
+
+  // ── Load the restaurant's available Add-on items for the basket selector ──
+  const addOnRestaurantId = view?.restaurantId ?? null;
+  useEffect(() => {
+    if (!addOnRestaurantId) {
+      setAddOns([]);
+      return;
+    }
+    let active = true;
+    listPublicAddOns(addOnRestaurantId)
+      .then((list) => {
+        if (active) setAddOns(list);
+      })
+      .catch(() => {
+        if (active) setAddOns([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [addOnRestaurantId]);
 
   // ── Load host serving options for basket dishes (drives the Edit size control) ──
   const basketDishKey = Array.from(new Set(basket.map((item) => item.dishId))).sort().join(',');
@@ -477,6 +498,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           price: optionPrice,
           imageUrl: dish.imageUrl,
           quantity,
+          section: dish.section,
           servingOptionId: optionId,
           servingLabel: optionLabel,
           removedIngredientIds: removedIds,
@@ -484,6 +506,25 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         },
       ];
     });
+    setBasketBadge(true);
+  }
+
+  function handleAddAddOn(addOn: AddOnOption) {
+    setBasket((prev) => [
+      ...prev,
+      {
+        dishId: addOn.id,
+        name: addOn.name,
+        price: addOn.price,
+        imageUrl: addOn.imageUrl,
+        section: 'add_on',
+        quantity: 1,
+        servingOptionId: null,
+        servingLabel: null,
+        removedIngredientIds: [],
+        removedIngredientLabels: [],
+      },
+    ]);
     setBasketBadge(true);
   }
 
@@ -764,6 +805,8 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           onUpdateQuantity={handleUpdateBasketQuantity}
           onRemove={handleRemoveFromBasket}
           onChangeServingSize={handleChangeServingSize}
+          addOns={addOns}
+          onAddAddOn={handleAddAddOn}
         />
       ) : null}
 
