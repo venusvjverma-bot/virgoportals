@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { Dish, DishServingOption, DishRemovableIngredient, RestaurantPortal, PublicResource, ResourceType } from '@/types';
+import type { UsageRow } from '@/lib/dailyTokenUsage';
 
 const RESTAURANT_COLUMNS = 'id, owner_email, name, city, welcome, system_prompt, status, created_at, timezone, currency';
 const DISH_COLUMNS =
@@ -547,6 +548,20 @@ export async function getLlmUsageTotals(
     }),
     { inputTokens: 0, outputTokens: 0 }
   );
+}
+
+export async function getLlmUsageSince(restaurantId: string, since: Date): Promise<UsageRow[]> {
+  const { data, error } = await supabase
+    .from('llm_usage')
+    .select('created_at, input_tokens, output_tokens')
+    .eq('restaurant_id', restaurantId)
+    .gte('created_at', since.toISOString());
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    createdAt: row.created_at,
+    inputTokens: row.input_tokens ?? 0,
+    outputTokens: row.output_tokens ?? 0,
+  }));
 }
 
 export async function getHostCreditBalance(restaurantId: string): Promise<number> {

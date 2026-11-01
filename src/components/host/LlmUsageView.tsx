@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
+import { DailyTokenChart } from '@/components/host/DailyTokenChart';
 import { getLlmUsageTotals } from '@/lib/portal';
 import type { RestaurantPortal } from '@/types';
 
@@ -52,6 +53,8 @@ export function LlmUsageView({ portal }: LlmUsageViewProps) {
           <UsageCard label="OUTPUT TOKENS" value={totals?.outputTokens ?? 0} />
         </div>
       )}
+
+      <DailyTokenChart portal={portal} />
     </div>
   );
 }
