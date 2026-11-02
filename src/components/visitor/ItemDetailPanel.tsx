@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Minus, Plus, UtensilsCrossed, X, ShoppingBag, Check } from 'lucide-react';
+import { Minus, Plus, UtensilsCrossed, X, ShoppingBag } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { categoryLabel, sectionLabel } from '@/lib/menuSections';
 import { formatPriceInput } from '@/lib/currency';
@@ -43,7 +43,6 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
   const initial = editing?.initial;
   const [closing, setClosing] = useState(false);
   const [quantity, setQuantity] = useState(initial?.quantity ?? 1);
-  const [added, setAdded] = useState(false);
 
   const activeOptions = dish.servingOptions?.filter((o) => o.isActive !== false) ?? [];
   const hasOptions = activeOptions.length > 0;
@@ -111,8 +110,7 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
       return;
     }
     onAddToBasket?.(dish, selection.quantity, selection.servingOption, selection.removedIngredientIds, selection.removedIngredientLabels, selection.additionalRequest);
-    setAdded(true);
-    window.setTimeout(() => setAdded(false), 2000);
+    requestClose();
   }
 
   return (
@@ -376,22 +374,12 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
               <button
                 type="button"
                 onClick={handleSubmit}
-                className={cn(
-                  'mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 active:scale-[0.99]',
-                  added
-                    ? 'bg-olive-600'
-                    : 'bg-olive-700 hover:bg-olive-800 hover:shadow-lift'
-                )}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-olive-700 py-3.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:bg-olive-800 hover:shadow-lift active:scale-[0.99]"
               >
                 {editing ? (
                   <>
                     <ShoppingBag className="h-4 w-4" />
                     Update Item{formattedPrice ? ` · ${formattedPrice}` : ''}
-                  </>
-                ) : added ? (
-                  <>
-                    <Check className="h-4 w-4" />
-                    Added to basket
                   </>
                 ) : (
                   <>
