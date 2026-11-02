@@ -18,6 +18,8 @@ interface BasketPanelProps {
   onChangeServingSize: (dishId: string, servingOptionId: string | null, removedKey: string, option: DishServingOption) => void;
   addOns: AddOnOption[];
   onAddAddOn: (addOn: AddOnOption) => void;
+  onEditItem: (item: BasketItem) => void;
+  canEditItem: (item: BasketItem) => boolean;
 }
 
 export function BasketPanel({
@@ -33,6 +35,8 @@ export function BasketPanel({
   onChangeServingSize,
   addOns,
   onAddAddOn,
+  onEditItem,
+  canEditItem,
 }: BasketPanelProps) {
   const [closing, setClosing] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -129,7 +133,20 @@ export function BasketPanel({
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-sm font-semibold text-ink">{item.name}</h3>
+                    <h3 className="truncate text-sm font-semibold text-ink">
+                      {canEditItem(item) ? (
+                        <button
+                          type="button"
+                          onClick={() => onEditItem(item)}
+                          aria-label={`Edit ${item.name}`}
+                          className="block max-w-full truncate text-left underline-offset-2 transition-colors duration-200 hover:text-olive-700 hover:underline"
+                        >
+                          {item.name}
+                        </button>
+                      ) : (
+                        item.name
+                      )}
+                    </h3>
                     <p className="text-xs text-ink-muted">
                       {formatPriceInput(item.price, currency)}
                       {item.servingLabel ? <span className="text-ink-faint"> · {item.servingLabel}</span> : null}

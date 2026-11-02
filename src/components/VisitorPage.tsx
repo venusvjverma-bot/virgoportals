@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Loader2, RotateCcw, Send, ShoppingBag, Sparkles, UtensilsCrossed } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
-import { ItemDetailPanel } from '@/components/visitor/ItemDetailPanel';
+import { ItemDetailPanel, type DishSelection } from '@/components/visitor/ItemDetailPanel';
 import { LanguageSelector } from '@/components/visitor/LanguageSelector';
 import { BasketPanel } from '@/components/visitor/BasketPanel';
 import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/CheckoutView';
@@ -100,6 +100,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   const [basketServingOptions, setBasketServingOptions] = useState<Record<string, DishServingOption[]>>({});
   const [addOns, setAddOns] = useState<AddOnOption[]>([]);
   const [overlay, setOverlay] = useState<VisitorOverlay>(null);
+  const [editingItem, setEditingItem] = useState<BasketItem | null>(null);
   const [confirmedOrder, setConfirmedOrder] = useState<ConfirmedOrder | null>(null);
   const [basketBadge, setBasketBadge] = useState(false);
   const [chatRestored, setChatRestored] = useState(false);
@@ -514,6 +515,54 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     setBasketBadge(true);
   }
 
+  function findChatDish(dishId: string): Dish | null {
+    for (const message of messages) {
+      const match = message.dishes?.find((dish) => dish.id === dishId);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  const editingDish = editingItem ? findChatDish(editingItem.dishId) : null;
+
+  function canEditBasketItem(item: BasketItem) {
+    return item.section !== 'add_on' && findChatDish(item.dishId) !== null;
+  }
+
+  function handleUpdateBasketLine(original: BasketItem, selection: DishSelection) {
+    const optionId = selection.servingOption?.id ?? null;
+    const removedKey = basketLineKey({ removedIngredientIds: selection.removedIngredientIds, additionalRequest: selection.additionalRequest });
+    setBasket((prev) => {
+      if (!prev.includes(original)) return prev;
+      const duplicate = prev.find(
+        (item) =>
+          item !== original &&
+          item.dishId === original.dishId &&
+          (item.servingOptionId ?? null) === optionId &&
+          basketLineKey(item) === removedKey
+      );
+      if (duplicate) {
+        return prev
+          .filter((item) => item !== original)
+          .map((item) => (item === duplicate ? { ...item, quantity: Math.min(99, item.quantity + selection.quantity) } : item));
+      }
+      return prev.map((item) =>
+        item === original
+          ? {
+              ...item,
+              price: selection.servingOption?.price ?? item.price,
+              quantity: selection.quantity,
+              servingOptionId: optionId,
+              servingLabel: selection.servingOption?.label ?? null,
+              removedIngredientIds: selection.removedIngredientIds,
+              removedIngredientLabels: selection.removedIngredientLabels,
+              additionalRequest: selection.additionalRequest,
+            }
+          : item
+      );
+    });
+  }
+
   function handleAddAddOn(addOn: AddOnOption) {
     setBasket((prev) => [
       ...prev,
@@ -812,6 +861,26 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           onChangeServingSize={handleChangeServingSize}
           addOns={addOns}
           onAddAddOn={handleAddAddOn}
+          onEditItem={setEditingItem}
+          canEditItem={canEditBasketItem}
+        />
+      ) : null}
+
+      {editingItem && editingDish ? (
+        <ItemDetailPanel
+          dish={editingDish}
+          currency={view.currency}
+          onClose={() => setEditingItem(null)}
+          editing={{
+            initial: {
+              servingOption: editingDish.servingOptions?.find((o) => o.id === editingItem.servingOptionId) ?? null,
+              quantity: editingItem.quantity,
+              removedIngredientIds: editingItem.removedIngredientIds ?? [],
+              removedIngredientLabels: editingItem.removedIngredientLabels ?? [],
+              additionalRequest: editingItem.additionalRequest ?? '',
+            },
+            onUpdate: (selection) => handleUpdateBasketLine(editingItem, selection),
+          }}
         />
       ) : null}
 

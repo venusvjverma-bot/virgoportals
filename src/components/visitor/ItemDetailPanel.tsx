@@ -7,11 +7,20 @@ import type { Dish, DishServingOption, DishRemovableIngredient } from '@/types';
 
 const CLOSE_MS = 180;
 
+export interface DishSelection {
+  servingOption: DishServingOption | null;
+  quantity: number;
+  removedIngredientIds: string[];
+  removedIngredientLabels: string[];
+  additionalRequest: string;
+}
+
 interface ItemDetailPanelProps {
   dish: Dish;
   currency: string;
   onClose: () => void;
-  onAddToBasket: (dish: Dish, quantity: number, servingOption?: DishServingOption | null, removedIngredientIds?: string[], removedIngredientLabels?: string[], additionalRequest?: string) => void;
+  onAddToBasket?: (dish: Dish, quantity: number, servingOption?: DishServingOption | null, removedIngredientIds?: string[], removedIngredientLabels?: string[], additionalRequest?: string) => void;
+  editing?: { initial: DishSelection; onUpdate: (selection: DishSelection) => void };
 }
 
 const MAX_REQUEST_WORDS = 50;
@@ -30,22 +39,27 @@ function defaultServingOptionIndex(options: DishServingOption[]): number {
   return options.length - 2;
 }
 
-export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket }: ItemDetailPanelProps) {
+export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editing }: ItemDetailPanelProps) {
+  const initial = editing?.initial;
   const [closing, setClosing] = useState(false);
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(initial?.quantity ?? 1);
   const [added, setAdded] = useState(false);
 
   const activeOptions = dish.servingOptions?.filter((o) => o.isActive !== false) ?? [];
   const hasOptions = activeOptions.length > 0;
   const defaultIdx = defaultServingOptionIndex(activeOptions);
-  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(
-    defaultIdx >= 0 ? activeOptions[defaultIdx].id : null
-  );
+  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(() => {
+    const initialOptionId = initial?.servingOption?.id;
+    if (initialOptionId && activeOptions.some((o) => o.id === initialOptionId)) return initialOptionId;
+    return defaultIdx >= 0 ? activeOptions[defaultIdx].id : null;
+  });
 
   const activeRemovableIngredients = (dish.removableIngredients ?? []).filter((i) => i.isActive !== false);
-  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
-  const [requestOpen, setRequestOpen] = useState(false);
-  const [additionalRequest, setAdditionalRequest] = useState('');
+  const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set(
+    (initial?.removedIngredientIds ?? []).filter((id) => activeRemovableIngredients.some((i) => i.id === id))
+  ));
+  const [requestOpen, setRequestOpen] = useState(Boolean(initial?.additionalRequest));
+  const [additionalRequest, setAdditionalRequest] = useState(initial?.additionalRequest ?? '');
   const requestWords = countWords(additionalRequest);
 
   const selectedOption = hasOptions
@@ -79,12 +93,24 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket }: Item
     };
   }, []);
 
-  function handleAdd() {
-    const selectedIds = [...removedIds];
-    const selectedLabels = activeRemovableIngredients
-      .filter((i) => removedIds.has(i.id))
-      .map((i) => i.label);
-    onAddToBasket(dish, quantity, selectedOption ?? null, selectedIds, selectedLabels, additionalRequest.trim());
+  function buildSelection(): DishSelection {
+    return {
+      servingOption: selectedOption,
+      quantity,
+      removedIngredientIds: [...removedIds],
+      removedIngredientLabels: activeRemovableIngredients.filter((i) => removedIds.has(i.id)).map((i) => i.label),
+      additionalRequest: additionalRequest.trim(),
+    };
+  }
+
+  function handleSubmit() {
+    const selection = buildSelection();
+    if (editing) {
+      editing.onUpdate(selection);
+      requestClose();
+      return;
+    }
+    onAddToBasket?.(dish, selection.quantity, selection.servingOption, selection.removedIngredientIds, selection.removedIngredientLabels, selection.additionalRequest);
     setAdded(true);
     window.setTimeout(() => setAdded(false), 2000);
   }
@@ -349,7 +375,7 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket }: Item
 
               <button
                 type="button"
-                onClick={handleAdd}
+                onClick={handleSubmit}
                 className={cn(
                   'mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 active:scale-[0.99]',
                   added
@@ -357,7 +383,12 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket }: Item
                     : 'bg-olive-700 hover:bg-olive-800 hover:shadow-lift'
                 )}
               >
-                {added ? (
+                {editing ? (
+                  <>
+                    <ShoppingBag className="h-4 w-4" />
+                    Update Item{formattedPrice ? ` · ${formattedPrice}` : ''}
+                  </>
+                ) : added ? (
                   <>
                     <Check className="h-4 w-4" />
                     Added to basket
