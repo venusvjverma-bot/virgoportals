@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Clock, Download, FileText, ShoppingBag, X } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { formatMinor } from '@/lib/orders';
+import { formatMinor, paymentLabel } from '@/lib/orders';
 import type { ConfirmedOrder } from './CheckoutView';
+
+const PAY_TO_STAFF_NOTICE =
+  'Payment for this order is made to restaurant staff and is not processed through Virgo. This is not an invoice or payment receipt.';
 
 interface OrderConfirmationProps {
   order: ConfirmedOrder;
@@ -11,6 +14,7 @@ interface OrderConfirmationProps {
 
 export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
   const created = new Date(order.createdAt);
+  const payToStaff = order.paymentStatus === 'pay_to_staff';
   const [showSuccess, setShowSuccess] = useState(false);
   const [openFailed, setOpenFailed] = useState(false);
   const blobUrlRef = useRef<string | null>(null);
@@ -39,7 +43,7 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
     doc.text('Order Confirmation Ticket', pageW / 2, 14, { align: 'center' });
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text('Virgo Portals — Prototype Order', pageW / 2, 22, { align: 'center' });
+    doc.text(payToStaff ? 'Virgo Portals — Order' : 'Virgo Portals — Prototype Order', pageW / 2, 22, { align: 'center' });
 
     y = 40;
     doc.setTextColor(42, 42, 42);
@@ -125,7 +129,7 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
     doc.setFontSize(10);
     doc.text(`Order status: ${order.status}`, margin, y);
     y += 6;
-    doc.text(`Payment status: Test Payment — Not Paid`, margin, y);
+    doc.text(`Payment: ${paymentLabel(order.paymentStatus)}`, margin, y);
     y += 6;
 
     // Mobile number
@@ -139,7 +143,7 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
     doc.rect(margin, y, contentW, 24);
     doc.setFontSize(8);
     doc.setTextColor(120, 80, 0);
-    const disclaimer =
+    const disclaimer = payToStaff ? PAY_TO_STAFF_NOTICE :
       'This is a prototype order. No real payment has been taken and no food will be prepared. ' +
       'This ticket is not a payment receipt or invoice. The mobile number shown is the one ' +
       'provided at checkout for this specific order.';
@@ -214,7 +218,7 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
               Order confirmed
             </h2>
             <p className="mt-1 text-sm text-ink-muted">
-              Your test order has been sent to the restaurant.
+              Your {payToStaff ? '' : 'test '}order has been sent to the restaurant.
             </p>
           </div>
 
@@ -241,7 +245,7 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
                 Payment
               </span>
               <span className="text-xs font-semibold text-warning-700">
-                Test Payment — Not Paid
+                {paymentLabel(order.paymentStatus)}
               </span>
             </div>
             <div className="mt-3 flex items-center justify-between border-t border-cream-200 pt-3">
@@ -307,8 +311,9 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
           {/* Prototype notice */}
           <div className="mt-5 rounded-xl bg-warning-50 px-4 py-3 ring-1 ring-warning-200">
             <p className="text-xs text-warning-800">
-              This is a prototype order. No payment has been taken and no food will be prepared.
-              This is not an invoice or payment receipt.
+              {payToStaff
+                ? PAY_TO_STAFF_NOTICE
+                : 'This is a prototype order. No payment has been taken and no food will be prepared. This is not an invoice or payment receipt.'}
             </p>
           </div>
 

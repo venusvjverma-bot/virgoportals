@@ -184,6 +184,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
                 resourceType: loaded.resourceType ?? 'restaurant',
                 items: [],
                 mobileNumber: '+0',
+                paymentMethod: 'pay_to_staff',
               });
             } catch {
               // Recovery attempt with empty items will fail gracefully —

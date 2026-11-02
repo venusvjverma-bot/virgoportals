@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { callFunction } from '@/lib/functions';
-import type { Department, EventItem, Order, OrderStatus, OrderItem, ResourceType, TipOption } from '@/types';
+import type { Department, EventItem, Order, OrderStatus, OrderItem, PaymentMethod, ResourceType, TipOption } from '@/types';
 
 interface OrderRow {
   id: string;
@@ -156,6 +156,7 @@ export async function createOrder(params: {
   items: { dishId: string; quantity: number; servingOptionId?: string | null; removedIngredientIds?: string[]; additionalRequest?: string | null }[];
   mobileNumber: string;
   tip?: { option: TipOption; customMinor?: number };
+  paymentMethod: PaymentMethod;
 }): Promise<CreateOrderResult> {
   return callFunction<CreateOrderResult>('visitor-orders', {
     action: 'create',
@@ -166,6 +167,7 @@ export async function createOrder(params: {
     items: params.items.map((i) => ({ dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? null })),
     mobileNumber: params.mobileNumber,
     tip: params.tip,
+    paymentMethod: params.paymentMethod,
   });
 }
 
@@ -230,6 +232,10 @@ export function groupOrdersByScope(orders: Order[], departments: Department[], e
   const known = orderedKeys.map((key) => groups.get(key)).filter((g): g is OrderGroup => Boolean(g));
   const unknown = [...groups.values()].filter((g) => !orderedKeys.includes(g.key));
   return [...known, ...unknown].filter((g) => g.orders.length > 0);
+}
+
+export function paymentLabel(paymentStatus: string): string {
+  return paymentStatus === 'pay_to_staff' ? 'Pay to Staff — Not Paid' : 'Test Payment — Not Paid';
 }
 
 export function statusLabel(status: OrderStatus): string {

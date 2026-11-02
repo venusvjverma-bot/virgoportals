@@ -4,6 +4,7 @@ import {
   getOrder,
   updateOrderStatus,
   formatMinor,
+  paymentLabel,
   statusLabel,
   nextStatus,
   STATUS_FLOW,
@@ -148,7 +149,7 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
         </div>
         <div className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
           <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Payment</p>
-          <p className="mt-1.5 text-xs font-semibold text-warning-700">Test Payment — Not Paid</p>
+          <p className="mt-1.5 text-xs font-semibold text-warning-700">{paymentLabel(order.paymentStatus)}</p>
         </div>
       </div>
 

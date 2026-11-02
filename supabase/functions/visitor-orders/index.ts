@@ -174,6 +174,11 @@ Deno.serve(async (req: Request) => {
         return json({ error: 'Please enter a valid mobile number in international format.' }, 400);
       }
 
+      if (body.paymentMethod !== 'pay_to_staff' && body.paymentMethod !== 'pay_online') {
+        return json({ error: 'Please choose a payment method.' }, 400);
+      }
+      const paymentStatus = body.paymentMethod === 'pay_to_staff' ? 'pay_to_staff' : 'test_unpaid';
+
       // Validate quantities
       for (const item of items) {
         if (!item.dishId || typeof item.dishId !== 'string') {
@@ -460,7 +465,7 @@ Deno.serve(async (req: Request) => {
           resource_name: resourceName,
           restaurant_name: restaurant.name,
           status: 'new',
-          payment_status: 'test_unpaid',
+          payment_status: paymentStatus,
           subtotal_minor: subtotalMinor,
           tip_option: tipResult.tipOption,
           tip_minor: tipResult.tipMinor,

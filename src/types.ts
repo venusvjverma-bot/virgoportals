@@ -169,6 +169,8 @@ export type OrderStatus = 'new' | 'accepted' | 'preparing' | 'ready' | 'complete
 
 export type TipOption = 'none' | '5' | '10' | '13' | '20' | 'custom';
 
+export type PaymentMethod = 'pay_to_staff' | 'pay_online';
+
 export interface OrderItem {
   id: string;
   orderId: string;

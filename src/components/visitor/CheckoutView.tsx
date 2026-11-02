@@ -8,7 +8,8 @@ import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency
 import { computeTipMinor } from '@/lib/tip';
 import { Notice } from '@/components/ui/Notice';
 import { TipSelector } from '@/components/visitor/TipSelector';
-import type { BasketItem, ResourceType, TipOption } from '@/types';
+import { PaymentMethodSelector } from '@/components/visitor/PaymentMethodSelector';
+import type { BasketItem, PaymentMethod, ResourceType, TipOption } from '@/types';
 
 interface CheckoutViewProps {
   items: BasketItem[];
@@ -130,6 +131,7 @@ export function CheckoutView({
   const [nationalNumber, setNationalNumber] = useState('');
   const [tipOption, setTipOption] = useState<TipOption>('none');
   const [customTipInput, setCustomTipInput] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pay_to_staff');
   const [idempotencyKey] = useState(() => {
     const existing = sessionStorage.getItem('vp_checkout_key');
     if (existing) return existing;
@@ -205,6 +207,7 @@ export function CheckoutView({
         resourceType: resourceType ?? 'restaurant',
         items: items.map((i) => ({ dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? '' })),
         mobileNumber: normalizedMobile,
+        paymentMethod,
         tip: {
           option: effectiveTipOption,
           customMinor: effectiveTipOption === 'custom' ? customTipMinor ?? undefined : undefined,
@@ -236,18 +239,19 @@ export function CheckoutView({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-soft">
         <div className="mx-auto max-w-md px-5 py-6">
-          {/* Test checkout banner */}
-          <div className="mb-5 rounded-2xl bg-warning-50 px-4 py-3 ring-1 ring-warning-200">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 text-warning-700" />
-              <p className="text-sm font-semibold text-warning-800">
-                TEST CHECKOUT — NO PAYMENT WILL BE TAKEN
+          {paymentMethod === 'pay_online' ? (
+            <div className="mb-5 rounded-2xl bg-warning-50 px-4 py-3 ring-1 ring-warning-200">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-warning-700" />
+                <p className="text-sm font-semibold text-warning-800">
+                  TEST CHECKOUT — NO PAYMENT WILL BE TAKEN
+                </p>
+              </div>
+              <p className="mt-1 text-xs text-warning-700">
+                This is a prototype order. No real payment, card details, or SMS verification is required.
               </p>
             </div>
-            <p className="mt-1 text-xs text-warning-700">
-              This is a prototype order. No real payment, card details, or SMS verification is required.
-            </p>
-          </div>
+          ) : null}
 
           {/* Restaurant info */}
           <div className="mb-5 rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
@@ -426,6 +430,8 @@ export function CheckoutView({
             ) : null}
           </div>
 
+          <PaymentMethodSelector selectedMethod={paymentMethod} onSelectMethod={setPaymentMethod} />
+
           {error ? (
             <Notice tone="error" className="mb-4">
               {error}
@@ -450,13 +456,15 @@ export function CheckoutView({
             ) : (
               <>
                 <Check className="h-4 w-4" />
-                Confirm test order
+                {paymentMethod === 'pay_online' ? 'Confirm test order' : 'Place order'}
               </>
             )}
           </button>
 
           <p className="mt-3 text-center text-xs text-ink-faint">
-            By confirming, a test order is created and sent to the restaurant. No payment is processed.
+            {paymentMethod === 'pay_online'
+              ? 'By confirming, a test order is created and sent to the restaurant. No payment is processed.'
+              : 'By placing your order, it is sent to the restaurant. You pay the restaurant staff directly.'}
           </p>
         </div>
       </div>
