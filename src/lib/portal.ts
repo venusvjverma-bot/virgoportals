@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { AddOnOption, Dish, DishServingOption, DishRemovableIngredient, RestaurantPortal, PublicResource, ResourceType } from '@/types';
-import type { UsageRow } from '@/lib/dailyTokenUsage';
+import type { DailyUsageRow } from '@/lib/dailyTokenUsage';
 
 const RESTAURANT_COLUMNS = 'id, owner_email, name, city, welcome, system_prompt, status, created_at, timezone, currency';
 const DISH_COLUMNS =
@@ -549,31 +549,22 @@ export async function replaceRemovableIngredients(
 export async function getLlmUsageTotals(
   restaurantId: string
 ): Promise<{ inputTokens: number; outputTokens: number }> {
-  const { data, error } = await supabase
-    .from('llm_usage')
-    .select('input_tokens, output_tokens')
-    .eq('restaurant_id', restaurantId);
+  const { data, error } = await supabase.rpc('get_llm_usage_totals', { p_restaurant_id: restaurantId });
   if (error) throw error;
-  return (data ?? []).reduce(
-    (acc, row) => ({
-      inputTokens: acc.inputTokens + (row.input_tokens ?? 0),
-      outputTokens: acc.outputTokens + (row.output_tokens ?? 0),
-    }),
-    { inputTokens: 0, outputTokens: 0 }
-  );
+  const row = (data ?? [])[0];
+  return {
+    inputTokens: Number(row?.total_input_tokens ?? 0),
+    outputTokens: Number(row?.total_output_tokens ?? 0),
+  };
 }
 
-export async function getLlmUsageSince(restaurantId: string, since: Date): Promise<UsageRow[]> {
-  const { data, error } = await supabase
-    .from('llm_usage')
-    .select('created_at, input_tokens, output_tokens')
-    .eq('restaurant_id', restaurantId)
-    .gte('created_at', since.toISOString());
+export async function getLlmUsageDaily(restaurantId: string): Promise<DailyUsageRow[]> {
+  const { data, error } = await supabase.rpc('get_llm_usage_daily', { p_restaurant_id: restaurantId });
   if (error) throw error;
-  return (data ?? []).map((row) => ({
-    createdAt: row.created_at,
-    inputTokens: row.input_tokens ?? 0,
-    outputTokens: row.output_tokens ?? 0,
+  return (data ?? []).map((row: { usage_date: string; daily_input_tokens: number | null; daily_output_tokens: number | null }) => ({
+    usageDate: String(row.usage_date),
+    inputTokens: Number(row.daily_input_tokens ?? 0),
+    outputTokens: Number(row.daily_output_tokens ?? 0),
   }));
 }
 

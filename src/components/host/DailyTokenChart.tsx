@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
-import { buildDailyUsage, formatCredits, windowStart, type DailyUsage } from '@/lib/dailyTokenUsage';
-import { getLlmUsageSince } from '@/lib/portal';
+import { buildDailyUsage, formatCredits, type DailyUsage } from '@/lib/dailyTokenUsage';
+import { getLlmUsageDaily } from '@/lib/portal';
 import type { RestaurantPortal } from '@/types';
 
 const BAR_COLOR = '#E8833A';
@@ -26,9 +26,8 @@ export function DailyTokenChart({ portal }: DailyTokenChartProps) {
     let active = true;
     (async () => {
       try {
-        const now = new Date();
-        const rows = await getLlmUsageSince(portal.id, windowStart(now));
-        if (active) setDays(buildDailyUsage(rows, now, timezone));
+        const rows = await getLlmUsageDaily(portal.id);
+        if (active) setDays(buildDailyUsage(rows));
       } catch (err) {
         if (active) setError(err instanceof Error ? err.message : 'Could not load daily usage.');
       }
@@ -36,7 +35,7 @@ export function DailyTokenChart({ portal }: DailyTokenChartProps) {
     return () => {
       active = false;
     };
-  }, [portal.id, timezone]);
+  }, [portal.id]);
 
   const peak = days ? Math.max(0, ...days.map((day) => day.totalTokens)) : 0;
 
