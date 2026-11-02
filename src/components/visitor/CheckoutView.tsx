@@ -9,6 +9,7 @@ import { computeTipMinor } from '@/lib/tip';
 import { Notice } from '@/components/ui/Notice';
 import { TipSelector } from '@/components/visitor/TipSelector';
 import { PaymentMethodSelector } from '@/components/visitor/PaymentMethodSelector';
+import { TermsPage } from '@/components/visitor/TermsPage';
 import type { BasketItem, PaymentMethod, ResourceType, TipOption } from '@/types';
 
 interface CheckoutViewProps {
@@ -132,6 +133,7 @@ export function CheckoutView({
   const [tipOption, setTipOption] = useState<TipOption>('none');
   const [customTipInput, setCustomTipInput] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pay_to_staff');
+  const [showTerms, setShowTerms] = useState(false);
   const [idempotencyKey] = useState(() => {
     const existing = sessionStorage.getItem('vp_checkout_key');
     if (existing) return existing;
@@ -432,6 +434,18 @@ export function CheckoutView({
 
           <PaymentMethodSelector selectedMethod={paymentMethod} onSelectMethod={setPaymentMethod} />
 
+          <p className="mb-5 text-sm leading-relaxed text-ink-muted">
+            Please review our{' '}
+            <button
+              type="button"
+              onClick={() => setShowTerms(true)}
+              className="font-semibold text-blue-600 underline underline-offset-2 transition-colors duration-200 hover:text-blue-700 focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-olive-500"
+            >
+              Terms & Conditions
+            </button>{' '}
+            before placing your order. By placing your order, you agree to these terms.
+          </p>
+
           {error ? (
             <Notice tone="error" className="mb-4">
               {error}
@@ -468,6 +482,8 @@ export function CheckoutView({
           </p>
         </div>
       </div>
+
+      {showTerms ? <TermsPage onClose={() => setShowTerms(false)} /> : null}
     </div>
   );
 }
