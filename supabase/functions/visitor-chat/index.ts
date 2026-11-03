@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import { listCombosForScope, type ResourceScope } from './combos.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -327,6 +328,44 @@ function buildMenuContext(dishes: DishRow[], optionsByDish: Map<string, ServingO
     .join('\n\n');
 }
 
+type ChatCombo = Awaited<ReturnType<typeof listCombosForScope>>[number];
+
+function buildComboContext(combos: ChatCombo[], currency: string): string {
+  if (combos.length === 0) return '';
+  const header =
+    '--- AVAILABLE COMBOS ---\n' +
+    `A combo is a set menu. Its price is in ${currency}. For each step the guest chooses the listed number of dishes from the named section and category.`;
+  const blocks = combos.map((combo) => {
+    const lines = [`Combo: ${combo.name}`, `Price: ${combo.price}`];
+    if (combo.description) lines.push(`Description: ${combo.description}`);
+    for (const group of combo.groups) {
+      const names = group.dishes.map((dish) => dish.name).join(', ') || 'no dishes available';
+      lines.push(`Choose ${group.requiredCount} from ${sectionLabel(group.section)} / ${categoryLabel(group.category)}: ${names}`);
+    }
+    return lines.join('\n');
+  });
+  return [header, ...blocks].join('\n\n');
+}
+
+function resolveComboDirective(directive: string, combos: ChatCombo[]): ChatCombo[] {
+  const value = directive.trim().replace(/^\[|\]$/g, '').trim();
+  if (!value || /^(none|no combos|nothing|-)$/i.test(value)) return [];
+
+  const picked: ChatCombo[] = [];
+  for (const raw of value.split(/[,;]+/)) {
+    const wanted = raw.replace(/^\d+[.)]\s*/, '').trim().toLowerCase();
+    if (!wanted || /^(none|no combos|nothing|-)$/.test(wanted)) continue;
+
+    const exact = combos.find((combo) => combo.name.trim().toLowerCase() === wanted);
+    const match = exact ?? combos.find((combo) => {
+      const name = combo.name.trim().toLowerCase();
+      return name.length > 2 && (name.includes(wanted) || wanted.includes(name));
+    });
+    if (match && !picked.includes(match)) picked.push(match);
+  }
+  return picked.slice(0, MAX_CARDS);
+}
+
 /**
  * Card selection is a backend decision, so the model only has to name the
  * dishes it used. Anything it names is resolved against this restaurant's own
@@ -350,13 +389,20 @@ function cardInstructions(): string {
     'labels in the menu context. For cocktails, beer, wine, spirits, or other ' +
     'drink categories, name every saved item of that category. ' +
     'Never name an item that is not in the list above.\n' +
+    'COMBO CARDS\n' +
+    'Combos are listed under AVAILABLE COMBOS. When a combo fits the guest\u2019s request, ' +
+    'such as a set menu, a meal deal, or a group choice, or the guest asks about combos, ' +
+    'add one line naming it, copied exactly from the combo names:\n' +
+    'COMBOS: <exact combo name>, <exact combo name>\n' +
+    'Use COMBOS: none when no combo fits. Never invent a combo or a combo price.\n\n' +
+    'FOLLOWUP SELECTION\n' +
     'When an item has serving options listed, mention the available sizes and prices. ' +
     'Never invent serving sizes or prices that are not listed in the menu context.\n\n' +
     'FOLLOWUP SELECTION\n' +
-    'When you list one or more dishes on the CARDS line, add one more final line ' +
+    'When you list one or more dishes on the CARDS line or one or more combos on the COMBOS line, add one more final line ' +
     'with a short follow-up message for the guest:\n' +
     'FOLLOWUP: <your follow-up message>\n' +
-    'Omit the FOLLOWUP line entirely when the CARDS line is none.\n\n' +
+    'Omit the FOLLOWUP line entirely when both the CARDS and COMBOS lines are none.\n\n' +
     'SUGGESTION BUBBLES\n' +
     'Always finish with one final line containing up to two clickable ' +
     'suggestion prompts the guest might want to ask next:\n' +
@@ -419,6 +465,7 @@ const MAX_SUGGESTIONS = 2;
 function extractDirectives(text: string): {
   reply: string;
   cardsDirective: string | null;
+  combosDirective: string | null;
   followUp: string | null;
   suggestions: string[];
 } {
@@ -426,12 +473,16 @@ function extractDirectives(text: string): {
   let cardsDirective: string | null = null;
   let followUp: string | null = null;
   let suggestionsDirective: string | null = null;
+  let combosDirective: string | null = null;
   for (const line of text.split('\n')) {
     const cardMatch = line.match(/^\s*(?:\*\*)?CARDS(?:\*\*)?\s*:\s*(.*)$/i);
     const followMatch = line.match(/^\s*(?:\*\*)?FOLLOWUP(?:\*\*)?\s*:\s*(.*)$/i);
     const suggestMatch = line.match(/^\s*(?:\*\*)?SUGGESTIONS(?:\*\*)?\s*:\s*(.*)$/i);
+    const comboMatch = line.match(/^\s*(?:\*\*)?COMBOS(?:\*\*)?\s*:\s*(.*)$/i);
     if (cardMatch) {
       cardsDirective = cardMatch[1].replace(/\*\*/g, '').trim();
+    } else if (comboMatch) {
+      combosDirective = comboMatch[1].replace(/\*\*/g, '').trim();
     } else if (followMatch) {
       followUp = followMatch[1].replace(/\*\*/g, '').trim();
     } else if (suggestMatch) {
@@ -443,6 +494,7 @@ function extractDirectives(text: string): {
   return {
     reply: kept.join('\n').trim(),
     cardsDirective,
+    combosDirective,
     followUp,
     suggestions: parseSuggestions(suggestionsDirective),
   };
@@ -727,6 +779,12 @@ Deno.serve(async (req: Request) => {
 
     const menu = ((dishes ?? []) as DishRow[]).filter((d) => d.available !== false);
 
+    const comboScope: ResourceScope = {
+      departmentId: hasResource && resourceType === 'department' ? resourceId ?? null : null,
+      eventId: hasResource && resourceType === 'event' ? resourceId ?? null : null,
+    };
+    const combos = await listCombosForScope(supabase, restaurantId, comboScope);
+
     // ── Fetch serving options for all menu dishes ──
     const optionsByDish = new Map<string, ServingOptionRow[]>();
     const ingredientsByDish = new Map<string, RemovableIngredientRow[]>();
@@ -770,6 +828,8 @@ Deno.serve(async (req: Request) => {
     const basketBlock = basketContext ? `\n\n${basketContext}\n\n` : '';
 
     const menuContextText = buildMenuContext(menu, optionsByDish, restaurantCurrency);
+    const comboBlock = buildComboContext(combos, restaurantCurrency);
+    const savedMenuBlock = `--- SAVED MENU ---\n${menuContextText}${comboBlock ? `\n\n${comboBlock}` : ''}`;
     const requestBody: Record<string, unknown> = {
       model: chat.model,
       temperature: Number(chat.temperature ?? 0.8),
@@ -787,7 +847,7 @@ Deno.serve(async (req: Request) => {
                 `product cards, and do not include CARDS or FOLLOWUP lines.\n\n` +
                 `${suggestionsInstructions()}\n\n` +
                 `${langInstruction}\n\n` +
-                `--- SAVED MENU ---\n${menuContextText}` +
+                `${savedMenuBlock}` +
                 basketBlock,
             },
             ...normalizeHistory(body?.history),
@@ -807,7 +867,7 @@ Deno.serve(async (req: Request) => {
                 `answer drink questions from the same list.\n\n` +
                 `${cardInstructions()}\n\n` +
                 `${langInstruction}\n\n` +
-                `--- SAVED MENU ---\n${menuContextText}` +
+                `${savedMenuBlock}` +
                 basketBlock,
             },
             ...normalizeHistory(body?.history),
@@ -864,7 +924,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'The chat model returned an empty reply.' }, 502);
     }
 
-    const { reply: prose, cardsDirective, followUp, suggestions } = extractDirectives(rawReply);
+    const { reply: prose, cardsDirective, combosDirective, followUp, suggestions } = extractDirectives(rawReply);
 
     const inputTokens = extractTokenCount(payload?.usage?.prompt_tokens);
     const outputTokens = extractTokenCount(payload?.usage?.completion_tokens);
@@ -899,11 +959,12 @@ Deno.serve(async (req: Request) => {
     const matched =
       cardsDirective !== null ? resolveDirective(cardsDirective, menu, requestedSections) : [];
 
+    const matchedCombos = combosDirective !== null ? resolveComboDirective(combosDirective, combos) : [];
     const followUpText = followUp ?? '';
 
     await supabase.from('usage_events').insert({ restaurant_id: restaurantId, kind: 'message' });
 
-    return json({ reply, dishes: matched.map((d) => toCard(d, optionsByDish.get(d.id) ?? [], ingredientsByDish.get(d.id) ?? [], restaurantCurrency)), followUp: followUpText, suggestions });
+    return json({ reply, dishes: matched.map((d) => toCard(d, optionsByDish.get(d.id) ?? [], ingredientsByDish.get(d.id) ?? [], restaurantCurrency)), combos: matchedCombos, followUp: followUpText, suggestions });
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : 'The assistant failed to reply.' },

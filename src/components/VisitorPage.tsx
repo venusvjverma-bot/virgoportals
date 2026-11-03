@@ -6,6 +6,7 @@ import { ComboDetailPanel, type ComboSubmission } from '@/components/visitor/Com
 import { ComboListPanel } from '@/components/visitor/ComboListPanel';
 import { LanguageSelector } from '@/components/visitor/LanguageSelector';
 import { BasketPanel } from '@/components/visitor/BasketPanel';
+import { ChatCardButton } from '@/components/visitor/ChatCardButton';
 import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/CheckoutView';
 import { OrderConfirmation } from '@/components/visitor/OrderConfirmation';
 import { basketLineKey } from '@/lib/basketLine';
@@ -39,6 +40,7 @@ interface ChatMessage {
   role: 'visitor' | 'bot';
   text: string;
   dishes: Dish[];
+  combos?: VisitorCombo[];
 }
 
 interface LoadedView {
@@ -367,7 +369,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     setSendError(null);
     setSending(true);
     try {
-      const result = await callFunction<{ reply: string; dishes: Dish[]; followUp: string; suggestions?: string[] }>('visitor-chat', {
+      const result = await callFunction<{ reply: string; dishes: Dish[]; combos?: VisitorCombo[]; followUp: string; suggestions?: string[] }>('visitor-chat', {
         restaurantId: view.restaurantId,
         resourceId: view.resourceId,
         resourceType: view.resourceType,
@@ -386,10 +388,11 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         role: 'bot',
         text: result.reply,
         dishes: result.dishes ?? [],
+        combos: result.combos ?? [],
       };
       const newMessages = [...transcriptRef.current, botMessage];
       const followUp = result.followUp?.trim() ?? '';
-      if (followUp && botMessage.dishes.length > 0) {
+      if (followUp && (botMessage.dishes.length > 0 || (botMessage.combos ?? []).length > 0)) {
         newMessages.push({
           id: crypto.randomUUID(),
           role: 'bot',
@@ -426,7 +429,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     setMessages(transcriptRef.current);
     setSending(true);
     try {
-      const result = await callFunction<{ reply: string; dishes: Dish[]; followUp: string; suggestions?: string[] }>('visitor-chat', {
+      const result = await callFunction<{ reply: string; dishes: Dish[]; combos?: VisitorCombo[]; followUp: string; suggestions?: string[] }>('visitor-chat', {
         restaurantId: view.restaurantId,
         resourceId: view.resourceId,
         resourceType: view.resourceType,
@@ -445,10 +448,11 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         role: 'bot',
         text: result.reply,
         dishes: result.dishes ?? [],
+        combos: result.combos ?? [],
       };
       const newMessages = [...transcriptRef.current, botMessage];
       const followUp = result.followUp?.trim() ?? '';
-      if (followUp && botMessage.dishes.length > 0) {
+      if (followUp && (botMessage.dishes.length > 0 || (botMessage.combos ?? []).length > 0)) {
         newMessages.push({
           id: crypto.randomUUID(),
           role: 'bot',
@@ -818,7 +822,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
             </div>
           ) : null}
           {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} currency={view.currency} onOpen={setSelected} />
+            <MessageBubble key={message.id} message={message} currency={view.currency} onOpen={setSelected} onOpenCombo={setSelectedCombo} />
           ))}
           {sending ? (
             <div className="flex animate-fade-in justify-start">
@@ -1000,7 +1004,17 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
 
 const CARD_REVEAL_DELAY_MS = 250;
 
-function MessageBubble({ message, currency, onOpen }: { message: ChatMessage; currency: string; onOpen: (dish: Dish) => void }) {
+function MessageBubble({
+  message,
+  currency,
+  onOpen,
+  onOpenCombo,
+}: {
+  message: ChatMessage;
+  currency: string;
+  onOpen: (dish: Dish) => void;
+  onOpenCombo: (combo: VisitorCombo) => void;
+}) {
   const isVisitor = message.role === 'visitor';
   const [revealed, setRevealed] = useState(0);
   const timersRef = useRef<number[]>([]);
@@ -1008,7 +1022,7 @@ function MessageBubble({ message, currency, onOpen }: { message: ChatMessage; cu
   useEffect(() => {
     timersRef.current.forEach((t) => window.clearTimeout(t));
     timersRef.current = [];
-    const total = message.dishes.length;
+    const total = message.dishes.length + (message.combos ?? []).length;
     if (total <= 1) {
       setRevealed(total);
       return;
@@ -1025,7 +1039,17 @@ function MessageBubble({ message, currency, onOpen }: { message: ChatMessage; cu
       timersRef.current.forEach((t) => window.clearTimeout(t));
       timersRef.current = [];
     };
-  }, [message.id, message.dishes.length]);
+  }, [message.id, message.dishes.length, message.combos?.length]);
+
+  const combos = message.combos ?? [];
+  const cards = [
+    ...message.dishes.map((dish) => (
+      <DishResult key={`dish-${dish.id}`} dish={dish} currency={currency} onOpen={() => onOpen(dish)} />
+    )),
+    ...combos.map((combo) => (
+      <ComboResult key={`combo-${combo.id}`} combo={combo} currency={currency} onOpen={() => onOpenCombo(combo)} />
+    )),
+  ];
 
   return (
     <div className={cn('flex animate-fade-in', isVisitor ? 'justify-end' : 'justify-start')}>
@@ -1040,13 +1064,7 @@ function MessageBubble({ message, currency, onOpen }: { message: ChatMessage; cu
         >
           {message.text}
         </div>
-        {message.dishes.length > 0 ? (
-          <div className="space-y-3">
-            {message.dishes.slice(0, revealed).map((dish) => (
-              <DishResult key={dish.id} dish={dish} currency={currency} onOpen={() => onOpen(dish)} />
-            ))}
-          </div>
-        ) : null}
+        {cards.length > 0 ? <div className="space-y-3">{cards.slice(0, revealed)}</div> : null}
       </div>
     </div>
   );
@@ -1057,50 +1075,31 @@ function DishResult({ dish, currency, onOpen }: { dish: Dish; currency: string; 
   const activeOptions = (dish.servingOptions ?? []).filter((o) => o.isActive !== false);
   const hasMultiplePrices = activeOptions.length > 1;
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`View details for ${dish.name || 'this item'}`}
-      className="flex w-full flex-col gap-2 overflow-hidden rounded-2xl bg-white p-3 text-left shadow-lift ring-1 ring-olive-300 transition-all duration-200 hover:shadow-lift hover:ring-olive-500 focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-[0.99]"
-    >
-      <div className="flex gap-3">
-        <div className="flex w-24 shrink-0 flex-col">
-          {dish.imageUrl ? (
-            <img
-              src={dish.imageUrl}
-              alt={dish.name}
-              className="h-24 w-24 shrink-0 rounded-xl object-cover ring-1 ring-cream-200"
-            />
-          ) : (
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-cream-100 text-[11px] text-ink-faint ring-1 ring-inset ring-cream-200">
-              No image
-            </div>
-          )}
-          {dish.price && !hasMultiplePrices ? (
-            <span className="mt-1.5 text-center text-sm font-medium text-olive-700">
-              {formatPriceInput(dish.price, cur)}
-            </span>
-          ) : null}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="font-display text-base font-semibold text-ink">{dish.name}</h3>
-          {dish.description ? (
-            <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-ink-soft">
-              {dish.description}
-            </p>
-          ) : null}
-          {dish.allergy ? (
-            <p className="mt-1.5 text-xs font-medium text-warning-700">
-              Allergy: {dish.allergy}
-            </p>
-          ) : null}
-        </div>
-      </div>
-      {hasMultiplePrices ? (
-        <p className="text-xs font-medium leading-relaxed text-olive-700">
-          {activeOptions.map((o) => formatPriceInput(o.price, cur)).join(' · ')}
-        </p>
-      ) : null}
-    </button>
+    <ChatCardButton
+      name={dish.name}
+      description={dish.description}
+      imageUrl={dish.imageUrl}
+      allergy={dish.allergy}
+      price={dish.price && !hasMultiplePrices ? formatPriceInput(dish.price, cur) : null}
+      priceOptions={hasMultiplePrices ? activeOptions.map((o) => formatPriceInput(o.price, cur)) : []}
+      ariaLabel={`View details for ${dish.name || 'this item'}`}
+      onOpen={onOpen}
+    />
+  );
+}
+
+function ComboResult({ combo, currency, onOpen }: { combo: VisitorCombo; currency: string; onOpen: () => void }) {
+  const cur = normalizeCurrency(currency);
+  return (
+    <ChatCardButton
+      name={combo.name}
+      description={combo.description}
+      imageUrl={combo.imageUrl}
+      badge="Combo"
+      price={combo.price ? formatPriceInput(combo.price, cur) : null}
+      priceOptions={[]}
+      ariaLabel={`Build combo ${combo.name || ''}`.trim()}
+      onOpen={onOpen}
+    />
   );
 }
