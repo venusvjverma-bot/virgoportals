@@ -6,6 +6,7 @@ import { ComboDetailPanel, type ComboSubmission } from '@/components/visitor/Com
 import { ComboListPanel } from '@/components/visitor/ComboListPanel';
 import { LanguageSelector } from '@/components/visitor/LanguageSelector';
 import { BasketPanel } from '@/components/visitor/BasketPanel';
+import { AssistantMarkdown } from '@/components/visitor/AssistantMarkdown';
 import { ChatCardButton } from '@/components/visitor/ChatCardButton';
 import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/CheckoutView';
 import { OrderConfirmation } from '@/components/visitor/OrderConfirmation';
@@ -1051,7 +1052,7 @@ function MessageBubble({
               : 'bg-white text-ink ring-1 ring-cream-200'
           )}
         >
-          {message.text}
+          {isVisitor ? message.text : <AssistantMarkdown text={message.text} />}
         </div>
         {cards.length > 0 ? <div className="space-y-3">{cards.slice(0, revealed)}</div> : null}
       </div>
