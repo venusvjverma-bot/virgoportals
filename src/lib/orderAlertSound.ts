@@ -1,3 +1,5 @@
+import { useEffect, useRef, type RefObject } from 'react';
+
 export function createAlertAudio(): AudioContext | null {
   const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;
@@ -24,4 +26,24 @@ export function playAlertPing(ctx: AudioContext): void {
     oscillator.start(at);
     oscillator.stop(at + 0.4);
   }
+}
+
+export function useOrderAlertAudio(): RefObject<AudioContext | null> {
+  const audioRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    function unlock() {
+      if (!audioRef.current) audioRef.current = createAlertAudio();
+      void audioRef.current?.resume();
+    }
+    const events = ['pointerdown', 'keydown'] as const;
+    for (const type of events) window.addEventListener(type, unlock);
+    return () => {
+      for (const type of events) window.removeEventListener(type, unlock);
+      void audioRef.current?.close();
+      audioRef.current = null;
+    };
+  }, []);
+
+  return audioRef;
 }

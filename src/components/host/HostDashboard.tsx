@@ -14,6 +14,7 @@ import { Notice } from '@/components/ui/Notice';
 import { getOwnPortal, updatePortal } from '@/lib/portal';
 import { listDepartments } from '@/lib/departments';
 import { listEvents } from '@/lib/events';
+import { useOrderAlertAudio } from '@/lib/orderAlertSound';
 import type { Department, EventItem, HostView, Order, RestaurantPortal } from '@/types';
 
 interface HostDashboardProps {
@@ -31,6 +32,7 @@ export function HostDashboard({ onLogout }: HostDashboardProps) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const alertAudioRef = useOrderAlertAudio();
 
   useEffect(() => {
     let active = true;
@@ -153,6 +155,7 @@ export function HostDashboard({ onLogout }: HostDashboardProps) {
       {view === 'orders' ? (
         <OrdersView
           restaurant={portal}
+          alertAudioRef={alertAudioRef}
           onOpenOrder={(order) => {
             setSelectedOrder(order);
             setSelectedOrderId(order.id);

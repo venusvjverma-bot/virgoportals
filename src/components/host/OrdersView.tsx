@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, type RefObject } from 'react';
 import { Loader2, ShoppingBag, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
@@ -13,7 +13,7 @@ import {
 } from '@/lib/orders';
 import { listDepartments } from '@/lib/departments';
 import { listEvents } from '@/lib/events';
-import { createAlertAudio, playAlertPing } from '@/lib/orderAlertSound';
+import { playAlertPing } from '@/lib/orderAlertSound';
 import { OrderAlertBanner } from '@/components/host/OrderAlertBanner';
 import type { Department, EventItem, Order, OrderStatus, RestaurantPortal } from '@/types';
 import { cn } from '@/lib/cn';
@@ -54,9 +54,10 @@ function saveOpenedOrderIds(restaurantId: string, ids: Set<string>): void {
 interface OrdersViewProps {
   restaurant: RestaurantPortal;
   onOpenOrder: (order: Order) => void;
+  alertAudioRef: RefObject<AudioContext | null>;
 }
 
-export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
+export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersViewProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +71,6 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
   const loadingRef = useRef(false);
   const pendingRef = useRef(false);
   const seenOrderIdsRef = useRef<Set<string> | null>(null);
-  const audioRef = useRef<AudioContext | null>(null);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const channelHealthyRef = useRef(false);
@@ -97,7 +97,7 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
         const fresh = data.filter((order) => !seen.has(order.id));
         if (fresh.length > 0) {
           setAlerts((current) => [...current, ...fresh]);
-          if (audioRef.current) playAlertPing(audioRef.current);
+          if (alertAudioRef.current) playAlertPing(alertAudioRef.current);
         }
       }
       seenOrderIdsRef.current = new Set(data.map((order) => order.id));
@@ -113,26 +113,11 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
         void load();
       }
     }
-  }, [restaurant.id]);
+  }, [restaurant.id, alertAudioRef]);
 
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    function unlockAudio() {
-      if (!audioRef.current) audioRef.current = createAlertAudio();
-      void audioRef.current?.resume();
-    }
-    window.addEventListener('pointerdown', unlockAudio);
-    window.addEventListener('keydown', unlockAudio);
-    return () => {
-      window.removeEventListener('pointerdown', unlockAudio);
-      window.removeEventListener('keydown', unlockAudio);
-      void audioRef.current?.close();
-      audioRef.current = null;
-    };
-  }, []);
 
   useEffect(() => {
     let active = true;
