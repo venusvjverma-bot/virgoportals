@@ -70,8 +70,11 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => null);
     const restaurantId = body?.restaurantId as string | undefined;
     const dishId = body?.dishId as string | undefined;
+    const comboId = body?.comboId as string | undefined;
 
-    if (!restaurantId || !dishId) return json({ error: 'Missing dish.' }, 400);
+    if (!restaurantId || (!dishId && !comboId) || (dishId && comboId)) {
+      return json({ error: 'Missing dish or combo.' }, 400);
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -91,14 +94,26 @@ Deno.serve(async (req: Request) => {
     if (ownerError) throw ownerError;
     if (!owned) return json({ error: 'This restaurant is not on your account.' }, 403);
 
-    const { data: dish, error: dishError } = await supabase
-      .from('dishes')
-      .select('id, name, description, ingredients, restaurant_id')
-      .eq('id', dishId)
-      .eq('restaurant_id', restaurantId)
-      .maybeSingle();
-    if (dishError) throw dishError;
-    if (!dish) return json({ error: 'That dish no longer exists.' }, 404);
+    const isCombo = Boolean(comboId);
+    const targetId = (comboId ?? dishId) as string;
+    const { data: target, error: targetError } = isCombo
+      ? await supabase
+          .from('combos')
+          .select('id, name, description')
+          .eq('id', comboId)
+          .eq('restaurant_id', restaurantId)
+          .maybeSingle()
+      : await supabase
+          .from('dishes')
+          .select('id, name, description, ingredients, restaurant_id')
+          .eq('id', dishId)
+          .eq('restaurant_id', restaurantId)
+          .maybeSingle();
+    if (targetError) throw targetError;
+    if (!target) {
+      return json({ error: isCombo ? 'That combo no longer exists.' : 'That dish no longer exists.' }, 404);
+    }
+    const targetRow = target as { name?: string; description?: string; ingredients?: string };
 
     const { data: configRow, error: configError } = await supabase
       .from('model_settings')
@@ -118,9 +133,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const prompt = buildPrompt(
-      dish.name ?? 'a dish',
-      dish.description ?? '',
-      dish.ingredients ?? ''
+      targetRow.name ?? (isCombo ? 'a combo meal' : 'a dish'),
+      targetRow.description ?? '',
+      targetRow.ingredients ?? ''
     );
 
     const imageResponse = await fetch(image.endpoint, {
@@ -250,7 +265,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'The image model did not return an image.' }, 502);
     }
 
-    const path = `${restaurantId}/${dishId}-${Date.now()}.png`;
+    const path = `${restaurantId}/${isCombo ? 'combo-' : ''}${targetId}-${Date.now()}.png`;
     const { error: uploadError } = await supabase.storage
       .from('dish-images')
       .upload(path, bytes, { contentType: 'image/png', upsert: true });
@@ -259,11 +274,17 @@ Deno.serve(async (req: Request) => {
     const { data: publicUrlData } = supabase.storage.from('dish-images').getPublicUrl(path);
     const imageUrl = publicUrlData.publicUrl;
 
-    const { error: updateError } = await supabase
-      .from('dishes')
-      .update({ image_url: imageUrl, updated_at: new Date().toISOString() })
-      .eq('id', dishId)
-      .eq('restaurant_id', restaurantId);
+    const { error: updateError } = isCombo
+      ? await supabase
+          .from('combos')
+          .update({ image_url: imageUrl, updated_at: new Date().toISOString() })
+          .eq('id', targetId)
+          .eq('restaurant_id', restaurantId)
+      : await supabase
+          .from('dishes')
+          .update({ image_url: imageUrl, updated_at: new Date().toISOString() })
+          .eq('id', targetId)
+          .eq('restaurant_id', restaurantId);
     if (updateError) throw updateError;
 
     await supabase.from('usage_events').insert({ restaurant_id: restaurantId, kind: 'image' });

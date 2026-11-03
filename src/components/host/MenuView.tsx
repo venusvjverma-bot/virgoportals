@@ -60,6 +60,7 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const showCombos = sectionFilter === 'combo';
+  const [newComboRequest, setNewComboRequest] = useState(0);
 
   const categoryFilterOptions = useMemo(() => {
     if (sectionFilter === 'all') return SECTIONS.flatMap((s) => s.categories);
@@ -230,14 +231,24 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
             <h2 className="font-display text-lg font-semibold tracking-tight text-ink">
               Saved dishes
             </h2>
-            <Button
-              size="sm"
-              onClick={() => setAdding(true)}
-              disabled={adding || loading}
-            >
-              <Plus className="h-4 w-4" />
-              Add dish
-            </Button>
+            <div className="flex flex-col gap-2">
+              <Button
+                size="sm"
+                onClick={() => setAdding(true)}
+                disabled={adding || loading}
+              >
+                <Plus className="h-4 w-4" />
+                Add dish
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setNewComboRequest((count) => count + 1)}
+              >
+                <Plus className="h-4 w-4" />
+                New combo
+              </Button>
+            </div>
           </div>
           <span className="text-sm text-ink-muted">
             {dishes.length} {dishes.length === 1 ? 'dish' : 'dishes'}
@@ -307,9 +318,14 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
           </div>
         ) : null}
 
-        {showCombos ? (
-          <ComboManager restaurantId={restaurantId} departmentId={departmentId} eventId={eventId} currency={currency} />
-        ) : null}
+        <ComboManager
+          restaurantId={restaurantId}
+          departmentId={departmentId}
+          eventId={eventId}
+          currency={currency}
+          showList={showCombos}
+          newComboRequest={newComboRequest}
+        />
 
         {!showCombos && adding ? (
           <DishCard
