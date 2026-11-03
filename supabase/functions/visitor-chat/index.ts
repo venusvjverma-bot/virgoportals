@@ -135,6 +135,15 @@ interface RemovableIngredientRow {
   is_active: boolean;
 }
 
+interface VariantRow {
+  id: string;
+  dish_id: string;
+  name: string;
+  additional_price: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
 interface BasketItemInput {
   name: string;
   price: string;
@@ -202,6 +211,7 @@ function toCard(
   dish: DishRow,
   servingOptions: ServingOptionRow[] = [],
   removableIngredients: RemovableIngredientRow[] = [],
+  variants: VariantRow[] = [],
   currency = 'SEK'
 ) {
   return {
@@ -225,6 +235,9 @@ function toCard(
     removableIngredients: removableIngredients
       .filter((i) => i.is_active)
       .map((i) => ({ id: i.id, dishId: i.dish_id, label: i.label, sortOrder: i.sort_order, isActive: i.is_active })),
+    variants: variants
+      .filter((v) => v.is_active)
+      .map((v) => ({ id: v.id, dishId: v.dish_id, name: v.name, additionalPrice: v.additional_price, sortOrder: v.sort_order, isActive: v.is_active })),
   };
 }
 
@@ -788,9 +801,10 @@ Deno.serve(async (req: Request) => {
     // ── Fetch serving options for all menu dishes ──
     const optionsByDish = new Map<string, ServingOptionRow[]>();
     const ingredientsByDish = new Map<string, RemovableIngredientRow[]>();
+    const variantsByDish = new Map<string, VariantRow[]>();
     if (menu.length > 0) {
       const dishIds = menu.map((d) => d.id);
-      const [servingResult, ingredientResult] = await Promise.all([
+      const [servingResult, ingredientResult, variantResult] = await Promise.all([
         supabase
           .from('dish_serving_options')
           .select('id, dish_id, label, price, sort_order, is_active')
@@ -801,9 +815,20 @@ Deno.serve(async (req: Request) => {
           .select('id, dish_id, label, sort_order, is_active')
           .in('dish_id', dishIds)
           .order('sort_order', { ascending: true }),
+        supabase
+          .from('dish_variants')
+          .select('id, dish_id, name, additional_price, sort_order, is_active')
+          .in('dish_id', dishIds)
+          .order('sort_order', { ascending: true }),
       ]);
       if (servingResult.error) throw servingResult.error;
       if (ingredientResult.error) throw ingredientResult.error;
+      if (variantResult.error) throw variantResult.error;
+      for (const v of (variantResult.data ?? []) as VariantRow[]) {
+        const list = variantsByDish.get(v.dish_id) ?? [];
+        list.push(v);
+        variantsByDish.set(v.dish_id, list);
+      }
       for (const opt of (servingResult.data ?? []) as ServingOptionRow[]) {
         const list = optionsByDish.get(opt.dish_id) ?? [];
         list.push(opt);
@@ -964,7 +989,7 @@ Deno.serve(async (req: Request) => {
 
     await supabase.from('usage_events').insert({ restaurant_id: restaurantId, kind: 'message' });
 
-    return json({ reply, dishes: matched.map((d) => toCard(d, optionsByDish.get(d.id) ?? [], ingredientsByDish.get(d.id) ?? [], restaurantCurrency)), combos: matchedCombos, followUp: followUpText, suggestions });
+    return json({ reply, dishes: matched.map((d) => toCard(d, optionsByDish.get(d.id) ?? [], ingredientsByDish.get(d.id) ?? [], variantsByDish.get(d.id) ?? [], restaurantCurrency)), combos: matchedCombos, followUp: followUpText, suggestions });
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : 'The assistant failed to reply.' },
