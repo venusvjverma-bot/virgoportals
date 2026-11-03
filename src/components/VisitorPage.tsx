@@ -780,17 +780,6 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           >
             <RotateCcw className="h-5 w-5" />
           </button>
-          {combos.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setOverlay('combos')}
-              aria-label="Open combos"
-              className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-white/15 px-3 text-sm font-medium text-white transition-all duration-200 hover:bg-white/25"
-            >
-              <Layers className="h-5 w-5" />
-              <span className="hidden sm:inline">Combos</span>
-            </button>
-          ) : null}
           {/* Basket icon */}
           <button
             type="button"
