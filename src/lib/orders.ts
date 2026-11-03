@@ -246,6 +246,12 @@ export function groupOrdersByScope(orders: Order[], departments: Department[], e
   return [...known, ...unknown].filter((g) => g.orders.length > 0);
 }
 
+export function orderScopeTitle(order: Order, departments: Department[], events: EventItem[]): string {
+  if (order.eventId) return events.find((e) => e.id === order.eventId)?.name ?? 'Unknown event';
+  if (order.departmentId) return departments.find((d) => d.id === order.departmentId)?.name ?? 'Unknown department';
+  return 'Restaurant';
+}
+
 export function paymentLabel(paymentStatus: string): string {
   return paymentStatus === 'pay_to_staff' ? 'Pay to Staff — Not Paid' : 'Test Payment — Not Paid';
 }

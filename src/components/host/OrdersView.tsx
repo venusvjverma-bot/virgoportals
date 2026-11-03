@@ -9,9 +9,12 @@ import {
   nextStatus,
   STATUS_FLOW,
   groupOrdersByScope,
+  orderScopeTitle,
 } from '@/lib/orders';
 import { listDepartments } from '@/lib/departments';
 import { listEvents } from '@/lib/events';
+import { createAlertAudio, playAlertPing } from '@/lib/orderAlertSound';
+import { OrderAlertBanner } from '@/components/host/OrderAlertBanner';
 import type { Department, EventItem, Order, OrderStatus, RestaurantPortal } from '@/types';
 import { cn } from '@/lib/cn';
 
@@ -61,14 +64,21 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
   const [openedIds, setOpenedIds] = useState<Set<string>>(() => loadOpenedOrderIds(restaurant.id));
   const [departments, setDepartments] = useState<Department[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [alerts, setAlerts] = useState<Order[]>([]);
 
   const hasLoadedRef = useRef(false);
   const loadingRef = useRef(false);
   const pendingRef = useRef(false);
+  const seenOrderIdsRef = useRef<Set<string> | null>(null);
+  const audioRef = useRef<AudioContext | null>(null);
 
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const channelHealthyRef = useRef(false);
   const channelGenRef = useRef(0);
+
+  const dismissAlert = useCallback((orderId: string) => {
+    setAlerts((current) => current.filter((order) => order.id !== orderId));
+  }, []);
 
   const load = useCallback(async () => {
     if (loadingRef.current) {
@@ -81,6 +91,16 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
       setOrders(data);
       setError(null);
       hasLoadedRef.current = true;
+
+      const seen = seenOrderIdsRef.current;
+      if (seen) {
+        const fresh = data.filter((order) => !seen.has(order.id));
+        if (fresh.length > 0) {
+          setAlerts((current) => [...current, ...fresh]);
+          if (audioRef.current) playAlertPing(audioRef.current);
+        }
+      }
+      seenOrderIdsRef.current = new Set(data.map((order) => order.id));
     } catch (err) {
       if (!hasLoadedRef.current) {
         setError(err instanceof Error ? err.message : 'Could not load orders.');
@@ -98,6 +118,21 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    function unlockAudio() {
+      if (!audioRef.current) audioRef.current = createAlertAudio();
+      void audioRef.current?.resume();
+    }
+    window.addEventListener('pointerdown', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+      void audioRef.current?.close();
+      audioRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -242,6 +277,20 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
 
   return (
     <div className="space-y-6">
+      {alerts.length > 0 ? (
+        <div className="space-y-2" role="status" aria-live="polite">
+          {alerts.map((alert) => (
+            <OrderAlertBanner
+              key={alert.id}
+              order={alert}
+              scopeTitle={orderScopeTitle(alert, departments, events)}
+              onOpen={handleOpenOrder}
+              onDismiss={dismissAlert}
+            />
+          ))}
+        </div>
+      ) : null}
+
       {/* Unopened counter */}
       <div className="flex items-center gap-2">
         <span
@@ -312,7 +361,7 @@ export function OrdersView({ restaurant, onOpenOrder }: OrdersViewProps) {
                           'flex w-full items-center gap-4 rounded-2xl p-4 text-left shadow-soft ring-1 transition-all duration-200 hover:shadow-lift hover:ring-olive-200 active:scale-[0.99] sm:p-5',
                           isOpened
                             ? 'bg-white ring-cream-200'
-                            : 'bg-olive-50 ring-olive-200'
+                            : 'bg-orange-200 ring-orange-300 hover:ring-orange-400'
                         )}
                       >
                         <div className="min-w-0 flex-1">
