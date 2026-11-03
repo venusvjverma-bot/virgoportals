@@ -380,7 +380,7 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
                     dish={dish}
                     index={index}
                     currency={currency}
-                    onSave={(patch, servingOptions, removableIngredients) => handleSaveDish(dish.id, patch, servingOptions, removableIngredients)}
+                    onSave={(patch, servingOptions, removableIngredients, variants) => handleSaveDish(dish.id, patch, servingOptions, removableIngredients, variants)}
                     onGenerateImage={() => handleGenerateImage(dish.id)}
                     onDelete={() => handleDeleteDish(dish.id)}
                   />

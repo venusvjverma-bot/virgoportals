@@ -280,7 +280,7 @@ export function DishCard({
     const seenVariantNames = new Set<string>();
     for (const variant of cleanedVariants) {
       if (!variant.name) {
-        setError('Every variant needs a name (e.g. "Chicken").');
+        setError('Every variant needs a name.');
         return;
       }
       if (seenVariantNames.has(variant.name.toLowerCase())) {
@@ -564,14 +564,14 @@ export function DishCard({
               <div className="mt-4 rounded-xl bg-cream-50 p-4 ring-1 ring-cream-200">
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Variants</p>
                 <p className="mt-0.5 text-xs text-ink-faint">
-                  Choices visitors must pick one of, such as Chicken or Beef. The extra price is added to the dish price.
+                  Choices visitors must pick one of. Each extra price is added to this dish's price.
                 </p>
                 <div className="mt-2 space-y-2">
                   {variantDrafts.map((variant, idx) => (
                     <div key={idx} className="grid grid-cols-[1fr_7rem_auto] items-center gap-2">
                       <Input
                         value={variant.name}
-                        placeholder="e.g. Chicken"
+                        placeholder="Option name"
                         aria-label="Variant name"
                         onChange={(e) => {
                           setVariantDrafts((prev) => prev.map((o, i) => i === idx ? { ...o, name: e.target.value } : o));

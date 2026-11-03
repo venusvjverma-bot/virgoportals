@@ -361,8 +361,8 @@ function extractionInstruction(): string {
     '  "serving"     - serving size or volume as printed, e.g. "40 cl", or ""\n' +
     '  "abv"         - alcohol percentage as printed, e.g. "5.0%", or ""\n' +
     '  "variant_of"  - for a named option of another item, the exact name of that parent item as printed, or ""\n' +
-    '  "variant"     - the option name as printed, e.g. "chicken", or ""\n' +
-    '  "additional_price" - the extra amount the option adds, ONLY when the menu prints it as an add-on such as "+20", or ""\n\n' +
+    '  "variant"     - the option name as printed, or ""\n' +
+    '  "additional_price" - the extra amount the option adds, ONLY when the menu prints it as an add-on with a plus sign, or ""\n\n' +
     'Sizes: when one item is offered in several sizes or volumes, return ONE object per size. ' +
     'Every object for that item must repeat the same "name", "section", "category", "description", ' +
     '"ingredients", "allergy" and "abv" text, and only "serving" and "price" may differ. ' +
@@ -370,8 +370,8 @@ function extractionInstruction(): string {
     'becomes two objects: serving "25 cl" with price "SEK 74", and serving "50 cl" with price "SEK 114". ' +
     'If an item has a price but no printed size, use serving "" and keep its own object. ' +
     'Never guess a size from the item name.\n\n' +
-    'Variants: when a menu lists a named option of an item as its own line (e.g. "Pad Thai" and "Pad Thai with chicken"), ' +
-    'set "variant_of" to the parent name, "variant" to the option name, and "additional_price" only when the menu prints an add-on amount for it. ' +
+    'Variants: when a menu lists a named option of an item as its own line, ' +
+    'set "variant_of" to the parent item name, "variant" to the option name, and "additional_price" only when the menu prints an add-on amount for it. ' +
     'A full price printed for the option line is not an add-on amount: leave "variant_of", "variant" and "additional_price" as "" and keep the line as its own object. ' +
     'The parent keeps its own object and its own price.\n\n' +
     'Choose Section first, then choose a Category belonging to that Section. Use the original ' +
