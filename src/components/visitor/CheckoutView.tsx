@@ -4,6 +4,7 @@ import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { cn } from '@/lib/cn';
 import { basketLineKey } from '@/lib/basketLine';
 import { createOrder } from '@/lib/orders';
+import { ComboSelectionLines } from '@/components/visitor/ComboSelectionLines';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
 import { computeTipMinor } from '@/lib/tip';
 import { Notice } from '@/components/ui/Notice';
@@ -207,7 +208,15 @@ export function CheckoutView({
         restaurantId,
         resourceId,
         resourceType: resourceType ?? 'restaurant',
-        items: items.map((i) => ({ dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? '' })),
+        items: items.map((i) =>
+          i.comboId
+            ? {
+                comboId: i.comboId,
+                quantity: i.quantity,
+                selections: (i.comboSelections ?? []).map((s) => ({ groupId: s.groupId, dishId: s.dishId, servingOptionId: s.servingOptionId })),
+              }
+            : { dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? '' },
+        ),
         mobileNumber: normalizedMobile,
         paymentMethod,
         tip: {
@@ -302,6 +311,9 @@ export function CheckoutView({
                     <p className="text-xs text-ink-muted">
                       {item.quantity} × {formatPriceInput(item.price, currency)}{item.servingLabel ? ` · ${item.servingLabel}` : ''}
                     </p>
+                    {item.comboSelections && item.comboSelections.length > 0 ? (
+                      <ComboSelectionLines selections={item.comboSelections} />
+                    ) : null}
                     {item.removedIngredientLabels && item.removedIngredientLabels.length > 0 ? (
                       <p className="mt-0.5 text-xs font-medium text-ink-faint">
                         {item.removedIngredientLabels.map((l) => `No ${l}`).join(' · ')}

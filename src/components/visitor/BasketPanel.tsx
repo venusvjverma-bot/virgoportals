@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 import { basketLineKey } from '@/lib/basketLine';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
 import type { AddOnOption, BasketItem, DishServingOption } from '@/types';
+import { ComboSelectionLines } from '@/components/visitor/ComboSelectionLines';
 
 interface BasketPanelProps {
   items: BasketItem[];
@@ -151,6 +152,9 @@ export function BasketPanel({
                       {formatPriceInput(item.price, currency)}
                       {item.servingLabel ? <span className="text-ink-faint"> · {item.servingLabel}</span> : null}
                     </p>
+                    {item.comboSelections && item.comboSelections.length > 0 ? (
+                      <ComboSelectionLines selections={item.comboSelections} />
+                    ) : null}
                     {item.removedIngredientLabels && item.removedIngredientLabels.length > 0 ? (
                       <p className="mt-0.5 text-xs font-medium text-ink-faint">
                         {item.removedIngredientLabels.map((l) => `No ${l}`).join(' · ')}

@@ -194,6 +194,17 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
                   {item.quantity} × {formatMinor(item.priceMinor, order.currency)}
                   {item.servingLabel ? <span className="text-ink-faint"> · {item.servingLabel}</span> : null}
                 </p>
+                {item.selections && item.selections.length > 0 ? (
+                  <ul className="mt-1 space-y-0.5">
+                    {item.selections.map((selection, index) => (
+                      <li key={`${selection.groupId}-${index}`} className="text-xs text-ink-muted">
+                        {selection.dishName}
+                        {selection.servingLabel ? <span className="text-ink-faint"> · {selection.servingLabel}</span> : null}
+                        {selection.removedIngredients ? <span className="text-ink-faint"> · {selection.removedIngredients}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 {item.removedIngredients ? (
                   <p className="mt-0.5 text-xs font-medium text-ink-faint">
                     {item.removedIngredients}

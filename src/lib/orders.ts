@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { callFunction } from '@/lib/functions';
-import type { Department, EventItem, Order, OrderStatus, OrderItem, PaymentMethod, ResourceType, TipOption } from '@/types';
+import type { Department, EventItem, Order, OrderStatus, OrderItem, OrderComboSelection, PaymentMethod, ResourceType, TipOption } from '@/types';
 
 interface OrderRow {
   id: string;
@@ -27,7 +27,8 @@ interface OrderRow {
 interface OrderItemRow {
   id: string;
   order_id: string;
-  dish_id: string;
+  dish_id: string | null;
+  combo_id: string | null;
   name: string;
   price_minor: number;
   quantity: number;
@@ -35,6 +36,7 @@ interface OrderItemRow {
   serving_label: string | null;
   removed_ingredients: string | null;
   additional_request: string | null;
+  selections: OrderComboSelection[] | null;
 }
 
 function mapOrderItem(row: OrderItemRow): OrderItem {
@@ -42,6 +44,7 @@ function mapOrderItem(row: OrderItemRow): OrderItem {
     id: row.id,
     orderId: row.order_id,
     dishId: row.dish_id,
+    comboId: row.combo_id,
     name: row.name,
     priceMinor: row.price_minor,
     quantity: row.quantity,
@@ -49,6 +52,7 @@ function mapOrderItem(row: OrderItemRow): OrderItem {
     servingLabel: row.serving_label ?? null,
     removedIngredients: row.removed_ingredients ?? '',
     additionalRequest: row.additional_request ?? '',
+    selections: row.selections ?? null,
   };
 }
 
@@ -80,7 +84,7 @@ function mapOrder(row: OrderRow, items: OrderItem[]): Order {
 const ORDER_COLUMNS =
   'id, order_number, restaurant_id, department_id, event_id, resource_type, resource_name, restaurant_name, status, payment_status, subtotal_minor, tip_option, tip_minor, total_minor, currency, item_count, mobile_number, created_at, status_updated_at';
 
-const ITEM_COLUMNS = 'id, order_id, dish_id, name, price_minor, quantity, line_total_minor, serving_label, removed_ingredients, additional_request';
+const ITEM_COLUMNS = 'id, order_id, dish_id, combo_id, name, price_minor, quantity, line_total_minor, serving_label, removed_ingredients, additional_request, selections';
 
 export async function listOrders(restaurantId: string): Promise<Order[]> {
   const { data, error } = await supabase
@@ -148,12 +152,16 @@ interface CreateOrderResult {
   idempotent: boolean;
 }
 
+export type OrderLineInput =
+  | { dishId: string; quantity: number; servingOptionId?: string | null; removedIngredientIds?: string[]; additionalRequest?: string | null }
+  | { comboId: string; quantity: number; selections: { groupId: string; dishId: string; servingOptionId: string | null }[] };
+
 export async function createOrder(params: {
   idempotencyKey: string;
   restaurantId: string;
   resourceId?: string;
   resourceType?: string;
-  items: { dishId: string; quantity: number; servingOptionId?: string | null; removedIngredientIds?: string[]; additionalRequest?: string | null }[];
+  items: OrderLineInput[];
   mobileNumber: string;
   tip?: { option: TipOption; customMinor?: number };
   paymentMethod: PaymentMethod;
@@ -164,7 +172,11 @@ export async function createOrder(params: {
     restaurantId: params.restaurantId,
     resourceId: params.resourceId,
     resourceType: params.resourceType,
-    items: params.items.map((i) => ({ dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? null })),
+    items: params.items.map((i) =>
+      'comboId' in i
+        ? { comboId: i.comboId, quantity: i.quantity, selections: i.selections }
+        : { dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? null },
+    ),
     mobileNumber: params.mobileNumber,
     tip: params.tip,
     paymentMethod: params.paymentMethod,

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Notice } from '@/components/ui/Notice';
 import { Select } from '@/components/ui/Input';
+import { ComboManager } from '@/components/host/ComboManager';
 import { DishCard, type ServingOptionInput, type RemovableIngredientInput } from '@/components/host/DishCard';
 import { callFunction } from '@/lib/functions';
 import { createDish, deleteDish, replaceServingOptions, replaceRemovableIngredients, updateDish, uploadMenuFile as uploadMenuFileDefault } from '@/lib/portal';
@@ -38,6 +39,7 @@ const SECTION_FILTERS: { value: string; label: string }[] = [
   { value: 'food', label: 'Food' },
   { value: 'drinks', label: 'Drinks' },
   { value: 'add_on', label: 'Add-on' },
+  { value: 'combo', label: 'Combos' },
 ];
 
 const AVAILABILITY_FILTERS: { value: string; label: string }[] = [
@@ -57,6 +59,7 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const showCombos = sectionFilter === 'combo';
 
   const categoryFilterOptions = useMemo(() => {
     if (sectionFilter === 'all') return SECTIONS.flatMap((s) => s.categories);
@@ -241,7 +244,7 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
           </span>
         </div>
 
-        {dishes.length > 0 ? (
+        {dishes.length > 0 || showCombos ? (
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-muted">
               <Filter className="h-3.5 w-3.5" />
@@ -259,6 +262,8 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
                 </option>
               ))}
             </Select>
+            {!showCombos ? (
+              <>
             <Select
               aria-label="Filter by category"
               className="w-auto"
@@ -284,10 +289,12 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
                 </option>
               ))}
             </Select>
+              </>
+            ) : null}
           </div>
         ) : null}
 
-        {dishes.length > 0 ? (
+        {dishes.length > 0 && !showCombos ? (
           <div className="mb-4 relative max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint drop-shadow-sm" />
             <input
@@ -300,7 +307,11 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
           </div>
         ) : null}
 
-        {adding ? (
+        {showCombos ? (
+          <ComboManager restaurantId={restaurantId} departmentId={departmentId} eventId={eventId} currency={currency} />
+        ) : null}
+
+        {!showCombos && adding ? (
           <DishCard
             dish={null}
             index={0}
@@ -312,7 +323,7 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
           />
         ) : null}
 
-        {loading ? (
+        {showCombos ? null : loading ? (
           <Card className="flex items-center justify-center gap-2 py-14 text-sm text-ink-muted">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading your menu…

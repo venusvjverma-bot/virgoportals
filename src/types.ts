@@ -171,10 +171,29 @@ export type TipOption = 'none' | '5' | '10' | '13' | '20' | 'custom';
 
 export type PaymentMethod = 'pay_to_staff' | 'pay_online';
 
+export interface OrderComboSelection {
+  groupId: string;
+  dishName: string;
+  servingLabel: string | null;
+  removedIngredients: string;
+  upgradeMinor: number;
+}
+
+export interface BasketComboSelection {
+  groupId: string;
+  dishId: string;
+  dishName: string;
+  servingOptionId: string | null;
+  servingLabel: string | null;
+  upgradeMinor: number;
+}
+
 export interface OrderItem {
   id: string;
   orderId: string;
-  dishId: string;
+  dishId: string | null;
+  comboId: string | null;
+  selections: OrderComboSelection[] | null;
   name: string;
   priceMinor: number;
   quantity: number;
@@ -219,6 +238,8 @@ export interface BasketItem {
   removedIngredientIds?: string[];
   removedIngredientLabels?: string[];
   additionalRequest?: string | null;
+  comboId?: string | null;
+  comboSelections?: BasketComboSelection[];
 }
 
 export interface AddOnOption {
@@ -231,6 +252,46 @@ export interface AddOnOption {
 export interface ConfirmedOrderRef {
   orderId: string;
   orderNumber: string;
+}
+
+export interface ComboGroup {
+  id: string;
+  comboId: string;
+  section: string;
+  category: string;
+  requiredCount: number;
+  sortOrder: number;
+}
+
+export interface Combo {
+  id: string;
+  restaurantId: string;
+  departmentId: string | null;
+  eventId: string | null;
+  name: string;
+  description: string;
+  imageUrl: string | null;
+  price: string;
+  sortOrder: number;
+  isActive: boolean;
+  groups: ComboGroup[];
+}
+
+export interface VisitorComboGroup {
+  id: string;
+  section: string;
+  category: string;
+  requiredCount: number;
+  dishes: Dish[];
+}
+
+export interface VisitorCombo {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string | null;
+  price: string;
+  groups: VisitorComboGroup[];
 }
 
 export interface CreditHost {

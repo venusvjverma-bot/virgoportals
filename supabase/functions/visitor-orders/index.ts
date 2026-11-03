@@ -1,4 +1,21 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import {
+  MAX_REQUEST_CHARS,
+  MAX_REQUEST_WORDS,
+  parsePriceMinor,
+  type DishRow,
+  type RemovableIngredientRow,
+  type ServingOptionRow,
+} from './pricing.ts';
+import {
+  listCombosForScope,
+  priceComboLine,
+  type ComboGroupRow,
+  type ComboRow,
+  type ComboSelectionInput,
+  type ComboSelectionSnapshot,
+  type ResourceScope,
+} from './combo.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,15 +24,14 @@ const corsHeaders = {
 };
 
 interface IncomingItem {
-  dishId: string;
+  dishId?: string;
+  comboId?: string;
   quantity: number;
   servingOptionId?: string | null;
   removedIngredientIds?: string[];
   additionalRequest?: string;
+  selections?: ComboSelectionInput[];
 }
-
-const MAX_REQUEST_WORDS = 50;
-const MAX_REQUEST_CHARS = 500;
 
 interface TipInput {
   option?: string;
@@ -42,48 +58,6 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-/**
- * Parses a price text like "120 SEK", "150,00 kr", "$15.50", "95.00" into
- * integer minor units. Strips all non-numeric characters except dots and
- * commas, normalises European decimal commas to dots, then rounds to the
- * nearest integer (minor unit = 1/100 of major).
- * Returns null if the string has no parseable number.
- */
-function parsePriceMinor(priceText: string): number | null {
-  if (!priceText || typeof priceText !== 'string') return null;
-  let s = priceText.trim();
-  if (!s) return null;
-
-  // Remove everything except digits, dots, commas
-  s = s.replace(/[^0-9.,]/g, '');
-  if (!s) return null;
-
-  // Handle European format: "150,00" or "1.234,50"
-  // If there's a comma followed by exactly 2 digits at the end and no dot
-  // after it, treat comma as decimal separator.
-  const commaIdx = s.lastIndexOf(',');
-  const dotIdx = s.lastIndexOf('.');
-  if (commaIdx > dotIdx) {
-    // Comma is the decimal separator — remove all dots (thousands), replace comma with dot
-    s = s.replace(/\./g, '').replace(',', '.');
-  } else if (dotIdx >= 0 && commaIdx >= 0 && commaIdx < dotIdx) {
-    // Dot is decimal, commas are thousands separators
-    s = s.replace(/,/g, '');
-  } else if (commaIdx >= 0 && dotIdx < 0) {
-    // Only comma — could be decimal or thousands
-    const afterComma = s.length - commaIdx - 1;
-    if (afterComma <= 2) {
-      s = s.replace(',', '.');
-    } else {
-      s = s.replace(/,/g, '');
-    }
-  }
-
-  const num = parseFloat(s);
-  if (isNaN(num) || num < 0) return null;
-  return Math.round(num * 100);
-}
-
 const TIP_PERCENTS = new Map<string, number>([['5', 5], ['10', 10], ['13', 13], ['20', 20]]);
 const MAX_CUSTOM_TIP_MINOR = 1_000_000;
 
@@ -105,29 +79,6 @@ function resolveTip(
     return { tipOption: 'custom', tipMinor: amount };
   }
   return { error: 'Invalid tip option.' };
-}
-
-interface DishRow {
-  id: string;
-  name: string;
-  price: string;
-  available: boolean;
-  restaurant_id: string;
-}
-
-interface ServingOptionRow {
-  id: string;
-  dish_id: string;
-  label: string;
-  price: string;
-  is_active: boolean;
-}
-
-interface RemovableIngredientRow {
-  id: string;
-  dish_id: string;
-  label: string;
-  is_active: boolean;
 }
 
 interface ResourceRow {
@@ -181,7 +132,11 @@ Deno.serve(async (req: Request) => {
 
       // Validate quantities
       for (const item of items) {
-        if (!item.dishId || typeof item.dishId !== 'string') {
+        if (item.comboId !== undefined) {
+          if (typeof item.comboId !== 'string' || !Array.isArray(item.selections) || item.selections.length > 50) {
+            return json({ error: 'Invalid combo in basket.' }, 400);
+          }
+        } else if (!item.dishId || typeof item.dishId !== 'string') {
           return json({ error: 'Invalid item in basket.' }, 400);
         }
         if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 999) {
@@ -284,19 +239,48 @@ Deno.serve(async (req: Request) => {
       }
 
       // ── Validate all dish IDs belong to this restaurant ──
-      const dishIds = items.map((i) => i.dishId);
-      const { data: dishes, error: dishError } = await supabase
-        .from('dishes')
-        .select('id, name, price, available, restaurant_id')
-        .in('id', dishIds);
-
-      if (dishError) throw dishError;
-      if (!dishes || dishes.length !== dishIds.length) {
+      const dishIds = [...new Set([
+        ...items.filter((i) => i.dishId).map((i) => i.dishId!),
+        ...items.flatMap((i) => (i.selections ?? []).map((s) => s.dishId)),
+      ])];
+      let dishes: DishRow[] = [];
+      if (dishIds.length > 0) {
+        const { data, error: dishError } = await supabase
+          .from('dishes')
+          .select('id, name, price, available, restaurant_id, section, category, department_id, event_id')
+          .in('id', dishIds);
+        if (dishError) throw dishError;
+        dishes = (data ?? []) as DishRow[];
+      }
+      if (dishes.length !== dishIds.length) {
         return json({ error: 'One or more items could not be found. Please review your basket.' }, 400);
       }
 
+      const comboIds = [...new Set(items.filter((i) => i.comboId).map((i) => i.comboId!))];
+      const comboMap = new Map<string, ComboRow>();
+      const groupsByCombo = new Map<string, ComboGroupRow[]>();
+      if (comboIds.length > 0) {
+        const { data: combos, error: comboError } = await supabase
+          .from('combos')
+          .select('id, restaurant_id, department_id, event_id, name, price, is_active')
+          .in('id', comboIds);
+        if (comboError) throw comboError;
+        for (const c of (combos ?? []) as ComboRow[]) comboMap.set(c.id, c);
+
+        const { data: groups, error: groupError } = await supabase
+          .from('combo_groups')
+          .select('id, combo_id, section, category, required_count, sort_order')
+          .in('combo_id', comboIds);
+        if (groupError) throw groupError;
+        for (const g of (groups ?? []) as ComboGroupRow[]) {
+          const list = groupsByCombo.get(g.combo_id) ?? [];
+          list.push(g);
+          groupsByCombo.set(g.combo_id, list);
+        }
+      }
+
       const dishMap = new Map<string, DishRow>();
-      for (const d of dishes as DishRow[]) {
+      for (const d of dishes) {
         if (d.restaurant_id !== restaurantId) {
           return json({ error: 'One or more items do not belong to this restaurant.' }, 400);
         }
@@ -307,7 +291,10 @@ Deno.serve(async (req: Request) => {
       }
 
       // ── Fetch serving options for dishes that reference them ──
-      const optionIds = items.filter((i) => i.servingOptionId).map((i) => i.servingOptionId!) as string[];
+      const optionIds = [...new Set([
+        ...items.filter((i) => i.servingOptionId).map((i) => i.servingOptionId!),
+        ...items.flatMap((i) => (i.selections ?? []).filter((s) => s.servingOptionId).map((s) => s.servingOptionId!)),
+      ])];
       const optionMap = new Map<string, ServingOptionRow>();
       if (optionIds.length > 0) {
         const { data: options, error: optError } = await supabase
@@ -321,7 +308,10 @@ Deno.serve(async (req: Request) => {
       }
 
       // ── Fetch removable ingredients for dishes that reference them ──
-      const allRemovedIds = items.flatMap((i) => i.removedIngredientIds ?? []);
+      const allRemovedIds = [...new Set(items.flatMap((i) => [
+        ...(i.removedIngredientIds ?? []),
+        ...(i.selections ?? []).flatMap((s) => s.removedIngredientIds ?? []),
+      ]))];
       const ingredientMap = new Map<string, RemovableIngredientRow>();
       if (allRemovedIds.length > 0) {
         const { data: ingredients, error: ingError } = await supabase
@@ -338,7 +328,9 @@ Deno.serve(async (req: Request) => {
       let totalMinor = 0;
       let itemCount = 0;
       const orderItems: {
-        dish_id: string;
+        dish_id: string | null;
+        combo_id?: string;
+        selections?: ComboSelectionSnapshot[];
         name: string;
         price_minor: number;
         quantity: number;
@@ -350,7 +342,42 @@ Deno.serve(async (req: Request) => {
       }[] = [];
 
       for (const item of items) {
-        const dish = dishMap.get(item.dishId);
+        if (item.comboId) {
+          const combo = comboMap.get(item.comboId);
+          if (!combo) {
+            return json({ error: 'One of the combos in your basket is no longer available. Please review your basket.' }, 400);
+          }
+          const pricing = priceComboLine({
+            combo,
+            groups: groupsByCombo.get(combo.id) ?? [],
+            selections: item.selections ?? [],
+            additionalRequest: item.additionalRequest,
+            dishes: dishMap,
+            options: optionMap,
+            ingredients: ingredientMap,
+            scope: { departmentId, eventId } satisfies ResourceScope,
+          });
+          if (!pricing.ok) return json({ error: pricing.error }, 400);
+          const comboLineTotal = pricing.unitMinor * item.quantity;
+          totalMinor += comboLineTotal;
+          itemCount += item.quantity;
+          orderItems.push({
+            dish_id: null,
+            combo_id: combo.id,
+            name: combo.name,
+            price_minor: pricing.unitMinor,
+            quantity: item.quantity,
+            line_total_minor: comboLineTotal,
+            serving_option_id: null,
+            serving_label: null,
+            removed_ingredients: '',
+            additional_request: pricing.additionalRequest,
+            selections: pricing.selections,
+          });
+          continue;
+        }
+
+        const dish = item.dishId ? dishMap.get(item.dishId) : undefined;
         if (!dish) {
           return json({ error: 'Invalid item in basket.' }, 400);
         }
@@ -525,6 +552,8 @@ Deno.serve(async (req: Request) => {
       const itemsToInsert = orderItems.map((i) => ({
         order_id: order!.id,
         dish_id: i.dish_id,
+        combo_id: i.combo_id ?? null,
+        selections: i.selections ?? null,
         name: i.name,
         price_minor: i.price_minor,
         quantity: i.quantity,
@@ -575,6 +604,17 @@ Deno.serve(async (req: Request) => {
         })),
         idempotent: false,
       });
+    }
+
+    // ─── Action: list combos for a visitor resource ───
+    if (body.action === 'combos') {
+      if (!body.restaurantId) return json({ error: 'Missing restaurant.' }, 400);
+      const scope: ResourceScope = {
+        departmentId: body.resourceType === 'department' ? body.resourceId ?? null : null,
+        eventId: body.resourceType === 'event' ? body.resourceId ?? null : null,
+      };
+      const combos = await listCombosForScope(supabase, body.restaurantId, scope);
+      return json({ combos });
     }
 
     // ─── Action: update status (host) ───

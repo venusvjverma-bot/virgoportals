@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { Loader2, RotateCcw, Send, ShoppingBag, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { Layers, Loader2, RotateCcw, Send, ShoppingBag, Sparkles, UtensilsCrossed } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
 import { ItemDetailPanel, type DishSelection } from '@/components/visitor/ItemDetailPanel';
+import { ComboDetailPanel, type ComboSubmission } from '@/components/visitor/ComboDetailPanel';
+import { ComboListPanel } from '@/components/visitor/ComboListPanel';
 import { LanguageSelector } from '@/components/visitor/LanguageSelector';
 import { BasketPanel } from '@/components/visitor/BasketPanel';
 import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/CheckoutView';
@@ -21,9 +23,10 @@ import {
   scopeKey,
 } from '@/lib/visitorStorage';
 import { createOrder } from '@/lib/orders';
+import { listVisitorCombos } from '@/lib/combos';
 import { cn } from '@/lib/cn';
 import { formatPriceInput, normalizeCurrency } from '@/lib/currency';
-import type { AddOnOption, BasketItem, Dish, DishServingOption, ResourceType } from '@/types';
+import type { AddOnOption, BasketItem, Dish, DishServingOption, ResourceType, VisitorCombo } from '@/types';
 
 interface VisitorPageProps {
   portalId?: string;
@@ -48,7 +51,7 @@ interface LoadedView {
   chatBackgroundPath?: string | null;
 }
 
-type VisitorOverlay = null | 'basket' | 'checkout' | 'confirmation';
+type VisitorOverlay = null | 'basket' | 'checkout' | 'confirmation' | 'combos';
 
 function toHistory(messages: ChatMessage[]): { role: 'user' | 'assistant'; content: string }[] {
   return messages
@@ -101,6 +104,8 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   const [addOns, setAddOns] = useState<AddOnOption[]>([]);
   const [overlay, setOverlay] = useState<VisitorOverlay>(null);
   const [editingItem, setEditingItem] = useState<BasketItem | null>(null);
+  const [combos, setCombos] = useState<VisitorCombo[]>([]);
+  const [selectedCombo, setSelectedCombo] = useState<VisitorCombo | null>(null);
   const [confirmedOrder, setConfirmedOrder] = useState<ConfirmedOrder | null>(null);
   const [basketBadge, setBasketBadge] = useState(false);
   const [chatRestored, setChatRestored] = useState(false);
@@ -239,7 +244,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   }, [addOnRestaurantId]);
 
   // ── Load host serving options for basket dishes (drives the Edit size control) ──
-  const basketDishKey = Array.from(new Set(basket.map((item) => item.dishId))).sort().join(',');
+  const basketDishKey = Array.from(new Set(basket.filter((item) => !item.comboId).map((item) => item.dishId))).sort().join(',');
   useEffect(() => {
     const dishIds = basketDishKey ? basketDishKey.split(',') : [];
     if (dishIds.length === 0) {
@@ -258,6 +263,21 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
       active = false;
     };
   }, [basketDishKey]);
+
+  useEffect(() => {
+    if (!view) return;
+    let active = true;
+    listVisitorCombos(view.restaurantId, view.resourceType ?? 'restaurant', view.resourceId ?? '')
+      .then((list) => {
+        if (active) setCombos(list);
+      })
+      .catch(() => {
+        if (active) setCombos([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [view]);
 
   // ── Auto-scroll ──
   useEffect(() => {
@@ -464,6 +484,35 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     setShowSelector(true);
   }
 
+  function handleAddComboToBasket(combo: VisitorCombo, submission: ComboSubmission) {
+    const selections = [...submission.selections].sort(
+      (a, b) => a.groupId.localeCompare(b.groupId) || a.dishId.localeCompare(b.dishId),
+    );
+    const comboKey = basketLineKey({ comboSelections: selections });
+    const line = (item: BasketItem) => item.comboId === combo.id && basketLineKey(item) === comboKey;
+    setBasket((prev) => {
+      if (prev.some(line)) {
+        return prev.map((item) => (line(item) ? { ...item, quantity: item.quantity + submission.quantity } : item));
+      }
+      const newLine: BasketItem = {
+        dishId: combo.id,
+        name: combo.name,
+        price: (submission.unitMinor / 100).toFixed(2),
+        imageUrl: combo.imageUrl,
+        section: 'combo',
+        quantity: submission.quantity,
+        servingOptionId: null,
+        servingLabel: null,
+        removedIngredientIds: [],
+        removedIngredientLabels: [],
+        additionalRequest: '',
+        comboId: combo.id,
+        comboSelections: selections,
+      };
+      return [...prev, newLine];
+    });
+  }
+
   function handleAddToBasket(
     dish: Dish,
     quantity: number,
@@ -526,7 +575,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   const editingDish = editingItem ? findChatDish(editingItem.dishId) : null;
 
   function canEditBasketItem(item: BasketItem) {
-    return item.section !== 'add_on' && findChatDish(item.dishId) !== null;
+    return !item.comboId && item.section !== 'add_on' && findChatDish(item.dishId) !== null;
   }
 
   function handleUpdateBasketLine(original: BasketItem, selection: DishSelection) {
@@ -725,6 +774,17 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           >
             <RotateCcw className="h-5 w-5" />
           </button>
+          {combos.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setOverlay('combos')}
+              aria-label="Open combos"
+              className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-white/15 px-3 text-sm font-medium text-white transition-all duration-200 hover:bg-white/25"
+            >
+              <Layers className="h-5 w-5" />
+              <span className="hidden sm:inline">Combos</span>
+            </button>
+          ) : null}
           {/* Basket icon */}
           <button
             type="button"
@@ -837,6 +897,27 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
 
       {/* Overlays */}
       {showSelector ? <LanguageSelector onSelect={handleLanguageSelect} /> : null}
+
+      {overlay === 'combos' ? (
+        <ComboListPanel
+          combos={combos}
+          currency={view.currency}
+          onClose={() => setOverlay(null)}
+          onSelect={(combo) => {
+            setOverlay(null);
+            setSelectedCombo(combo);
+          }}
+        />
+      ) : null}
+
+      {selectedCombo ? (
+        <ComboDetailPanel
+          combo={selectedCombo}
+          currency={view.currency}
+          onClose={() => setSelectedCombo(null)}
+          onAddToBasket={(submission) => handleAddComboToBasket(selectedCombo, submission)}
+        />
+      ) : null}
 
       {selected ? (
         <ItemDetailPanel
