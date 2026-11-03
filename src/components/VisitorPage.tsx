@@ -225,13 +225,15 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
 
   // ── Load the restaurant's available Add-on items for the basket selector ──
   const addOnRestaurantId = view?.restaurantId ?? null;
+  const addOnResourceType = view?.resourceType ?? 'restaurant';
+  const addOnResourceId = view?.resourceId ?? null;
   useEffect(() => {
     if (!addOnRestaurantId) {
       setAddOns([]);
       return;
     }
     let active = true;
-    listPublicAddOns(addOnRestaurantId)
+    listPublicAddOns(addOnRestaurantId, addOnResourceType, addOnResourceId)
       .then((list) => {
         if (active) setAddOns(list);
       })
@@ -241,7 +243,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     return () => {
       active = false;
     };
-  }, [addOnRestaurantId]);
+  }, [addOnRestaurantId, addOnResourceType, addOnResourceId]);
 
   // ── Load host serving options for basket dishes (drives the Edit size control) ──
   const basketDishKey = Array.from(new Set(basket.filter((item) => !item.comboId).map((item) => item.dishId))).sort().join(',');

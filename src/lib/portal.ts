@@ -174,8 +174,16 @@ export async function getPublicResource(
   return row ? mapPublicResource(row) : null;
 }
 
-export async function listPublicAddOns(restaurantId: string): Promise<AddOnOption[]> {
-  const { data, error } = await supabase.rpc('get_public_add_ons', { p_restaurant_id: restaurantId });
+export async function listPublicAddOns(
+  restaurantId: string,
+  resourceType: ResourceType,
+  resourceId: string | null
+): Promise<AddOnOption[]> {
+  const { data, error } = await supabase.rpc('get_public_add_ons', {
+    p_restaurant_id: restaurantId,
+    p_resource_type: resourceType,
+    p_resource_id: resourceId,
+  });
   if (error) throw error;
   return ((data ?? []) as { id: unknown; name: unknown; price: unknown; image_url: unknown }[])
     .filter((row) => typeof row.id === 'string' && typeof row.name === 'string')
