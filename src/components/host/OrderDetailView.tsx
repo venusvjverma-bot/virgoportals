@@ -190,6 +190,17 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
             <li key={item.id} className="flex items-center justify-between px-4 py-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-ink">{item.name}</p>
+                {item.variantName ? (
+                  <p className="text-xs font-medium text-olive-800">
+                    Variant: {item.variantName}
+                    <span className="text-ink-faint">
+                      {' '}·{' '}
+                      {item.variantAdditionalMinor
+                        ? `+${formatMinor(item.variantAdditionalMinor, order.currency)}`
+                        : 'no extra charge'}
+                    </span>
+                  </p>
+                ) : null}
                 <p className="text-xs text-ink-muted">
                   {item.quantity} × {formatMinor(item.priceMinor, order.currency)}
                   {item.servingLabel ? <span className="text-ink-faint"> · {item.servingLabel}</span> : null}

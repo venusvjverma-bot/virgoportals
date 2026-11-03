@@ -67,6 +67,15 @@ export interface DishServingOption {
   isActive: boolean;
 }
 
+export interface DishVariant {
+  id: string;
+  dishId: string;
+  name: string;
+  additionalPrice: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
 export interface DishRemovableIngredient {
   id: string;
   dishId: string;
@@ -93,6 +102,7 @@ export interface Dish {
   departmentId: string | null;
   eventId: string | null;
   servingOptions: DishServingOption[];
+  variants: DishVariant[];
   removableIngredients: DishRemovableIngredient[];
 }
 
@@ -199,6 +209,8 @@ export interface OrderItem {
   quantity: number;
   lineTotalMinor: number;
   servingLabel: string | null;
+  variantName: string | null;
+  variantAdditionalMinor: number | null;
   removedIngredients: string;
   additionalRequest: string;
 }
@@ -235,6 +247,9 @@ export interface BasketItem {
   quantity: number;
   servingOptionId?: string | null;
   servingLabel?: string | null;
+  variantId?: string | null;
+  variantName?: string | null;
+  variantAdditionalPrice?: string | null;
   removedIngredientIds?: string[];
   removedIngredientLabels?: string[];
   additionalRequest?: string | null;

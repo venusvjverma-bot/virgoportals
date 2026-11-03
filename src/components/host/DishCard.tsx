@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ImagePlus,
   Loader2,
   Pencil,
@@ -16,11 +18,13 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Notice } from '@/components/ui/Notice';
 import { cn } from '@/lib/cn';
-import { formatPriceInput, normalizeCurrency } from '@/lib/currency';
+import { formatPriceInput, normalizeCurrency, parsePriceToMinor } from '@/lib/currency';
 import type { Dish } from '@/types';
 
 export type ServingOptionInput = { id?: string; label: string; price: string; sortOrder: number };
 export type RemovableIngredientInput = { id?: string; label: string; sortOrder: number };
+export type VariantInput = { id?: string; name: string; additionalPrice: string; sortOrder: number };
+type VariantDraft = { id?: string; name: string; additionalPrice: string };
 import {
   SECTIONS,
   categoriesForSection,
@@ -40,7 +44,7 @@ interface DishCardProps {
   index: number;
   isNew?: boolean;
   currency?: string;
-  onSave: (patch: DishPatch, servingOptions?: ServingOptionInput[], removableIngredients?: RemovableIngredientInput[]) => Promise<string | void>;
+  onSave: (patch: DishPatch, servingOptions?: ServingOptionInput[], removableIngredients?: RemovableIngredientInput[], variants?: VariantInput[]) => Promise<string | void>;
   onGenerateImage: () => Promise<void>;
   onDelete?: () => Promise<void>;
   onCancelNew?: () => void;
@@ -95,6 +99,7 @@ export function DishCard({
   const [deleting, setDeleting] = useState(false);
   const [servingOpts, setServingOpts] = useState<{ id?: string; label: string; price: string }[]>([]);
   const [removableIngs, setRemovableIngs] = useState<{ id?: string; label: string }[]>([]);
+  const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([]);
   const [newIngredient, setNewIngredient] = useState('');
 
   const dishId = dish?.id;
@@ -113,6 +118,7 @@ export function DishCard({
     setAvailable(dish.available);
     setServingOpts(dish.servingOptions?.map((o) => ({ id: o.id, label: o.label, price: o.price })) ?? []);
     setRemovableIngs(dish.removableIngredients?.map((i) => ({ id: i.id, label: i.label })) ?? []);
+    setVariantDrafts(dish.variants.map((v) => ({ id: v.id, name: v.name, additionalPrice: v.additionalPrice })));
     setNewIngredient('');
     setSaveState('idle');
     setError(null);
@@ -121,6 +127,7 @@ export function DishCard({
 
   const savedServingOpts = dish?.servingOptions?.map((o) => ({ id: o.id, label: o.label, price: o.price })) ?? [];
   const savedRemovableIngs = dish?.removableIngredients?.map((i) => ({ id: i.id, label: i.label })) ?? [];
+  const savedVariants = dish?.variants.map((v) => ({ id: v.id, name: v.name, additionalPrice: v.additionalPrice })) ?? [];
 
   const savedValues = dish
     ? {
@@ -150,6 +157,13 @@ export function DishCard({
       (o.id ?? undefined) !== (savedRemovableIngs[i]?.id ?? undefined)
     );
 
+  const variantsDirty = variantDrafts.length !== savedVariants.length ||
+    variantDrafts.some((v, i) =>
+      v.name !== (savedVariants[i]?.name ?? '') ||
+      v.additionalPrice !== (savedVariants[i]?.additionalPrice ?? '') ||
+      (v.id ?? undefined) !== (savedVariants[i]?.id ?? undefined)
+    );
+
   const dirty =
     name !== savedValues.name ||
     description !== savedValues.description ||
@@ -162,7 +176,8 @@ export function DishCard({
     abv !== savedValues.abv ||
     available !== savedValues.available ||
     servingOptsDirty ||
-    removableIngsDirty;
+    removableIngsDirty ||
+    variantsDirty;
 
   const showAbv = isDrinkSection(section) || abv.trim().length > 0;
   const showSavedAbv = dish
@@ -192,6 +207,7 @@ export function DishCard({
     setAvailable(savedValues.available);
     setServingOpts(savedServingOpts.map((o) => ({ id: o.id, label: o.label, price: o.price })));
     setRemovableIngs(savedRemovableIngs.map((i) => ({ id: i.id, label: i.label })));
+    setVariantDrafts(savedVariants.map((v) => ({ ...v })));
     setNewIngredient('');
     setSaveState('idle');
     setError(null);
@@ -205,6 +221,17 @@ export function DishCard({
   function cancelEditing() {
     resetToSaved();
     setEditing(false);
+  }
+
+  function moveVariant(idx: number, direction: -1 | 1) {
+    setVariantDrafts((prev) => {
+      const target = idx + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+    setSaveState('idle');
   }
 
   async function handleSave() {
@@ -244,12 +271,37 @@ export function DishCard({
       .map((o, i) => ({ id: o.id, label: o.label.trim(), sortOrder: i }));
     const ingredientInput = cleanedIngredients.length > 0 ? cleanedIngredients : undefined;
 
+    const cleanedVariants = variantDrafts.map((v, i) => ({
+      id: v.id,
+      name: v.name.trim(),
+      additionalPrice: v.additionalPrice.trim(),
+      sortOrder: i,
+    }));
+    const seenVariantNames = new Set<string>();
+    for (const variant of cleanedVariants) {
+      if (!variant.name) {
+        setError('Every variant needs a name (e.g. "Chicken").');
+        return;
+      }
+      if (seenVariantNames.has(variant.name.toLowerCase())) {
+        setError(`The variant "${variant.name}" is listed more than once.`);
+        return;
+      }
+      seenVariantNames.add(variant.name.toLowerCase());
+      const extraMinor = parsePriceToMinor(variant.additionalPrice);
+      if (extraMinor === null || extraMinor < 0) {
+        setError(`Enter an extra price for "${variant.name}" (use 0 if it costs the same).`);
+        return;
+      }
+    }
+
     setSaveState('saving');
     try {
       await onSave(
         { name, description, ingredients, allergy, price, category, section, serving, abv, available },
         cleanedOptions,
-        ingredientInput
+        ingredientInput,
+        cleanedVariants
       );
       setSaveState('saved');
       setEditing(false);
@@ -510,6 +562,80 @@ export function DishCard({
               ) : null}
 
               <div className="mt-4 rounded-xl bg-cream-50 p-4 ring-1 ring-cream-200">
+                <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Variants</p>
+                <p className="mt-0.5 text-xs text-ink-faint">
+                  Choices visitors must pick one of, such as Chicken or Beef. The extra price is added to the dish price.
+                </p>
+                <div className="mt-2 space-y-2">
+                  {variantDrafts.map((variant, idx) => (
+                    <div key={idx} className="grid grid-cols-[1fr_7rem_auto] items-center gap-2">
+                      <Input
+                        value={variant.name}
+                        placeholder="e.g. Chicken"
+                        aria-label="Variant name"
+                        onChange={(e) => {
+                          setVariantDrafts((prev) => prev.map((o, i) => i === idx ? { ...o, name: e.target.value } : o));
+                          setSaveState('idle');
+                        }}
+                      />
+                      <Input
+                        value={variant.additionalPrice}
+                        placeholder="0"
+                        inputMode="decimal"
+                        aria-label="Extra price"
+                        onChange={(e) => {
+                          setVariantDrafts((prev) => prev.map((o, i) => i === idx ? { ...o, additionalPrice: e.target.value } : o));
+                          setSaveState('idle');
+                        }}
+                      />
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveVariant(idx, -1)}
+                          disabled={idx === 0}
+                          className="flex h-[42px] w-8 items-center justify-center rounded-lg text-ink-soft ring-1 ring-cream-200 transition hover:bg-cream-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Move variant up"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveVariant(idx, 1)}
+                          disabled={idx === variantDrafts.length - 1}
+                          className="flex h-[42px] w-8 items-center justify-center rounded-lg text-ink-soft ring-1 ring-cream-200 transition hover:bg-cream-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Move variant down"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVariantDrafts((prev) => prev.filter((_, i) => i !== idx));
+                            setSaveState('idle');
+                          }}
+                          className="flex h-[42px] w-8 items-center justify-center rounded-lg text-error-500 ring-1 ring-cream-200 transition hover:bg-error-50"
+                          aria-label="Remove variant"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVariantDrafts((prev) => [...prev, { name: '', additionalPrice: '0' }]);
+                    setSaveState('idle');
+                  }}
+                  className="mt-3 flex items-center gap-1.5 text-sm font-medium text-olive-700 hover:text-olive-800"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add variant
+                </button>
+              </div>
+
+              <div className="mt-4 rounded-xl bg-cream-50 p-4 ring-1 ring-cream-200">
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
                   Removable ingredients
                 </p>
@@ -708,6 +834,21 @@ export function DishCard({
                   </div>
                 ) : null}
 
+                {dish!.variants.length > 0 ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                      Variants
+                    </p>
+                    <div className="mt-1 space-y-1">
+                      {dish!.variants.map((variant) => (
+                        <p key={variant.id} className="text-sm leading-relaxed text-ink-soft">
+                          {variant.name} — {variantPriceLabel(variant.additionalPrice, cur)}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 {dish!.removableIngredients && dish!.removableIngredients.length > 0 ? (
                   <div>
                     <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
@@ -791,6 +932,12 @@ export function DishCard({
       </ConfirmDialog>
     </article>
   );
+}
+
+function variantPriceLabel(additionalPrice: string, currency: string): string {
+  return parsePriceToMinor(additionalPrice) === 0
+    ? 'no extra charge'
+    : `+ ${formatPriceInput(additionalPrice, currency)}`;
 }
 
 function ReadOnlyRow({ label, value }: { label: string; value: string }) {

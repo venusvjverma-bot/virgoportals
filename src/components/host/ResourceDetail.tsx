@@ -26,7 +26,7 @@ import { MenuView } from '@/components/host/MenuView';
 import { BotView } from '@/components/host/BotView';
 import { QrView } from '@/components/host/QrView';
 import { ChatThemeView } from '@/components/host/ChatThemeView';
-import { listDishesByDepartment, listDishesByEvent, uploadMenuFile, createDish, deleteDish, updateDish, replaceServingOptions, replaceRemovableIngredients } from '@/lib/portal';
+import { listDishesByDepartment, listDishesByEvent, uploadMenuFile, createDish, deleteDish, updateDish, replaceServingOptions, replaceRemovableIngredients, replaceVariants } from '@/lib/portal';
 import { updateDepartment, deleteDepartment } from '@/lib/departments';
 import { updateEvent, deleteEvent } from '@/lib/events';
 import { callFunction } from '@/lib/functions';
@@ -35,7 +35,7 @@ import { getBotText } from '@/lib/config';
 import { computeEventStatus, EventStatusBadge } from '@/lib/eventStatus';
 import type { Department, EventItem, Dish, RestaurantPortal, ResourceView } from '@/types';
 import type { ServingOptionInput } from '@/components/host/DishCard';
-import type { RemovableIngredientInput } from '@/components/host/DishCard';
+import type { RemovableIngredientInput, VariantInput } from '@/components/host/DishCard';
 
 interface ResourceDetailProps {
   restaurant: RestaurantPortal;
@@ -90,7 +90,8 @@ export function ResourceDetail({
     dishId: string,
     patch: Parameters<typeof updateDish>[1],
     servingOptions?: ServingOptionInput[],
-    removableIngredients?: RemovableIngredientInput[]
+    removableIngredients?: RemovableIngredientInput[],
+    variants?: VariantInput[]
   ) {
     await updateDish(dishId, patch);
     if (servingOptions && servingOptions.length > 0) {
@@ -99,13 +100,17 @@ export function ResourceDetail({
     if (removableIngredients) {
       await replaceRemovableIngredients(dishId, removableIngredients);
     }
+    if (variants) {
+      await replaceVariants(dishId, variants);
+    }
     await reloadDishes();
   }
 
   async function handleCreateDish(
     patch: Parameters<typeof createDish>[1],
     servingOptions?: ServingOptionInput[],
-    removableIngredients?: RemovableIngredientInput[]
+    removableIngredients?: RemovableIngredientInput[],
+    variants?: VariantInput[]
   ): Promise<string | void> {
     const dish = await createDish(
       {
@@ -120,6 +125,9 @@ export function ResourceDetail({
     }
     if (removableIngredients) {
       await replaceRemovableIngredients(dish.id, removableIngredients);
+    }
+    if (variants) {
+      await replaceVariants(dish.id, variants);
     }
     await reloadDishes();
     return dish.id;

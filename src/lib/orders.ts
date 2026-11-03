@@ -37,6 +37,8 @@ interface OrderItemRow {
   removed_ingredients: string | null;
   additional_request: string | null;
   selections: OrderComboSelection[] | null;
+  variant_name: string | null;
+  variant_additional_minor: number | null;
 }
 
 function mapOrderItem(row: OrderItemRow): OrderItem {
@@ -53,6 +55,8 @@ function mapOrderItem(row: OrderItemRow): OrderItem {
     removedIngredients: row.removed_ingredients ?? '',
     additionalRequest: row.additional_request ?? '',
     selections: row.selections ?? null,
+    variantName: row.variant_name ?? null,
+    variantAdditionalMinor: row.variant_additional_minor ?? null,
   };
 }
 
@@ -84,7 +88,7 @@ function mapOrder(row: OrderRow, items: OrderItem[]): Order {
 const ORDER_COLUMNS =
   'id, order_number, restaurant_id, department_id, event_id, resource_type, resource_name, restaurant_name, status, payment_status, subtotal_minor, tip_option, tip_minor, total_minor, currency, item_count, mobile_number, created_at, status_updated_at';
 
-const ITEM_COLUMNS = 'id, order_id, dish_id, combo_id, name, price_minor, quantity, line_total_minor, serving_label, removed_ingredients, additional_request, selections';
+const ITEM_COLUMNS = 'id, order_id, dish_id, combo_id, name, price_minor, quantity, line_total_minor, serving_label, removed_ingredients, additional_request, selections, variant_name, variant_additional_minor';
 
 export async function listOrders(restaurantId: string): Promise<Order[]> {
   const { data, error } = await supabase
@@ -153,7 +157,7 @@ interface CreateOrderResult {
 }
 
 export type OrderLineInput =
-  | { dishId: string; quantity: number; servingOptionId?: string | null; removedIngredientIds?: string[]; additionalRequest?: string | null }
+  | { dishId: string; quantity: number; servingOptionId?: string | null; variantId?: string | null; removedIngredientIds?: string[]; additionalRequest?: string | null }
   | { comboId: string; quantity: number; selections: { groupId: string; dishId: string; servingOptionId: string | null }[] };
 
 export async function createOrder(params: {
@@ -175,7 +179,7 @@ export async function createOrder(params: {
     items: params.items.map((i) =>
       'comboId' in i
         ? { comboId: i.comboId, quantity: i.quantity, selections: i.selections }
-        : { dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? null },
+        : { dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, variantId: i.variantId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? null },
     ),
     mobileNumber: params.mobileNumber,
     tip: params.tip,

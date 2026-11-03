@@ -33,6 +33,7 @@ function restoreDish(raw: StoredDish): Dish {
     eventId: typeof raw.eventId === 'string' ? raw.eventId : null,
     servingOptions: Array.isArray(raw.servingOptions) ? raw.servingOptions : [],
     removableIngredients: Array.isArray(raw.removableIngredients) ? raw.removableIngredients : [],
+    variants: Array.isArray(raw.variants) ? raw.variants : [],
   };
 }
 

@@ -6,6 +6,7 @@ import {
   type DishRow,
   type RemovableIngredientRow,
   type ServingOptionRow,
+  type VariantRow,
 } from './pricing.ts';
 import {
   listCombosForScope,
@@ -28,7 +29,7 @@ interface IncomingItem {
   comboId?: string;
   quantity: number;
   servingOptionId?: string | null;
-  removedIngredientIds?: string[];
+  variantId?: string | null;
   additionalRequest?: string;
   selections?: ComboSelectionInput[];
 }
@@ -312,6 +313,22 @@ Deno.serve(async (req: Request) => {
         ...(i.removedIngredientIds ?? []),
         ...(i.selections ?? []).flatMap((s) => s.removedIngredientIds ?? []),
       ]))];
+      const variantMap = new Map<string, VariantRow>();
+      const variantsByDish = new Map<string, VariantRow[]>();
+      if (dishIds.length > 0) {
+        const { data: variants, error: variantError } = await supabase
+          .from('dish_variants')
+          .select('id, dish_id, name, additional_price, is_active')
+          .in('dish_id', dishIds);
+        if (variantError) throw variantError;
+        for (const v of (variants ?? []) as VariantRow[]) {
+          variantMap.set(v.id, v);
+          const list = variantsByDish.get(v.dish_id) ?? [];
+          list.push(v);
+          variantsByDish.set(v.dish_id, list);
+        }
+      }
+
       const ingredientMap = new Map<string, RemovableIngredientRow>();
       if (allRemovedIds.length > 0) {
         const { data: ingredients, error: ingError } = await supabase
@@ -339,6 +356,9 @@ Deno.serve(async (req: Request) => {
         serving_label: string | null;
         removed_ingredients: string;
         additional_request: string;
+        variant_id?: string | null;
+        variant_name?: string | null;
+        variant_additional_minor?: number | null;
       }[] = [];
 
       for (const item of items) {
@@ -346,6 +366,11 @@ Deno.serve(async (req: Request) => {
           const combo = comboMap.get(item.comboId);
           if (!combo) {
             return json({ error: 'One of the combos in your basket is no longer available. Please review your basket.' }, 400);
+          }
+          for (const selection of item.selections ?? []) {
+            if ((variantsByDish.get(selection.dishId) ?? []).some((v) => v.is_active)) {
+              return json({ error: 'A dish with options cannot be added to a combo yet. Please review your basket.' }, 400);
+            }
           }
           const pricing = priceComboLine({
             combo,
@@ -406,6 +431,29 @@ Deno.serve(async (req: Request) => {
           priceMinor = parsePriceMinor(dish.price);
         }
 
+        const dishVariants = (variantsByDish.get(dish.id) ?? []).filter((v) => v.is_active);
+        let selectedVariant: VariantRow | null = null;
+        let variantAdditionalMinor: number | null = null;
+        if (dishVariants.length > 0 || item.variantId) {
+          if (!item.variantId) {
+            return json({ error: `Please choose an option for "${dish.name}".` }, 400);
+          }
+          const variant = variantMap.get(item.variantId);
+          if (!variant || variant.dish_id !== dish.id) {
+            return json({ error: `The selected option for "${dish.name}" is not valid. Please review your basket.` }, 400);
+          }
+          if (!variant.is_active) {
+            return json({ error: `The option "${variant.name}" for "${dish.name}" is no longer available.` }, 400);
+          }
+          const extraMinor = parsePriceMinor(variant.additional_price);
+          if (extraMinor === null) {
+            return json({ error: `The price for the option "${variant.name}" is not valid.` }, 400);
+          }
+          selectedVariant = variant;
+          variantAdditionalMinor = extraMinor;
+          if (priceMinor !== null) priceMinor += extraMinor;
+        }
+
         // ── Validate removable ingredient IDs ──
         const removedIds = item.removedIngredientIds ?? [];
         if (removedIds.length > 0) {
@@ -452,6 +500,9 @@ Deno.serve(async (req: Request) => {
           serving_label: servingLabel,
           removed_ingredients: removedIngredientsText,
           additional_request: additionalRequest,
+          variant_id: selectedVariant?.id ?? null,
+          variant_name: selectedVariant?.name ?? null,
+          variant_additional_minor: variantAdditionalMinor,
         });
       }
 
@@ -562,6 +613,9 @@ Deno.serve(async (req: Request) => {
         serving_label: i.serving_label ?? null,
         removed_ingredients: i.removed_ingredients,
         additional_request: i.additional_request,
+        variant_id: i.variant_id ?? null,
+        variant_name: i.variant_name ?? null,
+        variant_additional_minor: i.variant_additional_minor ?? null,
       }));
 
       const { error: itemsError } = await supabase

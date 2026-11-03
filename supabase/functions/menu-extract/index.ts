@@ -88,11 +88,19 @@ interface DishDraft {
   price: string;
   serving: string;
   abv: string;
+  variantOf: string;
+  variant: string;
+  additionalPrice: string;
 }
 
 interface VariantOption {
   serving: string;
   price: string;
+}
+
+interface VariantChoice {
+  name: string;
+  additionalPrice: string;
 }
 
 interface GroupedDraft {
@@ -178,6 +186,14 @@ function groupDraftsByVariant(drafts: DishDraft[]): GroupedDraft[] {
   }
 
   return groups;
+}
+
+function isVariantLine(draft: DishDraft): boolean {
+  return (
+    draft.variantOf.length > 0 &&
+    normalizeName(draft.variantOf) !== normalizeName(draft.name) &&
+    /\d/.test(draft.additionalPrice)
+  );
 }
 
 function json(body: unknown, status = 200): Response {
@@ -343,7 +359,10 @@ function extractionInstruction(): string {
     '  "ingredients" - ingredients or composition, or ""\n' +
     '  "allergy"     - allergens, ONLY when the document states them for that item, or ""\n' +
     '  "serving"     - serving size or volume as printed, e.g. "40 cl", or ""\n' +
-    '  "abv"         - alcohol percentage as printed, e.g. "5.0%", or ""\n\n' +
+    '  "abv"         - alcohol percentage as printed, e.g. "5.0%", or ""\n' +
+    '  "variant_of"  - for a named option of another item, the exact name of that parent item as printed, or ""\n' +
+    '  "variant"     - the option name as printed, e.g. "chicken", or ""\n' +
+    '  "additional_price" - the extra amount the option adds, ONLY when the menu prints it as an add-on such as "+20", or ""\n\n' +
     'Sizes: when one item is offered in several sizes or volumes, return ONE object per size. ' +
     'Every object for that item must repeat the same "name", "section", "category", "description", ' +
     '"ingredients", "allergy" and "abv" text, and only "serving" and "price" may differ. ' +
@@ -351,6 +370,10 @@ function extractionInstruction(): string {
     'becomes two objects: serving "25 cl" with price "SEK 74", and serving "50 cl" with price "SEK 114". ' +
     'If an item has a price but no printed size, use serving "" and keep its own object. ' +
     'Never guess a size from the item name.\n\n' +
+    'Variants: when a menu lists a named option of an item as its own line (e.g. "Pad Thai" and "Pad Thai with chicken"), ' +
+    'set "variant_of" to the parent name, "variant" to the option name, and "additional_price" only when the menu prints an add-on amount for it. ' +
+    'A full price printed for the option line is not an add-on amount: leave "variant_of", "variant" and "additional_price" as "" and keep the line as its own object. ' +
+    'The parent keeps its own object and its own price.\n\n' +
     'Choose Section first, then choose a Category belonging to that Section. Use the original ' +
     'heading and surrounding context as evidence, but classify the item by what it actually is ' +
     'using its name, description, ingredients and preparation details. A Drinks heading may contain ' +
@@ -583,6 +606,9 @@ Deno.serve(async (req: Request) => {
           price: asString(record.price),
           serving: asString(record.serving),
           abv: asString(record.abv),
+          variantOf: asString(record.variant_of),
+          variant: asString(record.variant),
+          additionalPrice: asString(record.additional_price).replace(/^\+\s*/, ''),
         };
       })
       .filter((dish) => dish.name.length > 0);
@@ -627,9 +653,30 @@ Deno.serve(async (req: Request) => {
     if (existingError) throw existingError;
     const existingNames = new Set((existing ?? []).map((row) => normalizeName(String(row.name ?? ''))));
 
-    const grouped = groupDraftsByVariant(splitCombinedDrafts(drafts));
-    const fresh = grouped.filter((group) => !existingNames.has(normalizeName(group.draft.name)));
-    const skipped = grouped.length - fresh.length;
+    const variantLines = drafts.filter(isVariantLine);
+    const grouped = groupDraftsByVariant(splitCombinedDrafts(drafts.filter((draft) => !isVariantLine(draft))));
+    const freshPlain = grouped.filter((group) => !existingNames.has(normalizeName(group.draft.name)));
+
+    const attachments = new Map<GroupedDraft, VariantChoice[]>();
+    const unattached: DishDraft[] = [];
+    for (const line of variantLines) {
+      const matches = freshPlain.filter(
+        (group) =>
+          group.draft.section === line.section && normalizeName(group.draft.name) === normalizeName(line.variantOf)
+      );
+      if (matches.length !== 1) {
+        unattached.push(line);
+        continue;
+      }
+      const choices = attachments.get(matches[0]) ?? [];
+      choices.push({ name: line.variant || line.name, additionalPrice: line.additionalPrice });
+      attachments.set(matches[0], choices);
+    }
+    const standalone = unattached
+      .filter((line) => !existingNames.has(normalizeName(line.name)))
+      .map((draft): GroupedDraft => ({ draft, variants: [] }));
+    const fresh = [...freshPlain, ...standalone];
+    const skipped = grouped.length + unattached.length - fresh.length;
 
     const payload = fresh.map((group) => {
       const dish = group.draft;
@@ -660,6 +707,8 @@ Deno.serve(async (req: Request) => {
       };
     });
 
+    const choicesPerDish = fresh.map((group) => attachments.get(group) ?? []);
+
     let savedRows: Array<Record<string, unknown>> = [];
     if (payload.length > 0) {
       const { data, error: saveError } = await supabase.rpc('save_extracted_menu_dishes', {
@@ -671,6 +720,19 @@ Deno.serve(async (req: Request) => {
       });
       if (saveError) throw saveError;
       savedRows = (data ?? []) as Array<Record<string, unknown>>;
+    }
+
+    const variantRows = savedRows.flatMap((row, index) =>
+      (choicesPerDish[index] ?? []).map((choice, sortOrder) => ({
+        dish_id: row.id,
+        name: choice.name,
+        additional_price: choice.additionalPrice,
+        sort_order: sortOrder,
+      }))
+    );
+    if (variantRows.length > 0) {
+      const { error: variantError } = await supabase.from('dish_variants').insert(variantRows);
+      if (variantError) throw variantError;
     }
 
     await supabase.from('usage_events').insert({ restaurant_id: restaurantId, kind: 'upload' });

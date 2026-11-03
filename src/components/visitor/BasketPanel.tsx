@@ -120,6 +120,8 @@ export function BasketPanel({
                 const lineKey = `${item.dishId}-${item.servingOptionId ?? ''}-${removedKey}`;
                 const sizeOptions = (servingOptionsByDish[item.dishId] ?? []).filter((o) => o.isActive !== false);
                 const isEditingSize = editingKey === lineKey;
+                const unitMinor = parsePriceToMinor(item.price) ?? 0;
+                const extraMinor = parsePriceToMinor(item.variantAdditionalPrice ?? '') ?? 0;
                 return (
                 <li key={lineKey} className="flex gap-3 px-5 py-4 sm:px-6">
                   {item.imageUrl ? (
@@ -152,6 +154,16 @@ export function BasketPanel({
                       {formatPriceInput(item.price, currency)}
                       {item.servingLabel ? <span className="text-ink-faint"> · {item.servingLabel}</span> : null}
                     </p>
+                    {item.variantName ? (
+                      <div className="mt-1 space-y-0.5 text-xs text-ink-muted">
+                        <p>
+                          <span className="font-medium text-ink">Option:</span> {item.variantName}
+                        </p>
+                        <p className="text-ink-faint">
+                          Base {formatMinor(unitMinor - extraMinor, currency)} + {formatMinor(extraMinor, currency)} = {formatMinor(unitMinor, currency)} each
+                        </p>
+                      </div>
+                    ) : null}
                     {item.comboSelections && item.comboSelections.length > 0 ? (
                       <ComboSelectionLines selections={item.comboSelections} />
                     ) : null}

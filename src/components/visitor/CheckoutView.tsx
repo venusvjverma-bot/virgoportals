@@ -215,7 +215,7 @@ export function CheckoutView({
                 quantity: i.quantity,
                 selections: (i.comboSelections ?? []).map((s) => ({ groupId: s.groupId, dishId: s.dishId, servingOptionId: s.servingOptionId })),
               }
-            : { dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? '' },
+            : { dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, variantId: i.variantId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? '' },
         ),
         mobileNumber: normalizedMobile,
         paymentMethod,
@@ -309,7 +309,7 @@ export function CheckoutView({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-ink">{item.name}</p>
                     <p className="text-xs text-ink-muted">
-                      {item.quantity} × {formatPriceInput(item.price, currency)}{item.servingLabel ? ` · ${item.servingLabel}` : ''}
+                      {item.quantity} × {formatPriceInput(item.price, currency)}{item.servingLabel ? ` · ${item.servingLabel}` : ''}{item.variantName ? ` · ${item.variantName}` : ''}
                     </p>
                     {item.comboSelections && item.comboSelections.length > 0 ? (
                       <ComboSelectionLines selections={item.comboSelections} />

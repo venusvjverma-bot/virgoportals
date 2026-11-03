@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { AddOnOption, Dish, DishServingOption, DishRemovableIngredient, RestaurantPortal, PublicResource, ResourceType } from '@/types';
+import type { AddOnOption, Dish, DishServingOption, DishVariant, DishRemovableIngredient, RestaurantPortal, PublicResource, ResourceType } from '@/types';
 import type { DailyUsageRow } from '@/lib/dailyTokenUsage';
 
 const RESTAURANT_COLUMNS = 'id, owner_email, name, city, welcome, system_prompt, status, created_at, timezone, currency';
@@ -72,6 +72,7 @@ function mapDish(row: DishRow, servingOptions: DishServingOption[] = [], removab
     departmentId: row.department_id,
     eventId: row.event_id,
     servingOptions,
+    variants: [],
     removableIngredients,
   };
 }
@@ -221,6 +222,7 @@ export async function listDishes(restaurantId: string): Promise<Dish[]> {
   if (error) throw error;
   const dishes = (data ?? []).map((row) => mapDish(row as DishRow));
   await fillServingOptions(dishes);
+  await fillVariants(dishes);
   await fillRemovableIngredients(dishes);
   return dishes;
 }
@@ -234,6 +236,7 @@ export async function listDishesByDepartment(departmentId: string): Promise<Dish
   if (error) throw error;
   const dishes = (data ?? []).map((row) => mapDish(row as DishRow));
   await fillServingOptions(dishes);
+  await fillVariants(dishes);
   await fillRemovableIngredients(dishes);
   return dishes;
 }
@@ -247,6 +250,7 @@ export async function listDishesByEvent(eventId: string): Promise<Dish[]> {
   if (error) throw error;
   const dishes = (data ?? []).map((row) => mapDish(row as DishRow));
   await fillServingOptions(dishes);
+  await fillVariants(dishes);
   await fillRemovableIngredients(dishes);
   return dishes;
 }
@@ -266,6 +270,7 @@ export async function updateDish(
   if (error) throw error;
   const dish = mapDish(data as DishRow);
   await fillServingOptions([dish]);
+  await fillVariants([dish]);
   await fillRemovableIngredients([dish]);
   return dish;
 }
@@ -324,6 +329,7 @@ export async function createDish(
   if (error) throw error;
   const dish = mapDish(data as DishRow);
   await fillServingOptions([dish]);
+  await fillVariants([dish]);
   await fillRemovableIngredients([dish]);
   return dish;
 }
@@ -544,6 +550,102 @@ export async function replaceRemovableIngredients(
         .single();
       if (error) throw error;
       result.push(mapRemovableIngredient(data as RemovableIngredientRow));
+    }
+  }
+  return result;
+}
+
+// ─── Dish variant helpers ───
+
+const DISH_VARIANT_COLUMNS = 'id, dish_id, name, additional_price, sort_order, is_active';
+
+interface DishVariantRow {
+  id: string;
+  dish_id: string;
+  name: string;
+  additional_price: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+function mapDishVariant(row: DishVariantRow): DishVariant {
+  return {
+    id: row.id,
+    dishId: row.dish_id,
+    name: row.name,
+    additionalPrice: row.additional_price,
+    sortOrder: row.sort_order,
+    isActive: row.is_active,
+  };
+}
+
+async function fillVariants(dishes: Dish[]): Promise<void> {
+  if (dishes.length === 0) return;
+  const { data, error } = await supabase
+    .from('dish_variants')
+    .select(DISH_VARIANT_COLUMNS)
+    .in('dish_id', dishes.map((d) => d.id))
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  const byDish = new Map<string, DishVariant[]>();
+  for (const row of (data ?? []) as DishVariantRow[]) {
+    const list = byDish.get(row.dish_id) ?? [];
+    list.push(mapDishVariant(row));
+    byDish.set(row.dish_id, list);
+  }
+  for (const dish of dishes) {
+    dish.variants = byDish.get(dish.id) ?? [];
+  }
+}
+
+export async function listVariants(dishId: string): Promise<DishVariant[]> {
+  const { data, error } = await supabase
+    .from('dish_variants')
+    .select(DISH_VARIANT_COLUMNS)
+    .eq('dish_id', dishId)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => mapDishVariant(row as DishVariantRow));
+}
+
+export async function replaceVariants(
+  dishId: string,
+  variants: { id?: string; name: string; additionalPrice: string; sortOrder: number }[]
+): Promise<DishVariant[]> {
+  const existing = await listVariants(dishId);
+  const existingIds = new Set(existing.map((v) => v.id));
+  const keptIds = new Set(variants.filter((v) => v.id).map((v) => v.id!));
+  const toDelete = [...existingIds].filter((id) => !keptIds.has(id));
+
+  if (toDelete.length > 0) {
+    const { error: delError } = await supabase.from('dish_variants').delete().in('id', toDelete);
+    if (delError) throw delError;
+  }
+
+  const result: DishVariant[] = [];
+  for (const variant of variants) {
+    const values = {
+      name: variant.name,
+      additional_price: variant.additionalPrice,
+      sort_order: variant.sortOrder,
+    };
+    if (variant.id && existingIds.has(variant.id)) {
+      const { data, error } = await supabase
+        .from('dish_variants')
+        .update({ ...values, updated_at: new Date().toISOString() })
+        .eq('id', variant.id)
+        .select(DISH_VARIANT_COLUMNS)
+        .single();
+      if (error) throw error;
+      result.push(mapDishVariant(data as DishVariantRow));
+    } else {
+      const { data, error } = await supabase
+        .from('dish_variants')
+        .insert({ dish_id: dishId, ...values })
+        .select(DISH_VARIANT_COLUMNS)
+        .single();
+      if (error) throw error;
+      result.push(mapDishVariant(data as DishVariantRow));
     }
   }
   return result;

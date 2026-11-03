@@ -59,3 +59,11 @@ export interface RemovableIngredientRow {
   label: string;
   is_active: boolean;
 }
+
+export interface VariantRow {
+  id: string;
+  dish_id: string;
+  name: string;
+  additional_price: string;
+  is_active: boolean;
+}

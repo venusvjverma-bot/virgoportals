@@ -5,9 +5,9 @@ import { Card } from '@/components/ui/Card';
 import { Notice } from '@/components/ui/Notice';
 import { Select } from '@/components/ui/Input';
 import { ComboManager } from '@/components/host/ComboManager';
-import { DishCard, type ServingOptionInput, type RemovableIngredientInput } from '@/components/host/DishCard';
+import { DishCard, type ServingOptionInput, type RemovableIngredientInput, type VariantInput } from '@/components/host/DishCard';
 import { callFunction } from '@/lib/functions';
-import { createDish, deleteDish, replaceServingOptions, replaceRemovableIngredients, updateDish, uploadMenuFile as uploadMenuFileDefault } from '@/lib/portal';
+import { createDish, deleteDish, replaceServingOptions, replaceRemovableIngredients, replaceVariants, updateDish, uploadMenuFile as uploadMenuFileDefault } from '@/lib/portal';
 import type { Dish } from '@/types';
 
 type DishPatch = Pick<Dish, 'name' | 'description' | 'ingredients' | 'allergy' | 'price' | 'category' | 'section' | 'serving' | 'abv' | 'available'>;
@@ -25,8 +25,8 @@ interface MenuViewProps {
   loading: boolean;
   currency?: string;
   onReload: () => Promise<void>;
-  onCreateDish?: (patch: DishPatch, servingOptions?: ServingOptionInput[], removableIngredients?: RemovableIngredientInput[]) => Promise<string | void>;
-  onSaveDish?: (dishId: string, patch: DishPatch, servingOptions?: ServingOptionInput[], removableIngredients?: RemovableIngredientInput[]) => Promise<void>;
+  onCreateDish?: (patch: DishPatch, servingOptions?: ServingOptionInput[], removableIngredients?: RemovableIngredientInput[], variants?: VariantInput[]) => Promise<string | void>;
+  onSaveDish?: (dishId: string, patch: DishPatch, servingOptions?: ServingOptionInput[], removableIngredients?: RemovableIngredientInput[], variants?: VariantInput[]) => Promise<void>;
   onDeleteDish?: (dishId: string) => Promise<void>;
   onGenerateImage?: (dishId: string) => Promise<void>;
   uploadMenuFile?: (file: File) => Promise<{ objectPath: string }>;
@@ -138,8 +138,8 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
     }
   }
 
-  async function handleSaveDish(dishId: string, patch: DishPatch, servingOptions?: ServingOptionInput[], removableIngredients?: RemovableIngredientInput[]) {
-    if (onSaveDish) { await onSaveDish(dishId, patch, servingOptions, removableIngredients); return; }
+  async function handleSaveDish(dishId: string, patch: DishPatch, servingOptions?: ServingOptionInput[], removableIngredients?: RemovableIngredientInput[], variants?: VariantInput[]) {
+    if (onSaveDish) { await onSaveDish(dishId, patch, servingOptions, removableIngredients, variants); return; }
     await updateDish(dishId, patch);
     if (servingOptions && servingOptions.length > 0) {
       await replaceServingOptions(dishId, servingOptions);
@@ -147,17 +147,23 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
     if (removableIngredients) {
       await replaceRemovableIngredients(dishId, removableIngredients);
     }
+    if (variants) {
+      await replaceVariants(dishId, variants);
+    }
     await onReload();
   }
 
-  async function handleCreateDish(patch: DishPatch, servingOptions?: ServingOptionInput[], removableIngredients?: RemovableIngredientInput[]): Promise<string | void> {
-    if (onCreateDish) { return await onCreateDish(patch, servingOptions, removableIngredients); }
+  async function handleCreateDish(patch: DishPatch, servingOptions?: ServingOptionInput[], removableIngredients?: RemovableIngredientInput[], variants?: VariantInput[]): Promise<string | void> {
+    if (onCreateDish) { return await onCreateDish(patch, servingOptions, removableIngredients, variants); }
     const dish = await createDish({ restaurantId }, patch);
     if (servingOptions && servingOptions.length > 0) {
       await replaceServingOptions(dish.id, servingOptions);
     }
     if (removableIngredients) {
       await replaceRemovableIngredients(dish.id, removableIngredients);
+    }
+    if (variants) {
+      await replaceVariants(dish.id, variants);
     }
     await onReload();
     return dish.id;

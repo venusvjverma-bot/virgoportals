@@ -2,13 +2,14 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Minus, Plus, UtensilsCrossed, X, ShoppingBag } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { categoryLabel, sectionLabel } from '@/lib/menuSections';
-import { formatPriceInput } from '@/lib/currency';
-import type { Dish, DishServingOption, DishRemovableIngredient } from '@/types';
+import { formatMinor, formatPriceInput, parsePriceToMinor } from '@/lib/currency';
+import type { Dish, DishServingOption, DishRemovableIngredient, DishVariant } from '@/types';
 
 const CLOSE_MS = 180;
 
 export interface DishSelection {
   servingOption: DishServingOption | null;
+  variant: DishVariant | null;
   quantity: number;
   removedIngredientIds: string[];
   removedIngredientLabels: string[];
@@ -19,7 +20,7 @@ interface ItemDetailPanelProps {
   dish: Dish;
   currency: string;
   onClose: () => void;
-  onAddToBasket?: (dish: Dish, quantity: number, servingOption?: DishServingOption | null, removedIngredientIds?: string[], removedIngredientLabels?: string[], additionalRequest?: string) => void;
+  onAddToBasket?: (dish: Dish, quantity: number, servingOption?: DishServingOption | null, removedIngredientIds?: string[], removedIngredientLabels?: string[], additionalRequest?: string, variant?: DishVariant | null) => void;
   editing?: { initial: DishSelection; onUpdate: (selection: DishSelection) => void };
 }
 
@@ -39,6 +40,10 @@ function defaultServingOptionIndex(options: DishServingOption[]): number {
   return options.length - 2;
 }
 
+function variantPriceLabel(additionalPrice: string, currency: string): string {
+  return parsePriceToMinor(additionalPrice) === 0 ? 'Included' : `+${formatPriceInput(additionalPrice, currency)}`;
+}
+
 export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editing }: ItemDetailPanelProps) {
   const initial = editing?.initial;
   const [closing, setClosing] = useState(false);
@@ -53,6 +58,15 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
     return defaultIdx >= 0 ? activeOptions[defaultIdx].id : null;
   });
 
+  const activeVariants = (dish.variants ?? []).filter((v) => v.isActive);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(() => {
+    const initialVariantId = initial?.variant?.id;
+    if (initialVariantId && activeVariants.some((v) => v.id === initialVariantId)) return initialVariantId;
+    return null;
+  });
+  const selectedVariant = activeVariants.find((v) => v.id === selectedVariantId) ?? null;
+  const variantMissing = activeVariants.length > 0 && !selectedVariant;
+
   const activeRemovableIngredients = (dish.removableIngredients ?? []).filter((i) => i.isActive !== false);
   const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set(
     (initial?.removedIngredientIds ?? []).filter((id) => activeRemovableIngredients.some((i) => i.id === id))
@@ -66,7 +80,10 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
     : null;
 
   const displayPrice = selectedOption ? selectedOption.price : dish.price;
-  const formattedPrice = displayPrice ? formatPriceInput(displayPrice, currency) : '';
+  const basePriceMinor = parsePriceToMinor(displayPrice);
+  const formattedPrice = selectedVariant
+    ? formatMinor((basePriceMinor ?? 0) + (parsePriceToMinor(selectedVariant.additionalPrice) ?? 0), currency)
+    : displayPrice ? formatPriceInput(displayPrice, currency) : '';
 
   function requestClose() {
     setClosing((alreadyClosing) => {
@@ -95,6 +112,7 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
   function buildSelection(): DishSelection {
     return {
       servingOption: selectedOption,
+      variant: selectedVariant,
       quantity,
       removedIngredientIds: [...removedIds],
       removedIngredientLabels: activeRemovableIngredients.filter((i) => removedIds.has(i.id)).map((i) => i.label),
@@ -103,13 +121,14 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
   }
 
   function handleSubmit() {
+    if (variantMissing) return;
     const selection = buildSelection();
     if (editing) {
       editing.onUpdate(selection);
       requestClose();
       return;
     }
-    onAddToBasket?.(dish, selection.quantity, selection.servingOption, selection.removedIngredientIds, selection.removedIngredientLabels, selection.additionalRequest);
+    onAddToBasket?.(dish, selection.quantity, selection.servingOption, selection.removedIngredientIds, selection.removedIngredientLabels, selection.additionalRequest, selection.variant);
     requestClose();
   }
 
@@ -234,6 +253,44 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
                         </span>
                         <span className="shrink-0 text-sm font-semibold text-olive-700">
                           {formatPriceInput(opt.price, currency)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {activeVariants.length > 0 ? (
+              <div className="mt-5">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Choose one</p>
+                  <span className="text-xs font-medium text-warning-700">Required</span>
+                </div>
+                <div role="radiogroup" aria-label="Choose one option" className="mt-2 space-y-2">
+                  {activeVariants.map((variant) => {
+                    const isSelected = variant.id === selectedVariantId;
+                    return (
+                      <label
+                        key={variant.id}
+                        className={cn(
+                          'flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition-all duration-150',
+                          isSelected
+                            ? 'bg-olive-50 ring-2 ring-olive-500'
+                            : 'bg-white ring-1 ring-cream-200 hover:ring-cream-300'
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="dish-variant"
+                          value={variant.id}
+                          checked={isSelected}
+                          onChange={() => setSelectedVariantId(variant.id)}
+                          className="h-4 w-4 shrink-0 accent-olive-700"
+                        />
+                        <span className="min-w-0 flex-1 text-sm font-medium text-ink">{variant.name}</span>
+                        <span className="shrink-0 text-sm font-semibold text-olive-700">
+                          {variantPriceLabel(variant.additionalPrice, currency)}
                         </span>
                       </label>
                     );
@@ -374,9 +431,12 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-olive-700 py-3.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:bg-olive-800 hover:shadow-lift active:scale-[0.99]"
+                disabled={variantMissing}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-olive-700 py-3.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:bg-olive-800 hover:shadow-lift active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-cream-300 disabled:text-ink-soft disabled:shadow-none disabled:hover:bg-cream-300"
               >
-                {editing ? (
+                {variantMissing ? (
+                  'Choose an option to continue'
+                ) : editing ? (
                   <>
                     <ShoppingBag className="h-4 w-4" />
                     Update Item{formattedPrice ? ` · ${formattedPrice}` : ''}

@@ -10,7 +10,7 @@ import { AssistantMarkdown } from '@/components/visitor/AssistantMarkdown';
 import { ChatCardButton } from '@/components/visitor/ChatCardButton';
 import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/CheckoutView';
 import { OrderConfirmation } from '@/components/visitor/OrderConfirmation';
-import { basketLineKey } from '@/lib/basketLine';
+import { basketLineKey, unitPriceWithVariant } from '@/lib/basketLine';
 import { callFunction } from '@/lib/functions';
 import { getPublicPortal, getPublicResource, listPublicAddOns, listServingOptionsByDish, type PublicPortal } from '@/lib/portal';
 import { themeAssetUrl, mascotUrl } from '@/lib/themeAssets';
@@ -28,7 +28,7 @@ import { createOrder } from '@/lib/orders';
 import { listVisitorCombos } from '@/lib/combos';
 import { cn } from '@/lib/cn';
 import { formatPriceInput, normalizeCurrency } from '@/lib/currency';
-import type { AddOnOption, BasketItem, Dish, DishServingOption, ResourceType, VisitorCombo } from '@/types';
+import type { AddOnOption, BasketItem, Dish, DishServingOption, DishVariant, ResourceType, VisitorCombo } from '@/types';
 
 interface VisitorPageProps {
   portalId?: string;
@@ -526,15 +526,17 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     servingOption?: { id: string; label: string; price: string } | null,
     removedIngredientIds?: string[],
     removedIngredientLabels?: string[],
-    additionalRequest?: string
+    additionalRequest?: string,
+    variant?: DishVariant | null
   ) {
     const optionId = servingOption?.id ?? null;
     const optionLabel = servingOption?.label ?? null;
     const optionPrice = servingOption?.price ?? dish.price;
+    const unitPrice = variant ? unitPriceWithVariant(optionPrice, variant.additionalPrice) : optionPrice;
     const removedIds = removedIngredientIds ?? [];
     const removedLabels = removedIngredientLabels ?? [];
     const request = additionalRequest ?? '';
-    const removedKey = basketLineKey({ removedIngredientIds: removedIds, additionalRequest: request });
+    const removedKey = basketLineKey({ removedIngredientIds: removedIds, additionalRequest: request, variantId: variant?.id });
     setBasket((prev) => {
       const existing = prev.find(
         (item) =>
@@ -556,7 +558,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         {
           dishId: dish.id,
           name: dish.name,
-          price: optionPrice,
+          price: unitPrice,
           imageUrl: dish.imageUrl,
           quantity,
           section: dish.section,
@@ -565,6 +567,9 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           removedIngredientIds: removedIds,
           removedIngredientLabels: removedLabels,
           additionalRequest: request,
+          variantId: variant?.id,
+          variantName: variant?.name,
+          variantAdditionalPrice: variant?.additionalPrice,
         },
       ];
     });
@@ -587,7 +592,9 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
 
   function handleUpdateBasketLine(original: BasketItem, selection: DishSelection) {
     const optionId = selection.servingOption?.id ?? null;
-    const removedKey = basketLineKey({ removedIngredientIds: selection.removedIngredientIds, additionalRequest: selection.additionalRequest });
+    const basePrice = selection.servingOption?.price ?? editingDish?.price ?? original.price;
+    const unitPrice = selection.variant ? unitPriceWithVariant(basePrice, selection.variant.additionalPrice) : basePrice;
+    const removedKey = basketLineKey({ removedIngredientIds: selection.removedIngredientIds, additionalRequest: selection.additionalRequest, variantId: selection.variant?.id });
     setBasket((prev) => {
       if (!prev.includes(original)) return prev;
       const duplicate = prev.find(
@@ -606,13 +613,16 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         item === original
           ? {
               ...item,
-              price: selection.servingOption?.price ?? item.price,
+              price: unitPrice,
               quantity: selection.quantity,
               servingOptionId: optionId,
               servingLabel: selection.servingOption?.label ?? null,
               removedIngredientIds: selection.removedIngredientIds,
               removedIngredientLabels: selection.removedIngredientLabels,
               additionalRequest: selection.additionalRequest,
+              variantId: selection.variant?.id,
+              variantName: selection.variant?.name,
+              variantAdditionalPrice: selection.variant?.additionalPrice,
             }
           : item
       );
@@ -673,7 +683,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           .map((item) => (item === target ? { ...item, quantity: Math.min(99, item.quantity + source.quantity) } : item));
       }
       return prev.map((item) =>
-        item === source ? { ...item, servingOptionId: option.id, servingLabel: option.label, price: option.price } : item
+        item === source ? { ...item, servingOptionId: option.id, servingLabel: option.label, price: item.variantAdditionalPrice ? unitPriceWithVariant(option.price, item.variantAdditionalPrice) : option.price } : item
       );
     });
   }
@@ -951,6 +961,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           editing={{
             initial: {
               servingOption: editingDish.servingOptions?.find((o) => o.id === editingItem.servingOptionId) ?? null,
+              variant: editingDish.variants.find((v) => v.id === editingItem.variantId) ?? null,
               quantity: editingItem.quantity,
               removedIngredientIds: editingItem.removedIngredientIds ?? [],
               removedIngredientLabels: editingItem.removedIngredientLabels ?? [],
