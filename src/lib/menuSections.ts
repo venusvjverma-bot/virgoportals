@@ -45,7 +45,9 @@ export const SECTIONS: SectionOption[] = [
     value: 'add_on',
     label: 'Add-on',
     categories: [
-      { value: 'add_ons', label: 'Add-ons' },
+      { value: 'food_add_ons', label: 'Food Add-on' },
+      { value: 'drink_add_ons', label: 'Drink Add-on' },
+      { value: 'add_ons', label: 'Unassigned Add-on' },
     ],
   },
 ];

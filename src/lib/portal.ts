@@ -186,13 +186,14 @@ export async function listPublicAddOns(
     p_resource_id: resourceId,
   });
   if (error) throw error;
-  return ((data ?? []) as { id: unknown; name: unknown; price: unknown; image_url: unknown }[])
+  return ((data ?? []) as { id: unknown; name: unknown; price: unknown; image_url: unknown; category: unknown }[])
     .filter((row) => typeof row.id === 'string' && typeof row.name === 'string')
     .map((row) => ({
       id: row.id as string,
       name: row.name as string,
       price: typeof row.price === 'string' ? row.price : '',
       imageUrl: typeof row.image_url === 'string' ? row.image_url : null,
+      category: typeof row.category === 'string' ? row.category : 'add_ons',
     }));
 }
 

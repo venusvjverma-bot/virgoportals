@@ -262,6 +262,7 @@ export interface AddOnOption {
   name: string;
   price: string;
   imageUrl: string | null;
+  category: string;
 }
 
 export interface ConfirmedOrderRef {

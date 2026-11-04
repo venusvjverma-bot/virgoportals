@@ -50,6 +50,17 @@ export function BasketPanel({
   }
 
   const hasFoodItem = items.some((item) => item.section === 'food');
+  const hasDrinkItem = items.some((item) => item.section === 'drinks');
+  const visibleAddOnGroups = [
+    { key: 'food_add_ons', label: 'Food Add-ons', visible: hasFoodItem },
+    { key: 'drink_add_ons', label: 'Drink Add-ons', visible: hasDrinkItem },
+  ]
+    .filter((group) => group.visible)
+    .map((group) => ({
+      ...group,
+      items: addOns.filter((addOn) => addOn.category === group.key),
+    }))
+    .filter((group) => group.items.length > 0);
   const addOnQuantities = new Map(
     items
       .filter((item) => item.section === 'add_on' && (item.servingOptionId ?? null) === null)
@@ -257,11 +268,11 @@ export function BasketPanel({
             </ul>
           )}
 
-          {items.length > 0 && hasFoodItem && addOns.length > 0 ? (
-            <div className="border-t border-cream-200 px-5 py-4 sm:px-6">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Add-ons</h3>
+          {visibleAddOnGroups.map((group) => (
+            <div key={group.key} className="border-t border-cream-200 px-5 py-4 sm:px-6">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{group.label}</h3>
               <div className="mt-2 divide-y divide-cream-200">
-                {addOns.map((addOn) => {
+                {group.items.map((addOn) => {
                   const quantity = addOnQuantities.get(addOn.id) ?? 0;
                   return (
                     <div key={addOn.id} className="flex items-center gap-3 py-2.5">
@@ -304,7 +315,7 @@ export function BasketPanel({
                 })}
               </div>
             </div>
-          ) : null}
+          ))}
         </div>
 
         {items.length > 0 ? (

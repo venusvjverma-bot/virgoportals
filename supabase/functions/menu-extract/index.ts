@@ -32,7 +32,7 @@ const DRINK_CATEGORIES = [
   'non_alcoholic_beer',
 ] as const;
 
-const ADD_ON_CATEGORIES = ['add_ons'] as const;
+const ADD_ON_CATEGORIES = ['food_add_ons', 'drink_add_ons', 'add_ons'] as const;
 
 const CATEGORIES = [...FOOD_CATEGORIES, ...DRINK_CATEGORIES, ...ADD_ON_CATEGORIES] as const;
 type Category = (typeof CATEGORIES)[number];
@@ -228,7 +228,10 @@ function asSection(value: unknown, evidence: string): Section {
 }
 
 function asCategory(value: unknown, section: Section, evidence: string): Category {
-  if (section === 'add_on') return 'add_ons';
+  if (section === 'add_on') {
+    const addOnCategory = normalizedValue(value);
+    return addOnCategory === 'food_add_ons' || addOnCategory === 'drink_add_ons' ? addOnCategory : 'add_ons';
+  }
   const text = normalizedValue(value);
   const aliases: Record<string, Category> = {
     food: 'main_courses',
@@ -358,7 +361,7 @@ function extractionInstruction(): string {
     '  "category"    - exactly one approved category belonging to that section. ' +
     'Food: starters_appetizers, main_courses, soups, salads, sides, desserts, kids_menu, specials. ' +
     'Drinks: coffee_tea, soft_drinks_water, juices, mocktails, cocktails, beer_cider, wine, ' +
-    'spirits_shots, non_alcoholic_beer. Add-on items: add_ons.\n' +
+    'spirits_shots, non_alcoholic_beer. Add-on items: food_add_ons or drink_add_ons, or add_ons when you cannot tell.\n' +
     '  "price"       - price including currency as printed, e.g. "SEK 149"\n' +
     '  "description" - the item description, or ""\n' +
     '  "ingredients" - ingredients or composition, or ""\n' +
@@ -376,7 +379,8 @@ function extractionInstruction(): string {
     'If an item has a price but no printed size, use serving "" and keep its own object. ' +
     'Never guess a size from the item name.\n\n' +
     'Add-ons: an add-on is an optional extra the guest can add on top of other items, such as a topping, sauce, side or extra portion, usually printed under its own heading or with a plus sign. ' +
-    'Return each add-on as its own object with section "add_on" and category "add_ons", keeping its own name, description and printed price. ' +
+    'Return each add-on as its own object with section "add_on". Set category "food_add_ons" when the add-on is a food extra and "drink_add_ons" when it is a drink extra, judging by the add-on itself and the menu context around it. ' +
+    'When you cannot tell with confidence, use category "add_ons" so the restaurant can review it. Never guess. Keep each add-on own name, description and printed price. ' +
     'Do not attach add-ons as variants, do not set "variant_of", and do not put add-on prices in "additional_price". ' +
     'Several add-ons may exist, and each is a separate object.\n\n' +
     'Variants: when a menu lists a named option of an item as its own line, ' +
