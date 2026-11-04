@@ -10,6 +10,7 @@ import {
   STATUS_FLOW,
 } from '@/lib/orders';
 import { cn } from '@/lib/cn';
+import { orderAddOnLines } from '@/lib/orderItemDetails';
 import { supabase } from '@/lib/supabase';
 import type { Order, OrderStatus } from '@/types';
 
@@ -212,6 +213,15 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
                         {selection.dishName}
                         {selection.servingLabel ? <span className="text-ink-faint"> · {selection.servingLabel}</span> : null}
                         {selection.removedIngredients ? <span className="text-ink-faint"> · {selection.removedIngredients}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {item.addOns.length > 0 ? (
+                  <ul className="mt-1 space-y-0.5">
+                    {orderAddOnLines(item.addOns, order.currency).map((line) => (
+                      <li key={line} className="text-xs font-medium text-olive-800">
+                        {line}
                       </li>
                     ))}
                   </ul>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Clock, Download, FileText, ShoppingBag, X } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { formatMinor, paymentLabel } from '@/lib/orders';
+import { orderItemDetailLines } from '@/lib/orderItemDetails';
 import type { ConfirmedOrder } from './CheckoutView';
 
 const PAY_TO_STAFF_NOTICE =
@@ -103,6 +104,18 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
       doc.text(String(item.quantity), margin + contentW - 45, y, { align: 'right' });
       doc.text(formatMinor(item.priceMinor, order.currency), margin + contentW - 25, y, { align: 'right' });
       doc.text(formatMinor(item.lineTotalMinor, order.currency), margin + contentW - 2, y, { align: 'right' });
+      doc.setFontSize(8);
+      doc.setTextColor(90, 90, 90);
+      for (const detail of orderItemDetailLines(item, order.currency)) {
+        y += 4.5;
+        if (y > 275) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.text(detail, margin + 6, y);
+      }
+      doc.setFontSize(10);
+      doc.setTextColor(42, 42, 42);
       y += 6;
     }
 
@@ -287,6 +300,9 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-ink">{item.name}</p>
                     <p className="text-xs text-ink-muted">{item.quantity} × {formatMinor(item.priceMinor, order.currency)}</p>
+                    {orderItemDetailLines(item, order.currency).map((detail, detailIdx) => (
+                      <p key={detailIdx} className="text-xs font-medium text-olive-800">{detail}</p>
+                    ))}
                   </div>
                   <span className="shrink-0 text-sm font-semibold text-olive-700">
                     {formatMinor(item.lineTotalMinor, order.currency)}

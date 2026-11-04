@@ -39,6 +39,7 @@ interface OrderItemRow {
   selections: OrderComboSelection[] | null;
   variant_name: string | null;
   variant_additional_minor: number | null;
+  add_ons: { name: string; price_minor: number }[] | null;
 }
 
 function mapOrderItem(row: OrderItemRow): OrderItem {
@@ -52,6 +53,7 @@ function mapOrderItem(row: OrderItemRow): OrderItem {
     quantity: row.quantity,
     lineTotalMinor: row.line_total_minor,
     servingLabel: row.serving_label ?? null,
+    addOns: (row.add_ons ?? []).map((a) => ({ name: a.name, priceMinor: a.price_minor })),
     removedIngredients: row.removed_ingredients ?? '',
     additionalRequest: row.additional_request ?? '',
     selections: row.selections ?? null,
@@ -88,7 +90,7 @@ function mapOrder(row: OrderRow, items: OrderItem[]): Order {
 const ORDER_COLUMNS =
   'id, order_number, restaurant_id, department_id, event_id, resource_type, resource_name, restaurant_name, status, payment_status, subtotal_minor, tip_option, tip_minor, total_minor, currency, item_count, mobile_number, created_at, status_updated_at';
 
-const ITEM_COLUMNS = 'id, order_id, dish_id, combo_id, name, price_minor, quantity, line_total_minor, serving_label, removed_ingredients, additional_request, selections, variant_name, variant_additional_minor';
+const ITEM_COLUMNS = 'id, order_id, dish_id, combo_id, name, price_minor, quantity, line_total_minor, serving_label, removed_ingredients, additional_request, selections, variant_name, variant_additional_minor, add_ons';
 
 export async function listOrders(restaurantId: string): Promise<Order[]> {
   const { data, error } = await supabase
@@ -152,7 +154,7 @@ interface CreateOrderResult {
   resourceName: string;
   resourceType: string;
   mobileNumber: string;
-  items: { name: string; priceMinor: number; quantity: number; lineTotalMinor: number }[];
+  items: { name: string; priceMinor: number; quantity: number; lineTotalMinor: number; servingLabel: string | null; variantName: string | null; removedIngredients: string; addOns: { name: string; priceMinor: number }[] }[];
   idempotent: boolean;
 }
 

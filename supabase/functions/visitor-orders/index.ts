@@ -157,7 +157,7 @@ Deno.serve(async (req: Request) => {
         // Return the existing order with its items
         const { data: existingItems } = await supabase
           .from('order_items')
-          .select('name, price_minor, quantity, line_total_minor')
+          .select('name, price_minor, quantity, line_total_minor, serving_label, variant_name, removed_ingredients, add_ons')
           .eq('order_id', existing.id)
           .order('created_at', { ascending: true });
 
@@ -177,11 +177,15 @@ Deno.serve(async (req: Request) => {
           resourceName: existing.resource_name,
           resourceType: existing.resource_type,
           mobileNumber: existing.mobile_number ?? mobileNumber!,
-          items: (existingItems ?? []).map((i: { name: string; price_minor: number; quantity: number; line_total_minor: number }) => ({
+          items: (existingItems ?? []).map((i: { name: string; price_minor: number; quantity: number; line_total_minor: number; serving_label: string | null; variant_name: string | null; removed_ingredients: string; add_ons: { name: string; price_minor: number }[] | null }) => ({
             name: i.name,
             priceMinor: i.price_minor,
             quantity: i.quantity,
             lineTotalMinor: i.line_total_minor,
+            servingLabel: i.serving_label,
+            variantName: i.variant_name,
+            removedIngredients: i.removed_ingredients,
+            addOns: (i.add_ons ?? []).map((a) => ({ name: a.name, priceMinor: a.price_minor })),
           })),
           idempotent: true,
         });
@@ -590,7 +594,7 @@ Deno.serve(async (req: Request) => {
           if (raced) {
             const { data: racedItems } = await supabase
               .from('order_items')
-              .select('name, price_minor, quantity, line_total_minor')
+              .select('name, price_minor, quantity, line_total_minor, serving_label, variant_name, removed_ingredients, add_ons')
               .eq('order_id', raced.id);
             return json({
               orderId: raced.id,
@@ -608,11 +612,15 @@ Deno.serve(async (req: Request) => {
               resourceName: raced.resource_name,
               resourceType: raced.resource_type,
               mobileNumber: raced.mobile_number ?? mobileNumber!,
-              items: (racedItems ?? []).map((i: { name: string; price_minor: number; quantity: number; line_total_minor: number }) => ({
+              items: (racedItems ?? []).map((i: { name: string; price_minor: number; quantity: number; line_total_minor: number; serving_label: string | null; variant_name: string | null; removed_ingredients: string; add_ons: { name: string; price_minor: number }[] | null }) => ({
                 name: i.name,
                 priceMinor: i.price_minor,
                 quantity: i.quantity,
                 lineTotalMinor: i.line_total_minor,
+                servingLabel: i.serving_label,
+                variantName: i.variant_name,
+                removedIngredients: i.removed_ingredients,
+                addOns: (i.add_ons ?? []).map((a) => ({ name: a.name, priceMinor: a.price_minor })),
               })),
               idempotent: true,
             });
@@ -679,6 +687,9 @@ Deno.serve(async (req: Request) => {
           quantity: i.quantity,
           lineTotalMinor: i.line_total_minor,
           addOns: (i.add_ons ?? []).map((a) => ({ name: a.name, priceMinor: a.price_minor })),
+          servingLabel: i.serving_label,
+          variantName: i.variant_name,
+          removedIngredients: i.removed_ingredients,
         })),
         idempotent: false,
       });

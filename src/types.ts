@@ -213,6 +213,7 @@ export interface OrderItem {
   variantAdditionalMinor: number | null;
   removedIngredients: string;
   additionalRequest: string;
+  addOns: { name: string; priceMinor: number }[];
 }
 
 export interface Order {

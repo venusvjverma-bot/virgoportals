@@ -41,7 +41,7 @@ export interface ConfirmedOrder {
   resourceName: string;
   resourceType: string;
   mobileNumber: string;
-  items: { name: string; priceMinor: number; quantity: number; lineTotalMinor: number }[];
+  items: { name: string; priceMinor: number; quantity: number; lineTotalMinor: number; servingLabel: string | null; variantName: string | null; removedIngredients: string; addOns: { name: string; priceMinor: number }[] }[];
 }
 
 interface Country {
