@@ -194,8 +194,7 @@ function isVariantLine(draft: DishDraft): boolean {
   return (
     draft.section !== 'add_on' &&
     draft.variantOf.length > 0 &&
-    normalizeName(draft.variantOf) !== normalizeName(draft.name) &&
-    /\d/.test(draft.additionalPrice)
+    normalizeName(draft.variantOf) !== normalizeName(draft.name)
   );
 }
 
@@ -384,7 +383,7 @@ function extractionInstruction(): string {
     'Do not attach add-ons as variants, do not set "variant_of", and do not put add-on prices in "additional_price". ' +
     'Several add-ons may exist, and each is a separate object.\n\n' +
     'Variants: when a menu lists a named option of an item as its own line, ' +
-    'set "variant_of" to the parent item name, "variant" to the option name, and "additional_price" only when the menu prints an add-on amount for it. ' +
+    'set "variant_of" to the parent item name, "variant" to the option name, and "additional_price" to the add-on amount when the menu prints one. An option listed with no extra amount is still a variant: keep variant_of and variant, and leave additional_price "". ' +
     'A full price printed for the option line is not an add-on amount: leave "variant_of", "variant" and "additional_price" as "" and keep the line as its own object. ' +
     'The parent keeps its own object and its own price.\n\n' +
     'Choose Section first, then choose a Category belonging to that Section. Use the original ' +
@@ -621,7 +620,7 @@ Deno.serve(async (req: Request) => {
           abv: asString(record.abv),
           variantOf: asString(record.variant_of),
           variant: asString(record.variant),
-          additionalPrice: asString(record.additional_price).replace(/^\+\s*/, ''),
+          additionalPrice: asString(record.additional_price).replace(/^\+\s*/, '') || '0',
         };
       })
       .filter((dish) => dish.name.length > 0);
