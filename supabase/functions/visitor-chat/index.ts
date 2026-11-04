@@ -877,8 +877,10 @@ Deno.serve(async (req: Request) => {
           addOnCandidates
             .map((d) => `${d.id} | ${d.name} | ${d.category === 'drink_add_ons' ? 'Drink add-on' : 'Food add-on'} | ${d.description ?? ''}`)
             .join('\n') +
-          `\nOutput one line starting with ADDONS: listing the ids of add-on options that naturally go with the guest's basket items, comma separated. ` +
-          `Use only ids from the ADD-ON OPTIONS list. Pick an add-on only when its type matches a basket item it pairs with. Output ADDONS: none if nothing fits.\n\n`
+          `\nOutput one line starting with ADDONS: listing the ids of every add-on option that could sensibly be offered with the guest's basket items, comma separated. ` +
+          `Be inclusive. Match add-on type to basket item type: food add-ons go with food items and drink add-ons go with drink items. ` +
+          `Include every add-on of a matching type that could reasonably accompany the basket, and leave out only add-ons that would be clearly unsuitable or very odd in combination. ` +
+          `Use only ids from the ADD-ON OPTIONS list. Output ADDONS: none only if no add-on is suitable.\n\n`
         : '';
 
     const menuContextText = buildMenuContext(menu, optionsByDish, restaurantCurrency);
@@ -888,7 +890,7 @@ Deno.serve(async (req: Request) => {
       model: chat.model,
       temperature: Number(chat.temperature ?? 0.8),
       max_tokens: addOnsOnly
-        ? Math.min(Number(chat.maxOutputTokens ?? 1500), 400)
+        ? Math.min(Number(chat.maxOutputTokens ?? 1500), 1000)
         : suggestionsOnly
         ? Math.min(Number(chat.maxOutputTokens ?? 1500), 300)
         : Number(chat.maxOutputTokens ?? 1500),
