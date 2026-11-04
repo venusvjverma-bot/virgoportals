@@ -72,10 +72,12 @@ export function ItemDetailPanel({ dish, currency, addOns, onClose, onAddToBasket
   const availableAddOns = addOns.filter(
     (a) => a.category === (dish.section === 'drinks' ? 'drink_add_ons' : 'food_add_ons')
   );
-  const [selectedAddOnIds, setSelectedAddOnIds] = useState<string[]>(() =>
-    (initial?.addOns ?? []).map((a) => a.id).filter((id) => availableAddOns.some((a) => a.id === id))
+  const [selectedAddOns, setSelectedAddOns] = useState<AddOnOption[]>(() =>
+    (initial?.addOns ?? []).flatMap((a) => {
+      const match = availableAddOns.find((available) => available.id === a.id);
+      return match ? [match] : [];
+    })
   );
-  const selectedAddOns = availableAddOns.filter((a) => selectedAddOnIds.includes(a.id));
 
   const activeRemovableIngredients = (dish.removableIngredients ?? []).filter((i) => i.isActive !== false);
   const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set(
@@ -318,37 +320,57 @@ export function ItemDetailPanel({ dish, currency, addOns, onClose, onAddToBasket
                 <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
                   {dish.section === 'drinks' ? 'Drink add-ons' : 'Food add-ons'}
                 </p>
-                <div role="group" aria-label="Add-ons" className="mt-2 space-y-2">
+                <ul role="group" aria-label="Add-ons" className="mt-2 divide-y divide-cream-200">
                   {availableAddOns.map((addOn) => {
-                    const isSelected = selectedAddOnIds.includes(addOn.id);
+                    const count = selectedAddOns.filter((a) => a.id === addOn.id).length;
                     return (
-                      <label
-                        key={addOn.id}
-                        className={cn(
-                          'flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition-all duration-150',
-                          isSelected
-                            ? 'bg-olive-50 ring-2 ring-olive-500'
-                            : 'bg-white ring-1 ring-cream-200 hover:ring-cream-300'
+                      <li key={addOn.id} className="flex items-center gap-3 py-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-ink">{addOn.name}</p>
+                          <p className="text-xs font-semibold text-olive-700">+{formatPriceInput(addOn.price, currency)}</p>
+                        </div>
+                        {count === 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedAddOns((prev) => [...prev, addOn])}
+                            aria-label={`Add ${addOn.name}`}
+                            style={{ backgroundColor: '#EB7C10', color: '#FFFFFF' }}
+                            className="animate-bubble-pulse rounded-full px-3.5 py-2 text-sm font-bold shadow-soft transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-95"
+                          >
+                            Add
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedAddOns((prev) => {
+                                  const index = prev.map((a) => a.id).lastIndexOf(addOn.id);
+                                  return prev.filter((_, i) => i !== index);
+                                })
+                              }
+                              aria-label={`Remove one ${addOn.name}`}
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-ink shadow-soft ring-1 ring-cream-300 transition-all duration-200 hover:ring-olive-300"
+                            >
+                              <Minus className="h-3.5 w-3.5" />
+                            </button>
+                            <span className="min-w-[1.5rem] text-center text-sm font-semibold text-ink" aria-live="polite">
+                              {count}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAddOns((prev) => [...prev, addOn])}
+                              aria-label={`Add another ${addOn.name}`}
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-ink shadow-soft ring-1 ring-cream-300 transition-all duration-200 hover:ring-olive-300"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         )}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() =>
-                            setSelectedAddOnIds((prev) =>
-                              prev.includes(addOn.id) ? prev.filter((id) => id !== addOn.id) : [...prev, addOn.id]
-                            )
-                          }
-                          className="h-4 w-4 shrink-0 accent-olive-700"
-                        />
-                        <span className="min-w-0 flex-1 text-sm font-medium text-ink">{addOn.name}</span>
-                        <span className="shrink-0 text-sm font-semibold text-olive-700">
-                          +{formatPriceInput(addOn.price, currency)}
-                        </span>
-                      </label>
+                      </li>
                     );
                   })}
-                </div>
+                </ul>
               </div>
             ) : null}
 

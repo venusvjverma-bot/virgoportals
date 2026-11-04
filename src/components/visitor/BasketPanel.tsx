@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Minus, Plus, ShoppingBag, Trash2, X, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { basketLineKey } from '@/lib/basketLine';
+import { basketLineKey, groupAddOns } from '@/lib/basketLine';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
 import type { BasketItem, DishServingOption } from '@/types';
 import { ComboSelectionLines } from '@/components/visitor/ComboSelectionLines';
@@ -155,12 +155,12 @@ export function BasketPanel({
                         </p>
                       </div>
                     ) : null}
-                    {item.addOns && item.addOns.length > 0 ? (
+                    {groupAddOns(item.addOns ?? []).length > 0 ? (
                       <ul className="mt-1 space-y-0.5 text-xs text-ink-muted">
-                        {item.addOns.map((addOn) => (
+                        {groupAddOns(item.addOns ?? []).map(({ addOn, count }) => (
                           <li key={addOn.id} className="flex items-center justify-between gap-3">
-                            <span className="min-w-0 truncate font-medium text-ink">+ {addOn.name}</span>
-                            <span className="shrink-0 font-medium text-ink-soft">{formatPriceInput(addOn.price, currency)}</span>
+                            <span className="min-w-0 truncate font-medium text-ink">+ {count > 1 ? `${count} x ` : ''}{addOn.name}</span>
+                            <span className="shrink-0 font-medium text-ink-soft">{formatMinor((parsePriceToMinor(addOn.price) ?? 0) * count, currency)}</span>
                           </li>
                         ))}
                       </ul>

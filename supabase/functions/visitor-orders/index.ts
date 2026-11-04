@@ -457,12 +457,12 @@ Deno.serve(async (req: Request) => {
           if (priceMinor !== null) priceMinor += extraMinor;
         }
 
-        if (item.addOnIds !== undefined && !Array.isArray(item.addOnIds)) {
+        if (item.addOnIds !== undefined && (!Array.isArray(item.addOnIds) || item.addOnIds.length > 50)) {
           return json({ error: 'Invalid add-ons for an item.' }, 400);
         }
         const expectedAddOnCategory = dish.section === 'drinks' ? 'drink_add_ons' : 'food_add_ons';
         const addOnRows: { id: string; name: string; price_minor: number }[] = [];
-        for (const addOnId of new Set(item.addOnIds ?? [])) {
+        for (const addOnId of item.addOnIds ?? []) {
           const addOn = dishMap.get(addOnId);
           if (!addOn || addOn.section !== 'add_on' || addOn.category !== expectedAddOnCategory) {
             return json({ error: `One of the add-ons for "${dish.name}" is no longer available. Please review your basket.` }, 400);

@@ -17,3 +17,13 @@ export function unitPriceWithExtras(basePrice: string, additionalPrice: string |
   const addOnMinor = addOns.reduce((sum, addOn) => sum + (parsePriceToMinor(addOn.price) ?? 0), 0);
   return ((baseMinor + extraMinor + addOnMinor) / 100).toFixed(2);
 }
+
+export function groupAddOns(addOns: AddOnOption[]): { addOn: AddOnOption; count: number }[] {
+  const groups = new Map<string, { addOn: AddOnOption; count: number }>();
+  for (const addOn of addOns) {
+    const group = groups.get(addOn.id);
+    if (group) group.count += 1;
+    else groups.set(addOn.id, { addOn, count: 1 });
+  }
+  return [...groups.values()];
+}
