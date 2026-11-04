@@ -297,14 +297,73 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     return () => clearTimeout(t);
   }, [basketBadge]);
 
+  const basketSignature = basket
+    .map((i) => `${i.dishId}:${i.servingOptionId ?? ''}:${i.quantity}:${basketLineKey(i)}`)
+    .join('|');
+  // ── Recommend add-ons that suit the current basket (LLM-selected, server-validated) ──
+  const [recommendedAddOnIds, setRecommendedAddOnIds] = useState<string[]>([]);
+  const [addOnsLoading, setAddOnsLoading] = useState(false);
+  const addOnCacheRef = useRef(new Map<string, string[]>());
+  const addOnReqIdRef = useRef(0);
+  useEffect(() => {
+    if (!view) return;
+    if (!basket.some((item) => item.section !== 'add_on')) {
+      addOnReqIdRef.current += 1;
+      setRecommendedAddOnIds([]);
+      setAddOnsLoading(false);
+      return;
+    }
+    const cacheKey = `${view.resourceType}:${view.resourceId ?? ''}|${basketSignature}`;
+    const cached = addOnCacheRef.current.get(cacheKey);
+    if (cached) {
+      addOnReqIdRef.current += 1;
+      setRecommendedAddOnIds(cached);
+      setAddOnsLoading(false);
+      return;
+    }
+    const reqId = ++addOnReqIdRef.current;
+    setRecommendedAddOnIds([]);
+    setAddOnsLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await callFunction<{ addOnIds?: unknown }>('visitor-chat', {
+          restaurantId: view.restaurantId,
+          resourceId: view.resourceId,
+          resourceType: view.resourceType,
+          message: '',
+          suggestionsOnly: true,
+          addOnsOnly: true,
+          history: [],
+          language: language ?? '',
+          basket: basket.map((item) => ({
+            dishId: item.dishId,
+            name: item.name,
+            section: item.section,
+            price: item.price,
+            quantity: item.quantity,
+            servingLabel: item.servingLabel ?? null,
+          })),
+        });
+        if (reqId !== addOnReqIdRef.current) return;
+        const ids = Array.isArray(result.addOnIds)
+          ? result.addOnIds.filter((id): id is string => typeof id === 'string')
+          : [];
+        addOnCacheRef.current.set(cacheKey, ids);
+        setRecommendedAddOnIds(ids);
+      } catch {
+        if (reqId === addOnReqIdRef.current) setRecommendedAddOnIds([]);
+      } finally {
+        if (reqId === addOnReqIdRef.current) setAddOnsLoading(false);
+      }
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [basketSignature, view, language]);
+
   // ── Fetch fresh suggestions when the basket changes ──
   // A basket-aware LLM call (suggestionsOnly mode) returns new suggestion bubbles
   // based on the updated basket + conversation history, without inserting a chat
   // reply or product cards. We skip the initial basket restore and any in-flight
   // normal chat send (which already generates suggestions for this basket state).
-  const basketSignature = basket
-    .map((i) => `${i.dishId}:${i.servingOptionId ?? ''}:${i.quantity}:${basketLineKey(i)}`)
-    .join('|');
   const initialBasketRef = useRef(true);
   const suggestionsReqIdRef = useRef(0);
   useEffect(() => {
@@ -947,6 +1006,8 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           onRemove={handleRemoveFromBasket}
           onChangeServingSize={handleChangeServingSize}
           addOns={addOns}
+          recommendedAddOnIds={recommendedAddOnIds}
+          addOnsLoading={addOnsLoading}
           onAddAddOn={handleAddAddOn}
           onEditItem={setEditingItem}
           canEditItem={canEditBasketItem}

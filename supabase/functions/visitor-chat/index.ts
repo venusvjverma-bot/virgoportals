@@ -88,6 +88,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   non_alcoholic_beer: 'Non-alcoholic Beer',
 };
 
+const ADD_ON_RECOMMENDABLE_CATEGORIES = new Set(['food_add_ons', 'drink_add_ons']);
+
 function sectionLabel(section: string | null | undefined): string {
   return SECTION_LABELS[(section ?? '').toLowerCase()] ?? SECTION_LABELS.food;
 }
@@ -148,6 +150,7 @@ interface BasketItemInput {
   name: string;
   price: string;
   quantity: number;
+  section?: string | null;
   servingLabel?: string | null;
 }
 
@@ -513,6 +516,14 @@ function extractDirectives(text: string): {
   };
 }
 
+/** Parses the ADDONS directive, keeping only ids from the allowed add-on set. */
+function parseAddOnIds(text: string, allowed: Set<string>): string[] {
+  const match = text.match(/^\s*(?:\*\*)?ADDONS(?:\*\*)?\s*:\s*(.*)$/im);
+  if (!match) return [];
+  const ids = match[1].replace(/\*\*/g, '').split(/[\s,[\]`'"]+/).filter((id) => allowed.has(id));
+  return [...new Set(ids)];
+}
+
 /** Parses the SUGGESTIONS directive into a clean, de-duplicated list. */
 function parseSuggestions(directive: string | null): string[] {
   if (!directive) return [];
@@ -852,13 +863,33 @@ Deno.serve(async (req: Request) => {
     const basketContext = buildBasketContext(basketItems, restaurantCurrency);
     const basketBlock = basketContext ? `\n\n${basketContext}\n\n` : '';
 
+    const addOnCandidates = menu.filter(
+      (d) => d.section === 'add_on' && ADD_ON_RECOMMENDABLE_CATEGORIES.has((d.category ?? '').toLowerCase())
+    );
+    const hasBasketProduct = basketItems.some((item) => item.section !== 'add_on');
+    const addOnsOnly = suggestionsOnly && Boolean(body?.addOnsOnly);
+    if (addOnsOnly && (addOnCandidates.length === 0 || !hasBasketProduct)) {
+      return json({ suggestions: [], addOnIds: [] });
+    }
+    const addOnBlock =
+      addOnCandidates.length > 0 && hasBasketProduct
+        ? `\n\nADD-ON OPTIONS (id | name | type | description):\n` +
+          addOnCandidates
+            .map((d) => `${d.id} | ${d.name} | ${d.category === 'drink_add_ons' ? 'Drink add-on' : 'Food add-on'} | ${d.description ?? ''}`)
+            .join('\n') +
+          `\nOutput one line starting with ADDONS: listing the ids of add-on options that naturally go with the guest's basket items, comma separated. ` +
+          `Use only ids from the ADD-ON OPTIONS list. Pick an add-on only when its type matches a basket item it pairs with. Output ADDONS: none if nothing fits.\n\n`
+        : '';
+
     const menuContextText = buildMenuContext(menu, optionsByDish, restaurantCurrency);
     const comboBlock = buildComboContext(combos, restaurantCurrency);
     const savedMenuBlock = `--- SAVED MENU ---\n${menuContextText}${comboBlock ? `\n\n${comboBlock}` : ''}`;
     const requestBody: Record<string, unknown> = {
       model: chat.model,
       temperature: Number(chat.temperature ?? 0.8),
-      max_tokens: suggestionsOnly
+      max_tokens: addOnsOnly
+        ? Math.min(Number(chat.maxOutputTokens ?? 1500), 400)
+        : suggestionsOnly
         ? Math.min(Number(chat.maxOutputTokens ?? 1500), 300)
         : Number(chat.maxOutputTokens ?? 1500),
       messages: suggestionsOnly
@@ -873,7 +904,8 @@ Deno.serve(async (req: Request) => {
                 `${suggestionsInstructions()}\n\n` +
                 `${langInstruction}\n\n` +
                 `${savedMenuBlock}` +
-                basketBlock,
+                basketBlock +
+                addOnBlock,
             },
             ...normalizeHistory(body?.history),
             {
@@ -945,11 +977,12 @@ Deno.serve(async (req: Request) => {
     const raw = payload?.choices?.[0]?.message?.content;
     const rawReply = typeof raw === 'string' ? raw.trim() : '';
     if (!rawReply) {
-      if (suggestionsOnly) return json({ suggestions: [] });
+      if (suggestionsOnly) return json({ suggestions: [], addOnIds: [] });
       return json({ error: 'The chat model returned an empty reply.' }, 502);
     }
 
     const { reply: prose, cardsDirective, combosDirective, followUp, suggestions } = extractDirectives(rawReply);
+    const addOnIds = parseAddOnIds(rawReply, new Set(addOnCandidates.map((d) => d.id)));
 
     const inputTokens = extractTokenCount(payload?.usage?.prompt_tokens);
     const outputTokens = extractTokenCount(payload?.usage?.completion_tokens);
@@ -976,7 +1009,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (suggestionsOnly) {
-      return json({ suggestions });
+      return json({ suggestions, addOnIds });
     }
 
     const reply = prose || rawReply;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Minus, Plus, ShoppingBag, Trash2, X, ArrowRight } from 'lucide-react';
+import { Loader2, Minus, Plus, ShoppingBag, Trash2, X, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { basketLineKey } from '@/lib/basketLine';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
@@ -18,6 +18,8 @@ interface BasketPanelProps {
   servingOptionsByDish: Record<string, DishServingOption[]>;
   onChangeServingSize: (dishId: string, servingOptionId: string | null, removedKey: string, option: DishServingOption) => void;
   addOns: AddOnOption[];
+  recommendedAddOnIds: string[];
+  addOnsLoading: boolean;
   onAddAddOn: (addOn: AddOnOption) => void;
   onEditItem: (item: BasketItem) => void;
   canEditItem: (item: BasketItem) => boolean;
@@ -35,6 +37,8 @@ export function BasketPanel({
   servingOptionsByDish,
   onChangeServingSize,
   addOns,
+  recommendedAddOnIds,
+  addOnsLoading,
   onAddAddOn,
   onEditItem,
   canEditItem,
@@ -58,7 +62,12 @@ export function BasketPanel({
     .filter((group) => group.visible)
     .map((group) => ({
       ...group,
-      items: addOns.filter((addOn) => addOn.category === group.key),
+      items: addOns.filter(
+        (addOn) =>
+          addOn.category === group.key &&
+          (recommendedAddOnIds.includes(addOn.id) ||
+            items.some((item) => item.section === 'add_on' && item.dishId === addOn.id)),
+      ),
     }))
     .filter((group) => group.items.length > 0);
   const addOnQuantities = new Map(
@@ -268,6 +277,13 @@ export function BasketPanel({
             </ul>
           )}
 
+          {addOnsLoading && (hasFoodItem || hasDrinkItem) ? (
+            <div className="flex items-center gap-2 border-t border-cream-200 px-5 py-4 text-xs text-ink-muted sm:px-6">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-olive-600" />
+              Finding add-ons for your order
+            </div>
+          ) : null}
+
           {visibleAddOnGroups.map((group) => (
             <div key={group.key} className="border-t border-cream-200 px-5 py-4 sm:px-6">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{group.label}</h3>
@@ -285,7 +301,8 @@ export function BasketPanel({
                           type="button"
                           onClick={() => onAddAddOn(addOn)}
                           aria-label={`Add ${addOn.name}`}
-                          className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-olive-700 ring-1 ring-olive-300 transition-all duration-200 hover:bg-olive-50"
+                          style={{ backgroundColor: '#EB7C10', color: '#FFFFFF' }}
+                          className="animate-bubble-pulse rounded-full px-3.5 py-2 text-sm font-bold shadow-soft transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-95"
                         >
                           Add
                         </button>
