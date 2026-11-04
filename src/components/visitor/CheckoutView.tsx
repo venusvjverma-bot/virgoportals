@@ -215,7 +215,7 @@ export function CheckoutView({
                 quantity: i.quantity,
                 selections: (i.comboSelections ?? []).map((s) => ({ groupId: s.groupId, dishId: s.dishId, servingOptionId: s.servingOptionId })),
               }
-            : { dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, variantId: i.variantId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? '' },
+            : { dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, variantId: i.variantId ?? null, addOnIds: (i.addOns ?? []).map((a) => a.id), removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? '' },
         ),
         mobileNumber: normalizedMobile,
         paymentMethod,

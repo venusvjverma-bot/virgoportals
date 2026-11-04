@@ -10,7 +10,7 @@ import { AssistantMarkdown } from '@/components/visitor/AssistantMarkdown';
 import { ChatCardButton } from '@/components/visitor/ChatCardButton';
 import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/CheckoutView';
 import { OrderConfirmation } from '@/components/visitor/OrderConfirmation';
-import { basketLineKey, unitPriceWithVariant } from '@/lib/basketLine';
+import { basketLineKey, unitPriceWithExtras } from '@/lib/basketLine';
 import { callFunction } from '@/lib/functions';
 import { getPublicPortal, getPublicResource, listPublicAddOns, listServingOptionsByDish, type PublicPortal } from '@/lib/portal';
 import { themeAssetUrl, mascotUrl } from '@/lib/themeAssets';
@@ -527,16 +527,18 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     removedIngredientIds?: string[],
     removedIngredientLabels?: string[],
     additionalRequest?: string,
-    variant?: DishVariant | null
+    variant?: DishVariant | null,
+    addOns?: AddOnOption[]
   ) {
     const optionId = servingOption?.id ?? null;
     const optionLabel = servingOption?.label ?? null;
     const optionPrice = servingOption?.price ?? dish.price;
-    const unitPrice = variant ? unitPriceWithVariant(optionPrice, variant.additionalPrice) : optionPrice;
+    const selectedAddOns = addOns ?? [];
+    const unitPrice = unitPriceWithExtras(optionPrice, variant?.additionalPrice, selectedAddOns);
     const removedIds = removedIngredientIds ?? [];
     const removedLabels = removedIngredientLabels ?? [];
     const request = additionalRequest ?? '';
-    const removedKey = basketLineKey({ removedIngredientIds: removedIds, additionalRequest: request, variantId: variant?.id });
+    const removedKey = basketLineKey({ removedIngredientIds: removedIds, additionalRequest: request, variantId: variant?.id, addOns: selectedAddOns });
     setBasket((prev) => {
       const existing = prev.find(
         (item) =>
@@ -570,6 +572,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           variantId: variant?.id,
           variantName: variant?.name,
           variantAdditionalPrice: variant?.additionalPrice,
+          addOns: selectedAddOns,
         },
       ];
     });
@@ -593,8 +596,8 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   function handleUpdateBasketLine(original: BasketItem, selection: DishSelection) {
     const optionId = selection.servingOption?.id ?? null;
     const basePrice = selection.servingOption?.price ?? editingDish?.price ?? original.price;
-    const unitPrice = selection.variant ? unitPriceWithVariant(basePrice, selection.variant.additionalPrice) : basePrice;
-    const removedKey = basketLineKey({ removedIngredientIds: selection.removedIngredientIds, additionalRequest: selection.additionalRequest, variantId: selection.variant?.id });
+    const unitPrice = unitPriceWithExtras(basePrice, selection.variant?.additionalPrice, selection.addOns);
+    const removedKey = basketLineKey({ removedIngredientIds: selection.removedIngredientIds, additionalRequest: selection.additionalRequest, variantId: selection.variant?.id, addOns: selection.addOns });
     setBasket((prev) => {
       if (!prev.includes(original)) return prev;
       const duplicate = prev.find(
@@ -623,29 +626,11 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
               variantId: selection.variant?.id,
               variantName: selection.variant?.name,
               variantAdditionalPrice: selection.variant?.additionalPrice,
+              addOns: selection.addOns,
             }
           : item
       );
     });
-  }
-
-  function handleAddAddOn(addOn: AddOnOption) {
-    setBasket((prev) => [
-      ...prev,
-      {
-        dishId: addOn.id,
-        name: addOn.name,
-        price: addOn.price,
-        imageUrl: addOn.imageUrl,
-        section: 'add_on',
-        quantity: 1,
-        servingOptionId: null,
-        servingLabel: null,
-        removedIngredientIds: [],
-        removedIngredientLabels: [],
-      },
-    ]);
-    setBasketBadge(true);
   }
 
   function handleUpdateBasketQuantity(dishId: string, servingOptionId: string | null, quantity: number, removedKey?: string) {
@@ -683,7 +668,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           .map((item) => (item === target ? { ...item, quantity: Math.min(99, item.quantity + source.quantity) } : item));
       }
       return prev.map((item) =>
-        item === source ? { ...item, servingOptionId: option.id, servingLabel: option.label, price: item.variantAdditionalPrice ? unitPriceWithVariant(option.price, item.variantAdditionalPrice) : option.price } : item
+        item === source ? { ...item, servingOptionId: option.id, servingLabel: option.label, price: unitPriceWithExtras(option.price, item.variantAdditionalPrice, item.addOns) } : item
       );
     });
   }
@@ -929,6 +914,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         <ItemDetailPanel
           dish={selected}
           currency={view.currency}
+          addOns={addOns}
           onClose={() => setSelected(null)}
           onAddToBasket={handleAddToBasket}
         />
@@ -946,8 +932,6 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           onUpdateQuantity={handleUpdateBasketQuantity}
           onRemove={handleRemoveFromBasket}
           onChangeServingSize={handleChangeServingSize}
-          addOns={addOns}
-          onAddAddOn={handleAddAddOn}
           onEditItem={setEditingItem}
           canEditItem={canEditBasketItem}
         />
@@ -957,6 +941,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         <ItemDetailPanel
           dish={editingDish}
           currency={view.currency}
+          addOns={addOns}
           onClose={() => setEditingItem(null)}
           editing={{
             initial: {
@@ -966,6 +951,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
               removedIngredientIds: editingItem.removedIngredientIds ?? [],
               removedIngredientLabels: editingItem.removedIngredientLabels ?? [],
               additionalRequest: editingItem.additionalRequest ?? '',
+              addOns: editingItem.addOns ?? [],
             },
             onUpdate: (selection) => handleUpdateBasketLine(editingItem, selection),
           }}

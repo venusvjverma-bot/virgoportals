@@ -3,7 +3,7 @@ import { Minus, Plus, ShoppingBag, Trash2, X, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { basketLineKey } from '@/lib/basketLine';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
-import type { AddOnOption, BasketItem, DishServingOption } from '@/types';
+import type { BasketItem, DishServingOption } from '@/types';
 import { ComboSelectionLines } from '@/components/visitor/ComboSelectionLines';
 
 interface BasketPanelProps {
@@ -17,8 +17,6 @@ interface BasketPanelProps {
   onRemove: (dishId: string, servingOptionId: string | null, removedKey?: string) => void;
   servingOptionsByDish: Record<string, DishServingOption[]>;
   onChangeServingSize: (dishId: string, servingOptionId: string | null, removedKey: string, option: DishServingOption) => void;
-  addOns: AddOnOption[];
-  onAddAddOn: (addOn: AddOnOption) => void;
   onEditItem: (item: BasketItem) => void;
   canEditItem: (item: BasketItem) => boolean;
 }
@@ -34,8 +32,6 @@ export function BasketPanel({
   onRemove,
   servingOptionsByDish,
   onChangeServingSize,
-  addOns,
-  onAddAddOn,
   onEditItem,
   canEditItem,
 }: BasketPanelProps) {
@@ -48,23 +44,6 @@ export function BasketPanel({
       return true;
     });
   }
-
-  const hasFoodItem = items.some((item) => item.section === 'food');
-  const hasDrinkItem = items.some((item) => item.section === 'drinks');
-  const availableAddOnGroups = [
-    { key: 'food_add_ons', label: 'Food Add-on', visible: hasFoodItem },
-    { key: 'drink_add_ons', label: 'Drink Add-on', visible: hasDrinkItem },
-  ]
-    .filter((group) => group.visible)
-    .map((group) => ({
-      ...group,
-      items: addOns.filter(
-        (addOn) =>
-          addOn.category === group.key &&
-          !items.some((item) => item.section === 'add_on' && item.dishId === addOn.id),
-      ),
-    }))
-    .filter((group) => group.items.length > 0);
 
   const totalMinor = items.reduce((sum, item) => {
     const unit = parsePriceToMinor(item.price) ?? 0;
@@ -131,7 +110,9 @@ export function BasketPanel({
                 const sizeOptions = (servingOptionsByDish[item.dishId] ?? []).filter((o) => o.isActive !== false);
                 const isEditingSize = editingKey === lineKey;
                 const unitMinor = parsePriceToMinor(item.price) ?? 0;
-                const extraMinor = parsePriceToMinor(item.variantAdditionalPrice ?? '') ?? 0;
+                const variantMinor = parsePriceToMinor(item.variantAdditionalPrice ?? '') ?? 0;
+                const addOnMinor = (item.addOns ?? []).reduce((sum, addOn) => sum + (parsePriceToMinor(addOn.price) ?? 0), 0);
+                const extraMinor = variantMinor + addOnMinor;
                 return (
                 <li key={lineKey} className="flex gap-3 px-5 py-4 sm:px-6">
                   {item.imageUrl ? (
@@ -173,6 +154,16 @@ export function BasketPanel({
                           Base {formatMinor(unitMinor - extraMinor, currency)} + {formatMinor(extraMinor, currency)} = {formatMinor(unitMinor, currency)} each
                         </p>
                       </div>
+                    ) : null}
+                    {item.addOns && item.addOns.length > 0 ? (
+                      <ul className="mt-1 space-y-0.5 text-xs text-ink-muted">
+                        {item.addOns.map((addOn) => (
+                          <li key={addOn.id} className="flex items-center justify-between gap-3">
+                            <span className="min-w-0 truncate font-medium text-ink">+ {addOn.name}</span>
+                            <span className="shrink-0 font-medium text-ink-soft">{formatPriceInput(addOn.price, currency)}</span>
+                          </li>
+                        ))}
+                      </ul>
                     ) : null}
                     {item.comboSelections && item.comboSelections.length > 0 ? (
                       <ComboSelectionLines selections={item.comboSelections} />
@@ -267,30 +258,6 @@ export function BasketPanel({
             </ul>
           )}
 
-          {availableAddOnGroups.map((group) => (
-            <div key={group.key} className="border-t border-cream-200 px-5 py-4 sm:px-6">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{group.label}</h3>
-              <div className="mt-2 divide-y divide-cream-200">
-                {group.items.map((addOn) => (
-                  <div key={addOn.id} className="flex items-center gap-3 py-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-ink">{addOn.name}</p>
-                      <p className="text-xs text-ink-muted">{formatPriceInput(addOn.price, currency)}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onAddAddOn(addOn)}
-                      aria-label={`Add ${addOn.name}`}
-                      style={{ backgroundColor: '#EB7C10', color: '#FFFFFF' }}
-                      className="animate-bubble-pulse rounded-full px-3.5 py-2 text-sm font-bold shadow-soft transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-95"
-                    >
-                      Add
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
         </div>
 
         {items.length > 0 ? (

@@ -30,6 +30,7 @@ interface IncomingItem {
   quantity: number;
   servingOptionId?: string | null;
   variantId?: string | null;
+  addOnIds?: string[];
   additionalRequest?: string;
   selections?: ComboSelectionInput[];
 }
@@ -243,6 +244,7 @@ Deno.serve(async (req: Request) => {
       const dishIds = [...new Set([
         ...items.filter((i) => i.dishId).map((i) => i.dishId!),
         ...items.flatMap((i) => (i.selections ?? []).map((s) => s.dishId)),
+        ...items.flatMap((i) => (Array.isArray(i.addOnIds) ? i.addOnIds : [])),
       ])];
       let dishes: DishRow[] = [];
       if (dishIds.length > 0) {
@@ -359,6 +361,7 @@ Deno.serve(async (req: Request) => {
         variant_id?: string | null;
         variant_name?: string | null;
         variant_additional_minor?: number | null;
+        add_ons?: { id: string; name: string; price_minor: number }[];
       }[] = [];
 
       for (const item of items) {
@@ -454,6 +457,24 @@ Deno.serve(async (req: Request) => {
           if (priceMinor !== null) priceMinor += extraMinor;
         }
 
+        if (item.addOnIds !== undefined && !Array.isArray(item.addOnIds)) {
+          return json({ error: 'Invalid add-ons for an item.' }, 400);
+        }
+        const expectedAddOnCategory = dish.section === 'drinks' ? 'drink_add_ons' : 'food_add_ons';
+        const addOnRows: { id: string; name: string; price_minor: number }[] = [];
+        for (const addOnId of new Set(item.addOnIds ?? [])) {
+          const addOn = dishMap.get(addOnId);
+          if (!addOn || addOn.section !== 'add_on' || addOn.category !== expectedAddOnCategory) {
+            return json({ error: `One of the add-ons for "${dish.name}" is no longer available. Please review your basket.` }, 400);
+          }
+          const addOnPriceMinor = parsePriceMinor(addOn.price);
+          if (addOnPriceMinor === null) {
+            return json({ error: `The price for the add-on "${addOn.name}" is not valid.` }, 400);
+          }
+          addOnRows.push({ id: addOn.id, name: addOn.name, price_minor: addOnPriceMinor });
+          if (priceMinor !== null) priceMinor += addOnPriceMinor;
+        }
+
         // ── Validate removable ingredient IDs ──
         const removedIds = item.removedIngredientIds ?? [];
         if (removedIds.length > 0) {
@@ -503,6 +524,7 @@ Deno.serve(async (req: Request) => {
           variant_id: selectedVariant?.id ?? null,
           variant_name: selectedVariant?.name ?? null,
           variant_additional_minor: variantAdditionalMinor,
+          add_ons: addOnRows,
         });
       }
 
@@ -616,6 +638,7 @@ Deno.serve(async (req: Request) => {
         variant_id: i.variant_id ?? null,
         variant_name: i.variant_name ?? null,
         variant_additional_minor: i.variant_additional_minor ?? null,
+        add_ons: i.add_ons ?? [],
       }));
 
       const { error: itemsError } = await supabase
@@ -655,6 +678,7 @@ Deno.serve(async (req: Request) => {
           priceMinor: i.price_minor,
           quantity: i.quantity,
           lineTotalMinor: i.line_total_minor,
+          addOns: (i.add_ons ?? []).map((a) => ({ name: a.name, priceMinor: a.price_minor })),
         })),
         idempotent: false,
       });

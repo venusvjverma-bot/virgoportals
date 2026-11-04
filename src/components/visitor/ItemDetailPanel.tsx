@@ -3,13 +3,14 @@ import { Minus, Plus, UtensilsCrossed, X, ShoppingBag } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { categoryLabel, sectionLabel } from '@/lib/menuSections';
 import { formatMinor, formatPriceInput, parsePriceToMinor } from '@/lib/currency';
-import type { Dish, DishServingOption, DishRemovableIngredient, DishVariant } from '@/types';
+import type { AddOnOption, Dish, DishServingOption, DishRemovableIngredient, DishVariant } from '@/types';
 
 const CLOSE_MS = 180;
 
 export interface DishSelection {
   servingOption: DishServingOption | null;
   variant: DishVariant | null;
+  addOns: AddOnOption[];
   quantity: number;
   removedIngredientIds: string[];
   removedIngredientLabels: string[];
@@ -19,8 +20,9 @@ export interface DishSelection {
 interface ItemDetailPanelProps {
   dish: Dish;
   currency: string;
+  addOns: AddOnOption[];
   onClose: () => void;
-  onAddToBasket?: (dish: Dish, quantity: number, servingOption?: DishServingOption | null, removedIngredientIds?: string[], removedIngredientLabels?: string[], additionalRequest?: string, variant?: DishVariant | null) => void;
+  onAddToBasket?: (dish: Dish, quantity: number, servingOption?: DishServingOption | null, removedIngredientIds?: string[], removedIngredientLabels?: string[], additionalRequest?: string, variant?: DishVariant | null, addOns?: AddOnOption[]) => void;
   editing?: { initial: DishSelection; onUpdate: (selection: DishSelection) => void };
 }
 
@@ -44,7 +46,7 @@ function variantPriceLabel(additionalPrice: string, currency: string): string {
   return parsePriceToMinor(additionalPrice) === 0 ? 'Included' : `+${formatPriceInput(additionalPrice, currency)}`;
 }
 
-export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editing }: ItemDetailPanelProps) {
+export function ItemDetailPanel({ dish, currency, addOns, onClose, onAddToBasket, editing }: ItemDetailPanelProps) {
   const initial = editing?.initial;
   const [closing, setClosing] = useState(false);
   const [quantity, setQuantity] = useState(initial?.quantity ?? 1);
@@ -67,6 +69,14 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
   const selectedVariant = activeVariants.find((v) => v.id === selectedVariantId) ?? null;
   const variantMissing = activeVariants.length > 0 && !selectedVariant;
 
+  const availableAddOns = addOns.filter(
+    (a) => a.category === (dish.section === 'drinks' ? 'drink_add_ons' : 'food_add_ons')
+  );
+  const [selectedAddOnIds, setSelectedAddOnIds] = useState<string[]>(() =>
+    (initial?.addOns ?? []).map((a) => a.id).filter((id) => availableAddOns.some((a) => a.id === id))
+  );
+  const selectedAddOns = availableAddOns.filter((a) => selectedAddOnIds.includes(a.id));
+
   const activeRemovableIngredients = (dish.removableIngredients ?? []).filter((i) => i.isActive !== false);
   const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set(
     (initial?.removedIngredientIds ?? []).filter((id) => activeRemovableIngredients.some((i) => i.id === id))
@@ -81,8 +91,11 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
 
   const displayPrice = selectedOption ? selectedOption.price : dish.price;
   const basePriceMinor = parsePriceToMinor(displayPrice);
-  const formattedPrice = selectedVariant
-    ? formatMinor((basePriceMinor ?? 0) + (parsePriceToMinor(selectedVariant.additionalPrice) ?? 0), currency)
+  const extrasMinor =
+    (selectedVariant ? parsePriceToMinor(selectedVariant.additionalPrice) ?? 0 : 0) +
+    selectedAddOns.reduce((sum, a) => sum + (parsePriceToMinor(a.price) ?? 0), 0);
+  const formattedPrice = extrasMinor > 0
+    ? formatMinor((basePriceMinor ?? 0) + extrasMinor, currency)
     : displayPrice ? formatPriceInput(displayPrice, currency) : '';
 
   function requestClose() {
@@ -113,6 +126,7 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
     return {
       servingOption: selectedOption,
       variant: selectedVariant,
+      addOns: selectedAddOns,
       quantity,
       removedIngredientIds: [...removedIds],
       removedIngredientLabels: activeRemovableIngredients.filter((i) => removedIds.has(i.id)).map((i) => i.label),
@@ -128,7 +142,7 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
       requestClose();
       return;
     }
-    onAddToBasket?.(dish, selection.quantity, selection.servingOption, selection.removedIngredientIds, selection.removedIngredientLabels, selection.additionalRequest, selection.variant);
+    onAddToBasket?.(dish, selection.quantity, selection.servingOption, selection.removedIngredientIds, selection.removedIngredientLabels, selection.additionalRequest, selection.variant, selection.addOns);
     requestClose();
   }
 
@@ -291,6 +305,45 @@ export function ItemDetailPanel({ dish, currency, onClose, onAddToBasket, editin
                         <span className="min-w-0 flex-1 text-sm font-medium text-ink">{variant.name}</span>
                         <span className="shrink-0 text-sm font-semibold text-olive-700">
                           {variantPriceLabel(variant.additionalPrice, currency)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {availableAddOns.length > 0 ? (
+              <div className="mt-5">
+                <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                  {dish.section === 'drinks' ? 'Drink add-ons' : 'Food add-ons'}
+                </p>
+                <div role="group" aria-label="Add-ons" className="mt-2 space-y-2">
+                  {availableAddOns.map((addOn) => {
+                    const isSelected = selectedAddOnIds.includes(addOn.id);
+                    return (
+                      <label
+                        key={addOn.id}
+                        className={cn(
+                          'flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition-all duration-150',
+                          isSelected
+                            ? 'bg-olive-50 ring-2 ring-olive-500'
+                            : 'bg-white ring-1 ring-cream-200 hover:ring-cream-300'
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() =>
+                            setSelectedAddOnIds((prev) =>
+                              prev.includes(addOn.id) ? prev.filter((id) => id !== addOn.id) : [...prev, addOn.id]
+                            )
+                          }
+                          className="h-4 w-4 shrink-0 accent-olive-700"
+                        />
+                        <span className="min-w-0 flex-1 text-sm font-medium text-ink">{addOn.name}</span>
+                        <span className="shrink-0 text-sm font-semibold text-olive-700">
+                          +{formatPriceInput(addOn.price, currency)}
                         </span>
                       </label>
                     );

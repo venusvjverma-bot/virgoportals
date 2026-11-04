@@ -250,6 +250,7 @@ export interface BasketItem {
   variantId?: string | null;
   variantName?: string | null;
   variantAdditionalPrice?: string | null;
+  addOns?: AddOnOption[];
   removedIngredientIds?: string[];
   removedIngredientLabels?: string[];
   additionalRequest?: string | null;

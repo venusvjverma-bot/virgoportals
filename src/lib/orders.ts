@@ -157,7 +157,7 @@ interface CreateOrderResult {
 }
 
 export type OrderLineInput =
-  | { dishId: string; quantity: number; servingOptionId?: string | null; variantId?: string | null; removedIngredientIds?: string[]; additionalRequest?: string | null }
+  | { dishId: string; quantity: number; servingOptionId?: string | null; variantId?: string | null; addOnIds?: string[]; removedIngredientIds?: string[]; additionalRequest?: string | null }
   | { comboId: string; quantity: number; selections: { groupId: string; dishId: string; servingOptionId: string | null }[] };
 
 export async function createOrder(params: {
@@ -179,7 +179,7 @@ export async function createOrder(params: {
     items: params.items.map((i) =>
       'comboId' in i
         ? { comboId: i.comboId, quantity: i.quantity, selections: i.selections }
-        : { dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, variantId: i.variantId ?? null, removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? null },
+        : { dishId: i.dishId, quantity: i.quantity, servingOptionId: i.servingOptionId ?? null, variantId: i.variantId ?? null, addOnIds: i.addOnIds ?? [], removedIngredientIds: i.removedIngredientIds ?? [], additionalRequest: i.additionalRequest ?? null },
     ),
     mobileNumber: params.mobileNumber,
     tip: params.tip,
