@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Minus, Plus, ShoppingBag, Trash2, X, ArrowRight } from 'lucide-react';
+import { Minus, Plus, ShoppingBag, Trash2, X, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { basketLineKey } from '@/lib/basketLine';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
@@ -18,8 +18,6 @@ interface BasketPanelProps {
   servingOptionsByDish: Record<string, DishServingOption[]>;
   onChangeServingSize: (dishId: string, servingOptionId: string | null, removedKey: string, option: DishServingOption) => void;
   addOns: AddOnOption[];
-  recommendedAddOnIds: string[];
-  addOnsLoading: boolean;
   onAddAddOn: (addOn: AddOnOption) => void;
   onEditItem: (item: BasketItem) => void;
   canEditItem: (item: BasketItem) => boolean;
@@ -37,8 +35,6 @@ export function BasketPanel({
   servingOptionsByDish,
   onChangeServingSize,
   addOns,
-  recommendedAddOnIds,
-  addOnsLoading,
   onAddAddOn,
   onEditItem,
   canEditItem,
@@ -55,9 +51,9 @@ export function BasketPanel({
 
   const hasFoodItem = items.some((item) => item.section === 'food');
   const hasDrinkItem = items.some((item) => item.section === 'drinks');
-  const visibleAddOnGroups = [
-    { key: 'food_add_ons', label: 'Food Add-ons', visible: hasFoodItem },
-    { key: 'drink_add_ons', label: 'Drink Add-ons', visible: hasDrinkItem },
+  const availableAddOnGroups = [
+    { key: 'food_add_ons', label: 'Food Add-on', visible: hasFoodItem },
+    { key: 'drink_add_ons', label: 'Drink Add-on', visible: hasDrinkItem },
   ]
     .filter((group) => group.visible)
     .map((group) => ({
@@ -65,16 +61,10 @@ export function BasketPanel({
       items: addOns.filter(
         (addOn) =>
           addOn.category === group.key &&
-          recommendedAddOnIds.includes(addOn.id) &&
           !items.some((item) => item.section === 'add_on' && item.dishId === addOn.id),
       ),
     }))
     .filter((group) => group.items.length > 0);
-  const addOnQuantities = new Map(
-    items
-      .filter((item) => item.section === 'add_on' && (item.servingOptionId ?? null) === null)
-      .map((item) => [item.dishId, item.quantity] as const)
-  );
 
   const totalMinor = items.reduce((sum, item) => {
     const unit = parsePriceToMinor(item.price) ?? 0;
@@ -277,59 +267,27 @@ export function BasketPanel({
             </ul>
           )}
 
-          {addOnsLoading && (hasFoodItem || hasDrinkItem) ? (
-            <div className="flex items-center gap-2 border-t border-cream-200 px-5 py-4 text-xs text-ink-muted sm:px-6">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-olive-600" />
-              Finding add-ons for your order
-            </div>
-          ) : null}
-
-          {visibleAddOnGroups.map((group) => (
+          {availableAddOnGroups.map((group) => (
             <div key={group.key} className="border-t border-cream-200 px-5 py-4 sm:px-6">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{group.label}</h3>
               <div className="mt-2 divide-y divide-cream-200">
-                {group.items.map((addOn) => {
-                  const quantity = addOnQuantities.get(addOn.id) ?? 0;
-                  return (
-                    <div key={addOn.id} className="flex items-center gap-3 py-2.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-ink">{addOn.name}</p>
-                        <p className="text-xs text-ink-muted">{formatPriceInput(addOn.price, currency)}</p>
-                      </div>
-                      {quantity === 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => onAddAddOn(addOn)}
-                          aria-label={`Add ${addOn.name}`}
-                          style={{ backgroundColor: '#EB7C10', color: '#FFFFFF' }}
-                          className="animate-bubble-pulse rounded-full px-3.5 py-2 text-sm font-bold shadow-soft transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-95"
-                        >
-                          Add
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => onUpdateQuantity(addOn.id, null, quantity - 1, '')}
-                            aria-label={`Decrease ${addOn.name}`}
-                            className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-ink shadow-soft ring-1 ring-cream-300 transition-all duration-200 hover:ring-olive-300"
-                          >
-                            <Minus className="h-3.5 w-3.5" />
-                          </button>
-                          <span className="min-w-[1.5rem] text-center text-sm font-semibold text-ink">{quantity}</span>
-                          <button
-                            type="button"
-                            onClick={() => onUpdateQuantity(addOn.id, null, Math.min(99, quantity + 1), '')}
-                            aria-label={`Increase ${addOn.name}`}
-                            className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-ink shadow-soft ring-1 ring-cream-300 transition-all duration-200 hover:ring-olive-300"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      )}
+                {group.items.map((addOn) => (
+                  <div key={addOn.id} className="flex items-center gap-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-ink">{addOn.name}</p>
+                      <p className="text-xs text-ink-muted">{formatPriceInput(addOn.price, currency)}</p>
                     </div>
-                  );
-                })}
+                    <button
+                      type="button"
+                      onClick={() => onAddAddOn(addOn)}
+                      aria-label={`Add ${addOn.name}`}
+                      style={{ backgroundColor: '#EB7C10', color: '#FFFFFF' }}
+                      className="animate-bubble-pulse rounded-full px-3.5 py-2 text-sm font-bold shadow-soft transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-95"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
