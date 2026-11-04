@@ -303,21 +303,12 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   // ── Recommend add-ons that suit the current basket (LLM-selected, server-validated) ──
   const [recommendedAddOnIds, setRecommendedAddOnIds] = useState<string[]>([]);
   const [addOnsLoading, setAddOnsLoading] = useState(false);
-  const addOnCacheRef = useRef(new Map<string, string[]>());
   const addOnReqIdRef = useRef(0);
   useEffect(() => {
     if (!view) return;
     if (!basket.some((item) => item.section !== 'add_on')) {
       addOnReqIdRef.current += 1;
       setRecommendedAddOnIds([]);
-      setAddOnsLoading(false);
-      return;
-    }
-    const cacheKey = `${view.resourceType}:${view.resourceId ?? ''}|${basketSignature}`;
-    const cached = addOnCacheRef.current.get(cacheKey);
-    if (cached) {
-      addOnReqIdRef.current += 1;
-      setRecommendedAddOnIds(cached);
       setAddOnsLoading(false);
       return;
     }
@@ -335,20 +326,21 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           addOnsOnly: true,
           history: [],
           language: language ?? '',
-          basket: basket.map((item) => ({
-            dishId: item.dishId,
-            name: item.name,
-            section: item.section,
-            price: item.price,
-            quantity: item.quantity,
-            servingLabel: item.servingLabel ?? null,
-          })),
+          basket: basket
+            .filter((item) => item.section !== 'add_on')
+            .map((item) => ({
+              dishId: item.dishId,
+              name: item.name,
+              section: item.section,
+              price: item.price,
+              quantity: item.quantity,
+              servingLabel: item.servingLabel ?? null,
+            })),
         });
         if (reqId !== addOnReqIdRef.current) return;
         const ids = Array.isArray(result.addOnIds)
           ? result.addOnIds.filter((id): id is string => typeof id === 'string')
           : [];
-        addOnCacheRef.current.set(cacheKey, ids);
         setRecommendedAddOnIds(ids);
       } catch {
         if (reqId === addOnReqIdRef.current) setRecommendedAddOnIds([]);

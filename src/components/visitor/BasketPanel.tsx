@@ -65,8 +65,8 @@ export function BasketPanel({
       items: addOns.filter(
         (addOn) =>
           addOn.category === group.key &&
-          (recommendedAddOnIds.includes(addOn.id) ||
-            items.some((item) => item.section === 'add_on' && item.dishId === addOn.id)),
+          recommendedAddOnIds.includes(addOn.id) &&
+          !items.some((item) => item.section === 'add_on' && item.dishId === addOn.id),
       ),
     }))
     .filter((group) => group.items.length > 0);

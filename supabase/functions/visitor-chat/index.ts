@@ -860,14 +860,17 @@ Deno.serve(async (req: Request) => {
     const langInstruction = validLanguage
       ? `\nAlways respond to the guest in ${validLanguage}, regardless of what language they type in.`
       : '';
-    const basketContext = buildBasketContext(basketItems, restaurantCurrency);
+    const addOnsOnly = suggestionsOnly && Boolean(body?.addOnsOnly);
+    const basketContext = buildBasketContext(
+      addOnsOnly ? basketItems.filter((item) => item.section !== 'add_on') : basketItems,
+      restaurantCurrency
+    );
     const basketBlock = basketContext ? `\n\n${basketContext}\n\n` : '';
 
     const addOnCandidates = menu.filter(
       (d) => d.section === 'add_on' && ADD_ON_RECOMMENDABLE_CATEGORIES.has((d.category ?? '').toLowerCase())
     );
     const hasBasketProduct = basketItems.some((item) => item.section !== 'add_on');
-    const addOnsOnly = suggestionsOnly && Boolean(body?.addOnsOnly);
     if (addOnsOnly && (addOnCandidates.length === 0 || !hasBasketProduct)) {
       return json({ suggestions: [], addOnIds: [] });
     }
