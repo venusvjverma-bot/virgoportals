@@ -203,7 +203,10 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
 
       {/* Order ticket */}
       <div className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
-        <div className="flex flex-wrap gap-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-ink">
+          Order Confirmation Ticket
+        </h3>
+        <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
             onClick={downloadTicket}
