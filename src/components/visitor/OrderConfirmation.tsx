@@ -28,141 +28,152 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
     };
   }, []);
 
-  function generatePdfBlob(): Blob {
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    const pageW = 210;
-    const margin = 20;
+  function drawReceipt(doc: jsPDF): number {
+    const pageW = 80;
+    const margin = 4;
     const contentW = pageW - margin * 2;
-    let y = margin;
+    const right = margin + contentW;
+    let y = 6;
 
-    // Header band
-    doc.setFillColor(63, 80, 55);
-    doc.rect(0, 0, pageW, 30, 'F');
-    doc.setTextColor(255, 255, 255);
+    const sep = () => {
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.2);
+      doc.line(margin, y, right, y);
+    };
+
+    doc.setTextColor(0, 0, 0);
+
+    // Header
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.text('Order Confirmation Ticket', pageW / 2, 14, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(payToStaff ? 'Virgo Portals — Order' : 'Virgo Portals — Prototype Order', pageW / 2, 22, { align: 'center' });
-
-    y = 40;
-    doc.setTextColor(42, 42, 42);
-
-    // Order number
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text(`Order #${order.orderNumber}`, margin, y);
-    y += 8;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(120, 120, 120);
-    doc.text(`Order ID: ${order.orderId}`, margin, y);
-    y += 6;
-
-    // Date
-    doc.text(`Date: ${created.toLocaleString()}`, margin, y);
-    y += 10;
-
-    // Restaurant info
-    doc.setTextColor(42, 42, 42);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('VIRGO PORTALS', pageW / 2, y, { align: 'center' });
+    y += 5.5;
     doc.setFontSize(11);
-    doc.text('Restaurant', margin, y);
+    doc.text('ORDER CONFIRMATION', pageW / 2, y, { align: 'center' });
     y += 6;
-    doc.setFont('helvetica', 'normal');
+    sep();
+    y += 4;
+
     doc.setFontSize(10);
-    doc.text(order.restaurantName, margin, y);
-    y += 5;
+    doc.text(order.restaurantName, pageW / 2, y, { align: 'center' });
+    y += 4.5;
     if (order.resourceName && order.resourceName !== order.restaurantName) {
       const label = order.resourceType === 'event' ? 'Event' : 'Department';
-      doc.text(`${label}: ${order.resourceName}`, margin, y);
-      y += 5;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.text(`${label}: ${order.resourceName}`, pageW / 2, y, { align: 'center' });
+      y += 4.5;
     }
-    y += 5;
+    y += 1.5;
+    sep();
+    y += 4;
 
-    // Items table header
+    // Order info
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setFillColor(245, 243, 238);
-    doc.rect(margin, y - 4, contentW, 8, 'F');
-    doc.text('Item', margin + 2, y + 1);
-    doc.text('Qty', margin + contentW - 45, y + 1, { align: 'right' });
-    doc.text('Price', margin + contentW - 25, y + 1, { align: 'right' });
-    doc.text('Total', margin + contentW - 2, y + 1, { align: 'right' });
-    y += 8;
+    doc.setFontSize(12);
+    doc.text(`ORDER #${order.orderNumber}`, margin, y);
+    y += 5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text(`Order ID: ${order.orderId}`, margin, y);
+    y += 4;
+    doc.setFontSize(9);
+    doc.text(`Date: ${created.toLocaleString()}`, margin, y);
+    y += 4.5;
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Status: ${order.status.charAt(0).toUpperCase()}${order.status.slice(1)}`, margin, y);
+    y += 5;
+    sep();
+    y += 4;
 
     // Items
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('ITEMS', margin, y);
+    y += 4.5;
+
     for (const item of order.items) {
-      if (y > 270) {
-        doc.addPage();
-        y = margin;
-      }
-      const nameLines = doc.splitTextToSize(item.name, contentW - 55);
-      doc.text(nameLines[0], margin + 2, y);
-      doc.text(String(item.quantity), margin + contentW - 45, y, { align: 'right' });
-      doc.text(formatMinor(item.priceMinor, order.currency), margin + contentW - 25, y, { align: 'right' });
-      doc.text(formatMinor(item.lineTotalMinor, order.currency), margin + contentW - 2, y, { align: 'right' });
-      doc.setFontSize(8);
-      doc.setTextColor(90, 90, 90);
+      const nameLines = doc.splitTextToSize(item.name, contentW - 20) as string[];
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      nameLines.forEach((line, i) => {
+        doc.text(line, margin, y);
+        if (i === 0) doc.text(formatMinor(item.lineTotalMinor, order.currency), right, y, { align: 'right' });
+        y += 4;
+      });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text(`${item.quantity} x ${formatMinor(item.priceMinor, order.currency)}`, margin + 1, y);
+      y += 3.4;
+      doc.setFontSize(7.5);
       for (const detail of orderItemDetailLines(item, order.currency)) {
-        y += 4.5;
-        if (y > 275) {
-          doc.addPage();
-          y = margin;
+        const detailLines = doc.splitTextToSize(detail, contentW - 4) as string[];
+        for (const detailLine of detailLines) {
+          doc.text(detailLine, margin + 3, y);
+          y += 3.4;
         }
-        doc.text(detail, margin + 6, y);
       }
-      doc.setFontSize(10);
-      doc.setTextColor(42, 42, 42);
-      y += 6;
+      y += 1.5;
     }
 
-    // Tip and total
-    y += 2;
-    doc.setDrawColor(200, 200, 200);
-    doc.line(margin, y, margin + contentW, y);
-    y += 6;
+    y += 0.5;
+    sep();
+    y += 3.5;
+
     if (order.tipMinor > 0) {
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
+      doc.setFontSize(9);
       doc.text('Tip', margin, y);
-      doc.text(formatMinor(order.tipMinor, order.currency), margin + contentW - 2, y, { align: 'right' });
-      y += 8;
+      doc.text(formatMinor(order.tipMinor, order.currency), right, y, { align: 'right' });
+      y += 4.5;
+      sep();
+      y += 3.5;
     }
+
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('Total', margin, y);
-    doc.text(formatMinor(order.totalMinor, order.currency), margin + contentW - 2, y, { align: 'right' });
-    y += 10;
+    doc.setFontSize(13);
+    doc.text('TOTAL', margin, y);
+    doc.text(formatMinor(order.totalMinor, order.currency), right, y, { align: 'right' });
+    y += 6;
+    sep();
+    y += 4;
 
-    // Status & payment
+    // Payment info
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(`Order status: ${order.status}`, margin, y);
-    y += 6;
-    doc.text(`Payment: ${paymentLabel(order.paymentStatus)}`, margin, y);
-    y += 6;
+    doc.setFontSize(9);
+    const method = order.paymentStatus === 'pay_to_staff' ? 'Pay to Staff' : 'Test Payment';
+    doc.text(`Payment method: ${method}`, margin, y);
+    y += 4.5;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Payment status: NOT PAID', margin, y);
+    y += 4.5;
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Mobile: ${order.mobileNumber}`, margin, y);
+    y += 5.5;
+    sep();
+    y += 4;
 
-    // Mobile number
-    doc.text(`Mobile number: ${order.mobileNumber}`, margin, y);
-    y += 12;
-
-    // Disclaimer box
-    doc.setFillColor(255, 248, 230);
-    doc.rect(margin, y, contentW, 24, 'F');
-    doc.setDrawColor(230, 200, 120);
-    doc.rect(margin, y, contentW, 24);
-    doc.setFontSize(8);
-    doc.setTextColor(120, 80, 0);
+    // Footer
+    doc.setFontSize(6.8);
     const disclaimer = payToStaff ? PAY_TO_STAFF_NOTICE :
       'This is a prototype order. No real payment has been taken and no food will be prepared. ' +
       'This ticket is not a payment receipt or invoice. The mobile number shown is the one ' +
       'provided at checkout for this specific order.';
-    const discLines = doc.splitTextToSize(disclaimer, contentW - 6);
-    doc.text(discLines, margin + 3, y + 5);
+    const discLines = doc.splitTextToSize(disclaimer, contentW) as string[];
+    for (const line of discLines) {
+      doc.text(line, margin, y);
+      y += 3.1;
+    }
+    y += 4;
+    return y;
+  }
 
+  function generatePdfBlob(): Blob {
+    const measureDoc = new jsPDF({ unit: 'mm', format: [80, 600] });
+    const contentBottom = drawReceipt(measureDoc);
+    const height = Math.ceil(contentBottom + 4);
+    const doc = new jsPDF({ unit: 'mm', format: [80, height] });
+    drawReceipt(doc);
     return doc.output('blob');
   }
 
