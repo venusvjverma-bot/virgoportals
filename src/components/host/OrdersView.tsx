@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, type RefObject } from 'react';
-import { Loader2, ShoppingBag, ChevronRight } from 'lucide-react';
+import { Loader2, ShoppingBag, ChevronRight, Search, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
   listOrders,
@@ -89,6 +89,7 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState<'all' | Set<string>>(
     () => loadLocationFilter(restaurant.id)
   );
@@ -267,7 +268,12 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
     ? locationFiltered
     : locationFiltered.filter((o) => o.status === filter);
 
-  const groups = groupOrdersByScope(filtered, departments, events);
+  const trimmedQuery = searchQuery.trim().toLowerCase();
+  const searched = trimmedQuery
+    ? filtered.filter((o) => o.orderNumber.toLowerCase().includes(trimmedQuery))
+    : filtered;
+
+  const groups = groupOrdersByScope(searched, departments, events);
 
   function toggleLocation(id: string) {
     setLocationFilter((current) => {
@@ -419,8 +425,39 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
         ) : null}
       </div>
 
+      {/* Order search */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search by order number"
+          className="w-full rounded-2xl bg-white py-3 pl-11 pr-11 text-sm text-ink placeholder:text-ink-faint shadow-soft ring-1 ring-cream-200 transition-all duration-200 focus:outline-none focus:ring-olive-300"
+        />
+        {searchQuery ? (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            aria-label="Clear search"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-ink-faint transition-colors duration-200 hover:bg-cream-100 hover:text-ink"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+
       {/* Order list */}
       {groups.length === 0 ? (
+        trimmedQuery ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl bg-white py-16 shadow-soft ring-1 ring-cream-200">
+            <Search className="h-10 w-10 text-cream-300" />
+            <p className="mt-3 text-sm text-ink-muted">No orders found</p>
+            <p className="mt-1 text-xs text-ink-faint">
+              No orders match “{searchQuery.trim()}” with the selected filters.
+            </p>
+          </div>
+        ) : (
         <div className="flex flex-col items-center justify-center rounded-2xl bg-white py-16 shadow-soft ring-1 ring-cream-200">
           <ShoppingBag className="h-10 w-10 text-cream-300" />
           <p className="mt-3 text-sm text-ink-muted">No orders here yet.</p>
@@ -428,6 +465,7 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
             Incoming test orders from visitors will appear here automatically.
           </p>
         </div>
+        )
       ) : (
         <div className="space-y-8">
           {groups.map((group) => (
