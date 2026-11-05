@@ -655,6 +655,53 @@ Deno.serve(async (req: Request) => {
 
       if (itemsError) throw itemsError;
 
+      // ── Enqueue department ticket for the local print agent (best effort) ──
+      if (departmentId) {
+        const { data: deptPrinter } = await supabase
+          .from('departments')
+          .select('printer_enabled, printer_name, printer_connection, printer_ip, printer_port')
+          .eq('id', departmentId)
+          .maybeSingle();
+        if (deptPrinter?.printer_enabled && deptPrinter.printer_ip) {
+          await supabase.from('print_jobs').insert({
+            order_id: order!.id,
+            department_id: departmentId,
+            restaurant_id: restaurantId,
+            printer: {
+              name: deptPrinter.printer_name ?? 'Printer',
+              connection: deptPrinter.printer_connection ?? 'lan',
+              ip: deptPrinter.printer_ip,
+              port: deptPrinter.printer_port ?? 9100,
+              paperWidthMm: 80,
+            },
+            ticket: {
+              orderId: order!.id,
+              orderNumber: order!.order_number,
+              status: order!.status,
+              paymentStatus: order!.payment_status,
+              tipMinor: order!.tip_minor,
+              totalMinor: order!.total_minor,
+              currency: orderCurrency,
+              createdAt: order!.created_at,
+              restaurantName: order!.restaurant_name,
+              resourceName: order!.resource_name,
+              resourceType: order!.resource_type,
+              mobileNumber: order!.mobile_number,
+              items: orderItems.map((i) => ({
+                name: i.name,
+                priceMinor: i.price_minor,
+                quantity: i.quantity,
+                lineTotalMinor: i.line_total_minor,
+                servingLabel: i.serving_label ?? null,
+                variantName: i.variant_name ?? null,
+                removedIngredients: i.removed_ingredients,
+                addOns: (i.add_ons ?? []).map((a) => ({ name: a.name, priceMinor: a.price_minor })),
+              })),
+            },
+          });
+        }
+      }
+
       // ── Log initial status ──
       await supabase
         .from('order_status_log')

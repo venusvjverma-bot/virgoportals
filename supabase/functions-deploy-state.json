@@ -27,7 +27,11 @@
     },
     "visitor-orders": {
       "hasChanged": false,
-      "hash": "6e7600d26556cf79902891ad17b9674ee3783ee12561b304c5be1a1a2b592e00"
+      "hash": "b107c8a6c2ef9bbd89b250d8354eb1c35b7e410a17b46cbc6928e9b462db6b11"
+    },
+    "print-queue": {
+      "hasChanged": false,
+      "hash": "924171f2586b7305421b1b9686364cd2388348f07b6688b321685b69db681f37"
     }
   }
 }

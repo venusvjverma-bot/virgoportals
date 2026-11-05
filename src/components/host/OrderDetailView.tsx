@@ -8,6 +8,8 @@ import {
   statusLabel,
   nextStatus,
   STATUS_FLOW,
+  getPrintJobForOrder,
+  type PrintJobSummary,
 } from '@/lib/orders';
 import { cn } from '@/lib/cn';
 import { generateTicketBlob } from '@/lib/orderTicket';
@@ -36,6 +38,7 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
   const [updating, setUpdating] = useState(false);
   const [ticketUrl, setTicketUrl] = useState<string | null>(null);
   const [ticketError, setTicketError] = useState(false);
+  const [printJob, setPrintJob] = useState<PrintJobSummary | null>(null);
 
   async function load() {
     try {
@@ -52,6 +55,14 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
   useEffect(() => {
     load();
   }, [orderId]);
+
+  useEffect(() => {
+    let active = true;
+    getPrintJobForOrder(orderId)
+      .then((job) => { if (active) setPrintJob(job); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [orderId, order?.statusUpdatedAt]);
 
   useEffect(() => {
     return () => {
@@ -184,6 +195,26 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
           <p className="mt-2 text-xs text-error-600">
             Could not open the ticket. Please allow pop-ups for this page and try again.
           </p>
+        ) : null}
+        {printJob ? (
+          <div className="mt-3 border-t border-cream-200 pt-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Automatic printing</p>
+            <p className="mt-1 text-sm font-semibold text-ink">
+              {printJob.status === 'printed'
+                ? `Printed ${printJob.printedAt ? new Date(printJob.printedAt).toLocaleTimeString() : ''}`
+                : printJob.status === 'failed'
+                  ? 'Print failed — ticket can still be printed manually above'
+                  : printJob.status === 'printing'
+                    ? 'Sending to printer…'
+                    : 'Queued for printing'}
+            </p>
+            {printJob.status === 'failed' && printJob.lastError ? (
+              <p className="mt-0.5 text-xs text-error-600">{printJob.lastError}</p>
+            ) : null}
+            {printJob.status !== 'printed' && printJob.status !== 'failed' && printJob.attempts > 0 ? (
+              <p className="mt-0.5 text-xs text-ink-muted">Retry {printJob.attempts} of 5</p>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

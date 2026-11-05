@@ -262,6 +262,31 @@ export function paymentLabel(paymentStatus: string): string {
   return paymentStatus === 'pay_to_staff' ? 'Pay to Staff — Not Paid' : 'Test Payment — Not Paid';
 }
 
+export type PrintJobStatus = 'pending' | 'printing' | 'printed' | 'failed';
+
+export interface PrintJobSummary {
+  status: PrintJobStatus;
+  attempts: number;
+  lastError: string | null;
+  printedAt: string | null;
+}
+
+export async function getPrintJobForOrder(orderId: string): Promise<PrintJobSummary | null> {
+  const { data, error } = await supabase
+    .from('print_jobs')
+    .select('status, attempts, last_error, printed_at')
+    .eq('order_id', orderId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    status: data.status as PrintJobStatus,
+    attempts: data.attempts,
+    lastError: data.last_error,
+    printedAt: data.printed_at,
+  };
+}
+
 export function statusLabel(status: OrderStatus): string {
   const labels: Record<OrderStatus, string> = {
     new: 'New',
