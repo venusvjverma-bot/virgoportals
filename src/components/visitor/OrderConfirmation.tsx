@@ -56,13 +56,12 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
 
     doc.setFontSize(10);
     doc.text(order.restaurantName, pageW / 2, y, { align: 'center' });
-    y += 4.5;
+    y += 5.5;
     if (order.resourceName && order.resourceName !== order.restaurantName) {
-      const label = order.resourceType === 'event' ? 'Event' : 'Department';
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.text(`${label}: ${order.resourceName}`, pageW / 2, y, { align: 'center' });
-      y += 4.5;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text(order.resourceName, pageW / 2, y, { align: 'center' });
+      y += 6;
     }
     y += 1.5;
     sep();
