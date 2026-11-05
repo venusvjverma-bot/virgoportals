@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Loader2, Phone, X } from 'lucide-react';
+import { ArrowLeft, FileText, Loader2, Phone, X } from 'lucide-react';
 import {
   getOrder,
   updateOrderStatus,
@@ -10,6 +10,7 @@ import {
   STATUS_FLOW,
 } from '@/lib/orders';
 import { cn } from '@/lib/cn';
+import { generateTicketBlob } from '@/lib/orderTicket';
 import { orderAddOnLines } from '@/lib/orderItemDetails';
 import { supabase } from '@/lib/supabase';
 import type { Order, OrderStatus } from '@/types';
@@ -33,6 +34,8 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [ticketUrl, setTicketUrl] = useState<string | null>(null);
+  const [ticketError, setTicketError] = useState(false);
 
   async function load() {
     try {
@@ -49,6 +52,12 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
   useEffect(() => {
     load();
   }, [orderId]);
+
+  useEffect(() => {
+    return () => {
+      if (ticketUrl) URL.revokeObjectURL(ticketUrl);
+    };
+  }, [ticketUrl]);
 
   // ── Realtime: listen for status changes on this order ──
   useEffect(() => {
@@ -81,6 +90,35 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
       setError(err instanceof Error ? err.message : 'Could not update the order status.');
     } finally {
       setUpdating(false);
+    }
+  }
+
+  async function viewTicket() {
+    if (!order) return;
+    try {
+      const blob = generateTicketBlob({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        tipMinor: order.tipMinor,
+        totalMinor: order.totalMinor,
+        currency: order.currency,
+        createdAt: order.createdAt,
+        restaurantName: order.restaurantName,
+        resourceName: order.resourceName,
+        resourceType: order.resourceType,
+        mobileNumber: order.mobileNumber,
+        items: order.items,
+      });
+      if (ticketUrl) URL.revokeObjectURL(ticketUrl);
+      const url = URL.createObjectURL(blob);
+      setTicketUrl(url);
+      setTicketError(false);
+      const win = window.open(url, '_blank', 'noopener');
+      if (!win) setTicketError(true);
+    } catch {
+      setTicketError(true);
     }
   }
 
@@ -130,6 +168,23 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
           </h2>
           <p className="text-xs text-ink-muted">{created.toLocaleString()}</p>
         </div>
+      </div>
+
+      {/* View order ticket */}
+      <div className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
+        <button
+          type="button"
+          onClick={viewTicket}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-olive-700 bg-white py-3 text-sm font-semibold text-olive-700 transition-all duration-200 hover:bg-olive-50 active:scale-[0.99]"
+        >
+          <FileText className="h-4 w-4" />
+          View Order Ticket
+        </button>
+        {ticketError ? (
+          <p className="mt-2 text-xs text-error-600">
+            Could not open the ticket. Please allow pop-ups for this page and try again.
+          </p>
+        ) : null}
       </div>
 
       {/* Status and payment */}
