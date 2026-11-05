@@ -62,6 +62,7 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
+  const [locationFilter, setLocationFilter] = useState<'all' | Set<string>>('all');
   const [openedIds, setOpenedIds] = useState<Set<string>>(() => loadOpenedOrderIds(restaurant.id));
   const [departments, setDepartments] = useState<Department[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -225,11 +226,36 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
 
   const unopenedCount = orders.filter((o) => !openedIds.has(o.id)).length;
 
+  const selectedLocations = locationFilter === 'all' ? null : locationFilter;
+  const locationFiltered = selectedLocations
+    ? orders.filter((o) =>
+        (o.eventId && selectedLocations.has(o.eventId)) ||
+        (!o.eventId && o.departmentId && selectedLocations.has(o.departmentId))
+      )
+    : orders;
+
   const filtered = filter === 'all'
-    ? orders
-    : orders.filter((o) => o.status === filter);
+    ? locationFiltered
+    : locationFiltered.filter((o) => o.status === filter);
 
   const groups = groupOrdersByScope(filtered, departments, events);
+
+  function toggleLocation(id: string) {
+    setLocationFilter((current) => {
+      if (current === 'all') return new Set([id]);
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+        return next.size === 0 ? 'all' : next;
+      }
+      next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllLocations() {
+    setLocationFilter('all');
+  }
 
   const counts = {
     new: orders.filter((o) => o.status === 'new').length,
@@ -313,6 +339,48 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
         <FilterButton active={filter === 'cancelled'} onClick={() => setFilter('cancelled')}>
           Cancelled
         </FilterButton>
+      </div>
+
+      {/* Location filters */}
+      <div className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
+        <LocationButton active={locationFilter === 'all'} onClick={selectAllLocations}>
+          All
+        </LocationButton>
+        {departments.length > 0 ? (
+          <div className="mt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Department</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {departments.map((department) => (
+                <LocationButton
+                  key={department.id}
+                  active={locationFilter !== 'all' && locationFilter.has(department.id)}
+                  onClick={() => toggleLocation(department.id)}
+                >
+                  {department.name}
+                </LocationButton>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {departments.length > 0 && events.length > 0 ? (
+          <hr className="my-4 border-cream-200" />
+        ) : null}
+        {events.length > 0 ? (
+          <div className={departments.length > 0 ? '' : 'mt-4'}>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Event</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {events.map((event) => (
+                <LocationButton
+                  key={event.id}
+                  active={locationFilter !== 'all' && locationFilter.has(event.id)}
+                  onClick={() => toggleLocation(event.id)}
+                >
+                  {event.name}
+                </LocationButton>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Order list */}
@@ -415,6 +483,31 @@ function FilterButton({
         active
           ? 'bg-olive-700 text-white shadow-soft'
           : 'bg-white text-ink-soft ring-1 ring-cream-200 hover:ring-olive-200 hover:text-ink'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function LocationButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-200',
+        active
+          ? 'bg-orange-600 text-white shadow-soft'
+          : 'bg-white text-ink ring-1 ring-cream-300 hover:ring-orange-300'
       )}
     >
       {children}
