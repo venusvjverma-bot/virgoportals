@@ -51,6 +51,33 @@ function saveOpenedOrderIds(restaurantId: string, ids: Set<string>): void {
   }
 }
 
+function locationFilterKey(restaurantId: string): string {
+  return `vp:host:orders-location-filter:${restaurantId}`;
+}
+
+function loadLocationFilter(restaurantId: string): 'all' | Set<string> {
+  try {
+    const raw = localStorage.getItem(locationFilterKey(restaurantId));
+    if (!raw) return 'all';
+    const arr: unknown = JSON.parse(raw);
+    if (!Array.isArray(arr) || arr.length === 0) return 'all';
+    return new Set(arr.filter((v): v is string => typeof v === 'string'));
+  } catch {
+    return 'all';
+  }
+}
+
+function saveLocationFilter(restaurantId: string, filter: 'all' | Set<string>): void {
+  try {
+    localStorage.setItem(
+      locationFilterKey(restaurantId),
+      JSON.stringify(filter === 'all' ? [] : [...filter])
+    );
+  } catch {
+    // Ignore quota errors
+  }
+}
+
 interface OrdersViewProps {
   restaurant: RestaurantPortal;
   onOpenOrder: (order: Order) => void;
@@ -62,7 +89,9 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
-  const [locationFilter, setLocationFilter] = useState<'all' | Set<string>>('all');
+  const [locationFilter, setLocationFilter] = useState<'all' | Set<string>>(
+    () => loadLocationFilter(restaurant.id)
+  );
   const [openedIds, setOpenedIds] = useState<Set<string>>(() => loadOpenedOrderIds(restaurant.id));
   const [departments, setDepartments] = useState<Department[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -242,18 +271,25 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
 
   function toggleLocation(id: string) {
     setLocationFilter((current) => {
-      if (current === 'all') return new Set([id]);
+      if (current === 'all') {
+        const first = new Set([id]);
+        saveLocationFilter(restaurant.id, first);
+        return first;
+      }
       const next = new Set(current);
       if (next.has(id)) {
         next.delete(id);
-        return next.size === 0 ? 'all' : next;
+      } else {
+        next.add(id);
       }
-      next.add(id);
-      return next;
+      const result: 'all' | Set<string> = next.size === 0 ? 'all' : next;
+      saveLocationFilter(restaurant.id, result);
+      return result;
     });
   }
 
   function selectAllLocations() {
+    saveLocationFilter(restaurant.id, 'all');
     setLocationFilter('all');
   }
 
