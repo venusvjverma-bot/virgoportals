@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Download, ExternalLink, FileText, Loader2, Phone, X } from 'lucide-react';
+import { ArrowLeft, Download, ExternalLink, Loader2, Phone, X } from 'lucide-react';
 import {
   getOrder,
   updateOrderStatus,
@@ -36,7 +36,6 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
-  const [ticketUrl, setTicketUrl] = useState<string | null>(null);
   const [ticketError, setTicketError] = useState<string | null>(null);
   const [printJob, setPrintJob] = useState<PrintJobSummary | null>(null);
 
@@ -63,12 +62,6 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
       .catch(() => {});
     return () => { active = false; };
   }, [orderId, order?.statusUpdatedAt]);
-
-  useEffect(() => {
-    return () => {
-      if (ticketUrl) URL.revokeObjectURL(ticketUrl);
-    };
-  }, [ticketUrl]);
 
   // ── Realtime: listen for status changes on this order ──
   useEffect(() => {
@@ -104,8 +97,8 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
     }
   }
 
-  function viewTicket() {
-    if (!order) return;
+  function buildTicketBlob() {
+    if (!order) return null;
     try {
       const blob = generateTicketBlob({
         orderId: order.id,
@@ -123,35 +116,40 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
         items: order.items,
       });
       setTicketError(null);
-      setTicketUrl(URL.createObjectURL(blob));
+      return URL.createObjectURL(blob);
     } catch {
-      setTicketUrl(null);
       setTicketError('Could not generate the ticket. Please try again.');
+      return null;
     }
   }
 
   function openTicketInNewTab() {
-    if (!ticketUrl) return;
+    const url = buildTicketBlob();
+    if (!url) return;
     // Not passing 'noopener': browsers return null when it is passed even on
     // success, which caused false "popup blocked" errors. Detach the opener
     // manually instead so the new tab cannot access this page.
-    const win = window.open(ticketUrl, '_blank');
+    const win = window.open(url, '_blank');
     if (win) {
       win.opener = null;
       setTicketError(null);
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } else {
-      setTicketError('Your browser blocked the new tab. Use the download button instead.');
+      URL.revokeObjectURL(url);
+      setTicketError('Your browser blocked the new tab. Please use Download PDF instead.');
     }
   }
 
   function downloadTicket() {
-    if (!ticketUrl || !order) return;
+    const url = buildTicketBlob();
+    if (!url || !order) return;
     const anchor = document.createElement('a');
-    anchor.href = ticketUrl;
+    anchor.href = url;
     anchor.download = `order-${order.orderNumber}.pdf`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
+    URL.revokeObjectURL(url);
     setTicketError(null);
   }
 
@@ -203,58 +201,28 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
         </div>
       </div>
 
-      {/* View order ticket */}
+      {/* Order ticket */}
       <div className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
-        <button
-          type="button"
-          onClick={viewTicket}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-olive-700 bg-white py-3 text-sm font-semibold text-olive-700 transition-all duration-200 hover:bg-olive-50 active:scale-[0.99]"
-        >
-          <FileText className="h-4 w-4" />
-          View Order Ticket
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={downloadTicket}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-olive-700 bg-white py-3 text-sm font-semibold text-olive-700 transition-all duration-200 hover:bg-olive-50 active:scale-[0.99]"
+          >
+            <Download className="h-4 w-4" />
+            Download PDF
+          </button>
+          <button
+            type="button"
+            onClick={openTicketInNewTab}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-olive-700 bg-white py-3 text-sm font-semibold text-olive-700 transition-all duration-200 hover:bg-olive-50 active:scale-[0.99]"
+          >
+            <ExternalLink className="h-4 w-4" />
+            View in New Tab
+          </button>
+        </div>
         {ticketError ? (
           <p className="mt-2 text-xs text-error-600">{ticketError}</p>
-        ) : null}
-        {ticketUrl ? (
-          <div className="mt-4 rounded-xl border border-cream-200">
-            <div className="flex items-center justify-between border-b border-cream-200 px-3 py-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                Order ticket — 80 mm receipt
-              </p>
-              <button
-                type="button"
-                onClick={() => setTicketUrl(null)}
-                aria-label="Close ticket"
-                className="rounded-lg p-1 text-ink-soft transition-colors hover:bg-cream-100 hover:text-ink"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <iframe
-              src={ticketUrl}
-              title={`Order ticket ${order.orderNumber}`}
-              className="h-[70vh] w-full bg-cream-50"
-            />
-            <div className="flex flex-wrap gap-2 border-t border-cream-200 px-3 py-2.5">
-              <button
-                type="button"
-                onClick={downloadTicket}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-olive-700 px-4 py-2 text-xs font-semibold text-white shadow-soft transition-all duration-200 hover:bg-olive-800 active:scale-[0.99]"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Download PDF
-              </button>
-              <button
-                type="button"
-                onClick={openTicketInNewTab}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-xs font-semibold text-olive-700 ring-1 ring-cream-200 transition-all duration-200 hover:bg-cream-50 active:scale-[0.99]"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Open in new tab
-              </button>
-            </div>
-          </div>
         ) : null}
         {printJob ? (
           <div className="mt-3 border-t border-cream-200 pt-3">
