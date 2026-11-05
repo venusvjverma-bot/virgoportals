@@ -116,6 +116,11 @@ export interface Department {
   systemPrompt: string;
   isActive: boolean;
   chatBackgroundAssetId: string | null;
+  printerEnabled: boolean;
+  printerName: string | null;
+  printerConnection: 'wifi' | 'lan' | null;
+  printerIp: string | null;
+  printerPort: number | null;
   createdAt: string;
 }
 
@@ -173,7 +178,7 @@ export type HostView =
   | 'department-detail'
   | 'event-detail';
 
-export type ResourceView = 'details' | 'menu' | 'bot' | 'qr' | 'theme';
+export type ResourceView = 'details' | 'menu' | 'bot' | 'qr' | 'theme' | 'printer';
 
 export type OrderStatus = 'new' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'cancelled';
 

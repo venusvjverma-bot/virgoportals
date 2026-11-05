@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   Store,
   UtensilsCrossed,
+  Printer as PrinterIcon,
   CalendarDays,
   Save as SaveIcon,
   CheckCircle2,
@@ -26,6 +27,7 @@ import { MenuView } from '@/components/host/MenuView';
 import { BotView } from '@/components/host/BotView';
 import { QrView } from '@/components/host/QrView';
 import { ChatThemeView } from '@/components/host/ChatThemeView';
+import { PrinterView } from '@/components/host/PrinterView';
 import { listDishesByDepartment, listDishesByEvent, uploadMenuFile, createDish, deleteDish, updateDish, replaceServingOptions, replaceRemovableIngredients, replaceVariants } from '@/lib/portal';
 import { updateDepartment, deleteDepartment } from '@/lib/departments';
 import { updateEvent, deleteEvent } from '@/lib/events';
@@ -164,6 +166,7 @@ export function ResourceDetail({
     { id: 'bot', label: 'Bot', icon: Sparkles },
     { id: 'qr', label: 'QR', icon: QrIcon },
     { id: 'theme', label: 'Theme', icon: ImageIcon },
+    ...(isDept ? [{ id: 'printer' as ResourceView, label: 'Printer', icon: PrinterIcon }] : []),
   ];
 
   return (
@@ -272,6 +275,10 @@ export function ResourceDetail({
 
       {tab === 'theme' ? (
         <ChatThemeView resource={resource} resourceType={resourceType} onSaved={onResourceChanged} />
+      ) : null}
+
+      {tab === 'printer' && isDept ? (
+        <PrinterView department={resource as Department} onSaved={onResourceChanged} />
       ) : null}
     </div>
   );
