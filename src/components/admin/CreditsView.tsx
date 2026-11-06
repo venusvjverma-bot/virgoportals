@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Coins,
-  History,
   Loader2,
   Minus,
   Plus,
@@ -18,42 +17,16 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Notice } from '@/components/ui/Notice';
 import { cn } from '@/lib/cn';
+import { buildDailyUsage, formatCredits, type DailyUsage } from '@/lib/dailyTokenUsage';
+import { getLlmUsageDaily } from '@/lib/portal';
 import {
   adminAdjustCredit,
-  adminListCreditAdjustments,
   adminListCredits,
 } from '@/lib/adminApi';
-import type { CreditAdjustment, CreditHost } from '@/types';
+import type { CreditHost } from '@/types';
 
 function formatBalance(value: number): string {
   return value.toFixed(1);
-}
-
-function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function operationLabel(op: string): string {
-  switch (op) {
-    case 'add':
-      return 'Credit added';
-    case 'remove':
-      return 'Credit removed';
-    case 'deduct':
-      return 'LLM usage';
-    case 'initial':
-      return 'Initial allocation';
-    default:
-      return op;
-  }
 }
 
 export function CreditsView() {
@@ -201,8 +174,7 @@ interface CreditDetailDrawerProps {
 }
 
 function CreditDetailDrawer({ host, onClose, onAdjusted }: CreditDetailDrawerProps) {
-  const [adjustments, setAdjustments] = useState<CreditAdjustment[]>([]);
-  const [loadingAdjustments, setLoadingAdjustments] = useState(true);
+  const [dailyUsage, setDailyUsage] = useState<DailyUsage[] | null>(null);
   const [showConfirm, setShowConfirm] = useState<'add' | 'remove' | null>(null);
   const [amount, setAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -213,18 +185,16 @@ function CreditDetailDrawer({ host, onClose, onAdjusted }: CreditDetailDrawerPro
     let active = true;
     (async () => {
       try {
-        const result = await adminListCreditAdjustments(host.restaurantId);
-        if (active) setAdjustments(result);
+        const rows = await getLlmUsageDaily(host.restaurantId);
+        if (active) setDailyUsage(buildDailyUsage(rows));
       } catch {
-        // audit trail is informational; silently skip on error
-      } finally {
-        if (active) setLoadingAdjustments(false);
+        // Daily usage is informational; silently skip on error
       }
     })();
     return () => {
       active = false;
     };
-  }, [host.restaurantId, successMsg]);
+  }, [host.restaurantId]);
 
   const parsedAmount = parseFloat(amount);
   const isValidAmount = Number.isFinite(parsedAmount) && parsedAmount > 0;
@@ -445,52 +415,53 @@ function CreditDetailDrawer({ host, onClose, onAdjusted }: CreditDetailDrawerPro
             </div>
           )}
 
-          {/* Audit trail */}
+          {/* Daily LLM usage */}
           <div>
-            <div className="flex items-center gap-2">
-              <History className="h-4 w-4 text-ink-muted" />
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-                Adjustment history
-              </p>
-            </div>
-            {loadingAdjustments ? (
+            <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+              Daily LLM usage
+            </p>
+            {!dailyUsage ? (
               <div className="mt-3 flex items-center gap-2 text-sm text-ink-muted">
                 <Loader2 className="h-4 w-4 animate-spin text-olive-600" />
                 Loading…
               </div>
-            ) : adjustments.length === 0 ? (
-              <p className="mt-3 text-sm text-ink-faint">No adjustments yet.</p>
             ) : (
-              <div className="mt-3 space-y-2">
-                {adjustments.map((adj) => (
-                  <div
-                    key={adj.id}
-                    className="flex items-center justify-between rounded-lg bg-cream-50 px-4 py-2.5 ring-1 ring-cream-200"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-ink">
-                        {operationLabel(adj.operation)}
-                      </p>
-                      <p className="text-xs text-ink-faint">{formatDateTime(adj.createdAt)}</p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p
-                        className={cn(
-                          'text-sm font-semibold tabular-nums',
-                          adj.operation === 'add' || adj.operation === 'initial'
-                            ? 'text-success-600'
-                            : 'text-ink-soft'
-                        )}
-                      >
-                        {adj.operation === 'add' || adj.operation === 'initial' ? '+' : '-'}
-                        {formatBalance(adj.amount)}
-                      </p>
-                      <p className="text-xs text-ink-faint">
-                        → {formatBalance(adj.resultingBalance)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-3 overflow-x-auto rounded-lg ring-1 ring-cream-200 scrollbar-soft">
+                <table className="w-full min-w-[420px] border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-cream-200 bg-cream-50/60">
+                      {['Date', 'Input tokens', 'Output tokens', 'Total tokens', 'Credits'].map((heading) => (
+                        <th
+                          key={heading}
+                          className="px-3 py-2 text-xs font-medium uppercase tracking-wide text-ink-muted"
+                        >
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-cream-200">
+                    {[...dailyUsage].reverse().map((day) => (
+                      <tr key={day.dateKey}>
+                        <td className="px-3 py-2 whitespace-nowrap font-medium text-ink">
+                          {day.weekday}, {day.dayLabel}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums text-ink-soft">
+                          {day.inputTokens.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums text-ink-soft">
+                          {day.outputTokens.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2 font-semibold tabular-nums text-ink">
+                          {day.totalTokens.toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums text-ink-soft">
+                          {formatCredits(day.credits)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

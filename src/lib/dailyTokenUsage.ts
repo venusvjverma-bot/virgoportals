@@ -10,6 +10,8 @@ export interface DailyUsage {
   dateKey: string;
   weekday: string;
   dayLabel: string;
+  inputTokens: number;
+  outputTokens: number;
   totalTokens: number;
   credits: number;
 }
@@ -26,6 +28,8 @@ export function buildDailyUsage(rows: DailyUsageRow[]): DailyUsage[] {
       dateKey: row.usageDate,
       weekday: labelDate.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' }),
       dayLabel: labelDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
       totalTokens,
       credits: totalTokens / TOKENS_PER_CREDIT,
     };
