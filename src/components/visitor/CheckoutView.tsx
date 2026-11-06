@@ -319,6 +319,11 @@ export function CheckoutView({
                         {item.removedIngredientLabels.map((l) => `No ${l}`).join(' · ')}
                       </p>
                     ) : null}
+                    {item.addOns && item.addOns.length > 0 ? (
+                      <p className="mt-0.5 text-xs text-ink-faint">
+                        {item.addOns.map((a) => `${a.name} +${formatPriceInput(a.price, currency)}`).join(' · ')}
+                      </p>
+                    ) : null}
                     {item.additionalRequest ? (
                       <p className="mt-0.5 text-xs text-ink-muted">
                         <span className="font-medium text-ink">Request:</span> {item.additionalRequest}
