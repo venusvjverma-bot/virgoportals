@@ -35,7 +35,7 @@ const TITLES: Record<AdminView, { title: string; subtitle: string }> = {
   chat: { title: 'Chat model', subtitle: 'One model behind every host conversation.' },
   image: { title: 'Image model', subtitle: 'Dish image generation settings.' },
   bot: { title: 'Default bot text', subtitle: 'The prompt new hosts start from.' },
-  usage: { title: 'Usage', subtitle: 'Uploads, images, and visitor messages.' },
+  usage: { title: 'Usage', subtitle: 'All-time activity across restaurant portals.' },
   theme: { title: 'Theme uploader', subtitle: 'Upload and manage theme images.' },
 };
 
@@ -197,7 +197,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
               />
             ) : null}
             {view === 'bot' ? <BotTextView value={botText} onSave={handleSaveBotText} /> : null}
-            {view === 'usage' ? <UsageView rows={usage} /> : null}
+            {view === 'usage' ? <UsageView /> : null}
             {view === 'theme' ? <ThemeView /> : null}
           </div>
         </main>

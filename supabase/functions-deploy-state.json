@@ -21,17 +21,17 @@
       "hasChanged": false,
       "hash": "d44cdd2c7efa70599bd05ce85b1b70b423a6bd9465403f5adddf2a9565a11aa6"
     },
+    "print-queue": {
+      "hasChanged": false,
+      "hash": "924171f2586b7305421b1b9686364cd2388348f07b6688b321685b69db681f37"
+    },
     "visitor-chat": {
       "hasChanged": false,
-      "hash": "e742e89392857771157f7d54204082f099aa5651a6629557cf85a05e69ad5bf6"
+      "hash": "5960ffb3c680da9a8f1a7fdbfdecd860ccbc496724450d98f2e4af8ee6da8037"
     },
     "visitor-orders": {
       "hasChanged": false,
       "hash": "b107c8a6c2ef9bbd89b250d8354eb1c35b7e410a17b46cbc6928e9b462db6b11"
-    },
-    "print-queue": {
-      "hasChanged": false,
-      "hash": "924171f2586b7305421b1b9686364cd2388348f07b6688b321685b69db681f37"
     }
   }
 }

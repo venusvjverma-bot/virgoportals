@@ -976,7 +976,10 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Suggestions-only calls run the model and consume credits, so they count
+    // as a completed chat exchange too (one request = one event, same as chat).
     if (suggestionsOnly) {
+      await supabase.from('usage_events').insert({ restaurant_id: restaurantId, kind: 'message' });
       return json({ suggestions });
     }
 
