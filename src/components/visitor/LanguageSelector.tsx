@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronRight, Search } from 'lucide-react';
+import { PrivacyPage } from './PrivacyPage';
 
 const LANGUAGES: { native: string; english: string; search: string; flag: string }[] = [
   { native: 'English', english: 'English', search: 'english', flag: '🇬🇧' },
@@ -25,6 +26,7 @@ interface LanguageSelectorProps {
 
 export function LanguageSelector({ onSelect }: LanguageSelectorProps) {
   const [query, setQuery] = useState('');
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   const filtered = LANGUAGES.filter((lang) =>
     lang.search.toLowerCase().includes(query.trim().toLowerCase())
@@ -111,7 +113,7 @@ export function LanguageSelector({ onSelect }: LanguageSelectorProps) {
         </div>
 
         {/* Scrollable language list */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-soft px-6 pb-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-soft px-6">
           {filtered.length === 0 ? (
             <p
               className="py-10 text-center"
@@ -166,7 +168,23 @@ export function LanguageSelector({ onSelect }: LanguageSelectorProps) {
             </ul>
           )}
         </div>
+
+        {/* Footer: Privacy Policy link */}
+        <div
+          className="shrink-0 border-t px-6 py-3 text-center"
+          style={{ borderColor: '#EAE5DC' }}
+        >
+          <button
+            type="button"
+            onClick={() => setShowPrivacy(true)}
+            className="text-xs underline underline-offset-2 transition-colors duration-150 hover:text-[#292A27] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#71806A] rounded"
+            style={{ color: '#77766F' }}
+          >
+            Privacy Policy
+          </button>
+        </div>
       </div>
+      {showPrivacy ? <PrivacyPage onClose={() => setShowPrivacy(false)} /> : null}
     </div>
   );
 }
