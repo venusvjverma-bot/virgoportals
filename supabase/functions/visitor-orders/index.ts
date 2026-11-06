@@ -755,12 +755,34 @@ Deno.serve(async (req: Request) => {
 
     // ─── Action: update status (host) ───
     if (body.action === 'status') {
+      // The RPC's ownership check resolves auth.uid(), so the caller's verified
+      // JWT must be forwarded. The service-role client alone has no user
+      // identity and would reject every legitimate host.
+      const authHeader = req.headers.get('Authorization') ?? '';
+      const callerToken = authHeader.toLowerCase().startsWith('bearer ')
+        ? authHeader.slice(7).trim()
+        : '';
+      if (!callerToken) {
+        return json({ error: 'Please sign in to continue.' }, 401);
+      }
+
+      const authed = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: `Bearer ${callerToken}` } },
+      });
+      const { data: userData, error: userError } = await authed.auth.getUser(callerToken);
+      if (userError || !userData?.user) {
+        return json({ error: 'Your session has expired. Please sign in again.' }, 401);
+      }
+
       const { orderId, newStatus } = body;
       if (!orderId || !newStatus) {
         return json({ error: 'Missing order ID or status.' }, 400);
       }
+      if (!['accepted', 'preparing', 'ready', 'completed', 'cancelled'].includes(newStatus)) {
+        return json({ error: 'Invalid status.' }, 400);
+      }
 
-      const { data, error } = await supabase.rpc('update_order_status', {
+      const { data, error } = await authed.rpc('update_order_status', {
         p_order_id: orderId,
         p_new_status: newStatus,
       });
