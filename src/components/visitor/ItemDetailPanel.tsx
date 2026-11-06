@@ -34,12 +34,7 @@ function countWords(text: string): number {
 }
 
 function defaultServingOptionIndex(options: DishServingOption[]): number {
-  if (options.length === 0) return -1;
-  if (options.length === 1) return 0;
-  if (options.length % 2 === 1) {
-    return Math.floor(options.length / 2);
-  }
-  return options.length - 2;
+  return options.length === 0 ? -1 : 0;
 }
 
 function variantPriceLabel(additionalPrice: string, currency: string): string {
