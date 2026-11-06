@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { Department } from '@/types';
 
-const COLUMNS = 'id, restaurant_id, name, is_default, open_time, close_time, system_prompt, is_active, chat_background_asset_id, printer_enabled, printer_name, printer_connection, printer_ip, printer_port, created_at';
+const COLUMNS = 'id, restaurant_id, name, is_default, open_time, close_time, system_prompt, is_active, archived, chat_background_asset_id, printer_enabled, printer_name, printer_connection, printer_ip, printer_port, created_at';
 
 interface DepartmentRow {
   id: string;
@@ -12,6 +12,7 @@ interface DepartmentRow {
   close_time: string | null;
   system_prompt: string;
   is_active: boolean;
+  archived: boolean;
   chat_background_asset_id: string | null;
   printer_enabled: boolean;
   printer_name: string | null;
@@ -31,6 +32,7 @@ function mapDepartment(row: DepartmentRow): Department {
     closeTime: row.close_time,
     systemPrompt: row.system_prompt,
     isActive: row.is_active,
+    archived: row.archived,
     chatBackgroundAssetId: row.chat_background_asset_id,
     printerEnabled: row.printer_enabled,
     printerName: row.printer_name,
@@ -46,6 +48,7 @@ export async function listDepartments(restaurantId: string): Promise<Department[
     .from('departments')
     .select(COLUMNS)
     .eq('restaurant_id', restaurantId)
+    .eq('archived', false)
     .order('is_default', { ascending: false })
     .order('name', { ascending: true });
   if (error) throw error;
@@ -94,5 +97,13 @@ export async function updateDepartment(
 
 export async function deleteDepartment(departmentId: string): Promise<void> {
   const { error } = await supabase.from('departments').delete().eq('id', departmentId);
+  if (error) throw error;
+}
+
+export async function archiveDepartment(departmentId: string): Promise<void> {
+  const { error } = await supabase
+    .from('departments')
+    .update({ archived: true, is_active: false, updated_at: new Date().toISOString() })
+    .eq('id', departmentId);
   if (error) throw error;
 }

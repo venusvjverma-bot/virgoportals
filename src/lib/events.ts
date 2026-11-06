@@ -42,6 +42,7 @@ export async function listEvents(restaurantId: string): Promise<EventItem[]> {
     .from('events')
     .select(COLUMNS)
     .eq('restaurant_id', restaurantId)
+    .neq('status', 'archived')
     .order('start_date', { ascending: false });
   if (error) throw error;
   return (data ?? []).map((row) => mapEvent(row as EventRow));
@@ -98,5 +99,13 @@ export async function updateEvent(
 
 export async function deleteEvent(eventId: string): Promise<void> {
   const { error } = await supabase.from('events').delete().eq('id', eventId);
+  if (error) throw error;
+}
+
+export async function archiveEvent(eventId: string): Promise<void> {
+  const { error } = await supabase
+    .from('events')
+    .update({ status: 'archived', updated_at: new Date().toISOString() })
+    .eq('id', eventId);
   if (error) throw error;
 }

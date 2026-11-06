@@ -189,6 +189,16 @@ export async function createOrder(params: {
   });
 }
 
+export async function resourceHasOrders(resourceType: 'department' | 'event', resourceId: string): Promise<boolean> {
+  const column = resourceType === 'department' ? 'department_id' : 'event_id';
+  const { count, error } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .eq(column, resourceId);
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
 export async function updateOrderStatus(orderId: string, newStatus: OrderStatus): Promise<void> {
   await callFunction<{ success: boolean }>('visitor-orders', {
     action: 'status',

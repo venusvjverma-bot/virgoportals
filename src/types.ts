@@ -115,6 +115,7 @@ export interface Department {
   closeTime: string | null;
   systemPrompt: string;
   isActive: boolean;
+  archived: boolean;
   chatBackgroundAssetId: string | null;
   printerEnabled: boolean;
   printerName: string | null;

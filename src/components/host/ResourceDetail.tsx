@@ -15,6 +15,7 @@ import {
   Save as SaveIcon,
   CheckCircle2,
   Trash2,
+  Archive,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -29,13 +30,14 @@ import { QrView } from '@/components/host/QrView';
 import { ChatThemeView } from '@/components/host/ChatThemeView';
 import { PrinterView } from '@/components/host/PrinterView';
 import { listDishesByDepartment, listDishesByEvent, uploadMenuFile, createDish, deleteDish, updateDish, replaceServingOptions, replaceRemovableIngredients, replaceVariants } from '@/lib/portal';
-import { updateDepartment, deleteDepartment } from '@/lib/departments';
-import { updateEvent, deleteEvent } from '@/lib/events';
+import { updateDepartment, deleteDepartment, archiveDepartment } from '@/lib/departments';
+import { updateEvent, deleteEvent, archiveEvent } from '@/lib/events';
 import { callFunction } from '@/lib/functions';
 import { resourceLink } from '@/lib/links';
 import { getBotText } from '@/lib/config';
 import { computeEventStatus, EventStatusBadge } from '@/lib/eventStatus';
 import type { Department, EventItem, Dish, RestaurantPortal, ResourceView } from '@/types';
+import { resourceHasOrders } from '@/lib/orders';
 import type { ServingOptionInput } from '@/components/host/DishCard';
 import type { RemovableIngredientInput, VariantInput } from '@/components/host/DishCard';
 
@@ -453,6 +455,71 @@ function EditButtonRow({
 // Department Details
 // ---------------------------------------------------------------------------
 
+function ArchiveDeleteSection({
+  heading,
+  description,
+  actionLabel,
+  archiveLabel,
+  dialogTitle,
+  dialogConfirm,
+  dialogBody,
+  hasOrders,
+  disabled,
+  onDelete,
+  onArchive,
+}: {
+  heading: string;
+  description: string;
+  actionLabel: string;
+  archiveLabel: string;
+  dialogTitle: string;
+  dialogConfirm: string;
+  dialogBody: React.ReactNode;
+  hasOrders: boolean | null;
+  disabled?: boolean;
+  onDelete: () => void;
+  onArchive: () => void;
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  return (
+    <div className="p-5 sm:p-6" style={READ_ONLY_CARD_STYLE}>
+      <h3 className="font-display text-base font-semibold text-ink">{heading}</h3>
+      {hasOrders === false ? (
+        <>
+          <p className="mt-1 text-sm text-ink-muted">{description}</p>
+          <Button variant="ghost" className="mt-4 text-error-600" disabled={disabled} onClick={() => setConfirmOpen(true)}>
+            <Trash2 className="h-4 w-4" />
+            {actionLabel}
+          </Button>
+        </>
+      ) : hasOrders === true ? (
+        <>
+          <p className="mt-1 text-sm text-ink-muted">
+            This resource has historical orders, so it cannot be permanently deleted. Archiving removes it from your
+            active lists and stops new orders, while keeping all past orders and reports intact.
+          </p>
+          <Button variant="ghost" className="mt-4 text-error-600" disabled={disabled} onClick={onArchive}>
+            <Archive className="h-4 w-4" />
+            {archiveLabel}
+          </Button>
+        </>
+      ) : (
+        <p className="mt-1 text-sm text-ink-muted">Checking order history…</p>
+      )}
+      <ConfirmDialog
+        open={confirmOpen}
+        title={dialogTitle}
+        confirmLabel={dialogConfirm}
+        tone="danger"
+        onConfirm={() => { setConfirmOpen(false); onDelete(); }}
+        onCancel={() => setConfirmOpen(false)}
+      >
+        {dialogBody}
+      </ConfirmDialog>
+    </div>
+  );
+}
+
 function DepartmentDetails({
   restaurant,
   department,
@@ -472,6 +539,26 @@ function DepartmentDetails({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [hasOrders, setHasOrders] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setHasOrders(null);
+    resourceHasOrders('department', department.id)
+      .then((v) => { if (active) setHasOrders(v); })
+      .catch(() => { if (active) setHasOrders(true); });
+    return () => { active = false; };
+  }, [department.id]);
+
+  async function handleArchive() {
+    try {
+      await archiveDepartment(department.id);
+      onDelete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not archive.');
+    }
+  }
 
   useEffect(() => {
     setName(department.name);
@@ -579,19 +666,20 @@ function DepartmentDetails({
           </ReadOnlyPanel>
 
           {!department.isDefault ? (
-            <div
-              className="p-5 sm:p-6"
-              style={READ_ONLY_CARD_STYLE}
-            >
-              <h3 className="font-display text-base font-semibold text-ink">Remove department</h3>
-              <p className="mt-1 text-sm text-ink-muted">
-                This will permanently delete the department and all its menu items. This cannot be undone.
-              </p>
-              <Button variant="ghost" className="mt-4 text-error-600" onClick={() => setConfirmDelete(true)}>
-                <Trash2 className="h-4 w-4" />
-                Remove department
-              </Button>
-            </div>
+            <ArchiveDeleteSection
+              heading="Remove department"
+              description="This will permanently delete the department and all its menu items. This cannot be undone."
+              actionLabel="Remove department"
+              archiveLabel="Archive department"
+              dialogTitle="Remove this department?"
+              dialogConfirm="Remove"
+              dialogBody={
+                <p>All menu items, bot settings and QR links for <span className="font-medium">{department.name}</span> will be permanently deleted.</p>
+              }
+              hasOrders={hasOrders}
+              onDelete={() => setConfirmDelete(true)}
+              onArchive={() => setConfirmArchive(true)}
+            />
           ) : (
             <p className="text-sm text-ink-muted">
               The default department cannot be removed — it is the primary service area for your restaurant.
@@ -656,6 +744,17 @@ function DepartmentDetails({
       >
         <p>All menu items, bot settings and QR links for <span className="font-medium">{department.name}</span> will be permanently deleted.</p>
       </ConfirmDialog>
+
+      <ConfirmDialog
+        open={confirmArchive}
+        title="Archive this department?"
+        confirmLabel="Archive"
+        tone="danger"
+        onConfirm={() => { setConfirmArchive(false); handleArchive(); }}
+        onCancel={() => setConfirmArchive(false)}
+      >
+        <p><span className="font-medium">{department.name}</span> will be removed from your active departments and can no longer receive new orders. Its historical orders, menu and reports stay intact.</p>
+      </ConfirmDialog>
     </div>
   );
 }
@@ -684,6 +783,26 @@ function EventDetails({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [hasOrders, setHasOrders] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setHasOrders(null);
+    resourceHasOrders('event', event.id)
+      .then((v) => { if (active) setHasOrders(v); })
+      .catch(() => { if (active) setHasOrders(true); });
+    return () => { active = false; };
+  }, [event.id]);
+
+  async function handleArchive() {
+    try {
+      await archiveEvent(event.id);
+      onDelete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not archive.');
+    }
+  }
 
   useEffect(() => {
     setName(event.name);
@@ -790,19 +909,20 @@ function EventDetails({
             </InfoRow>
           </ReadOnlyPanel>
 
-          <div
-            className="p-5 sm:p-6"
-            style={READ_ONLY_CARD_STYLE}
-          >
-            <h3 className="font-display text-base font-semibold text-ink">Remove event</h3>
-            <p className="mt-1 text-sm text-ink-muted">
-              This will permanently delete the event and all its menu items. This cannot be undone.
-            </p>
-            <Button variant="ghost" className="mt-4 text-error-600" onClick={() => setConfirmDelete(true)}>
-              <Trash2 className="h-4 w-4" />
-              Remove event
-            </Button>
-          </div>
+          <ArchiveDeleteSection
+            heading="Remove event"
+            description="This will permanently delete the event and all its menu items. This cannot be undone."
+            actionLabel="Remove event"
+            archiveLabel="Archive event"
+            dialogTitle="Remove this event?"
+            dialogConfirm="Remove"
+            dialogBody={
+              <p>All menu items, bot settings and QR links for <span className="font-medium">{event.name}</span> will be permanently deleted.</p>
+            }
+            hasOrders={hasOrders}
+            onDelete={() => setConfirmDelete(true)}
+            onArchive={() => setConfirmArchive(true)}
+          />
         </>
       ) : (
         <Card className="animate-fade-in">
@@ -867,6 +987,17 @@ function EventDetails({
         onCancel={() => setConfirmDelete(false)}
       >
         <p>All menu items, bot settings and QR links for <span className="font-medium">{event.name}</span> will be permanently deleted.</p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={confirmArchive}
+        title="Archive this event?"
+        confirmLabel="Archive"
+        tone="danger"
+        onConfirm={() => { setConfirmArchive(false); handleArchive(); }}
+        onCancel={() => setConfirmArchive(false)}
+      >
+        <p><span className="font-medium">{event.name}</span> will be removed from your active events and can no longer receive new orders. Its historical orders, menu and reports stay intact.</p>
       </ConfirmDialog>
     </div>
   );

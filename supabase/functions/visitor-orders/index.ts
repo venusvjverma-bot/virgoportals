@@ -215,13 +215,13 @@ Deno.serve(async (req: Request) => {
       if (resourceType === 'department' && resourceId) {
         const { data: dept } = await supabase
           .from('departments')
-          .select('id, name, restaurant_id, is_active')
+          .select('id, name, restaurant_id, is_active, archived')
           .eq('id', resourceId)
           .maybeSingle();
         if (!dept || dept.restaurant_id !== restaurantId) {
           return json({ error: 'Invalid department for this restaurant.' }, 400);
         }
-        if (!dept.is_active) {
+        if (dept.archived || !dept.is_active) {
           return json({ error: 'This department is not currently active.' }, 400);
         }
         resourceName = dept.name;
