@@ -564,20 +564,33 @@ Deno.serve(async (req: Request) => {
     if (action === 'usage') {
       const [restaurantsResult, usageResult] = await Promise.all([
         supabase.from('restaurants').select('id, name, owner_email').order('created_at', { ascending: true }),
-        supabase.from('usage_events').select('restaurant_id, kind'),
+        // usage_events exceeds the default 1000-row page, so aggregate every
+        // page until the table is exhausted or the totals stop growing.
+        (async () => {
+          const PAGE = 1000;
+          const counts = new Map<string, { uploads: number; images: number; messages: number }>();
+          for (let from = 0; ; from += PAGE) {
+            const { data, error } = await supabase
+              .from('usage_events')
+              .select('restaurant_id, kind')
+              .range(from, from + PAGE - 1);
+            if (error) throw error;
+            const page = (data ?? []) as Array<{ restaurant_id: string | null; kind: string }>;
+            for (const row of page) {
+              if (!row.restaurant_id) continue;
+              const entry = counts.get(row.restaurant_id) ?? { uploads: 0, images: 0, messages: 0 };
+              if (row.kind === 'upload') entry.uploads += 1;
+              if (row.kind === 'image') entry.images += 1;
+              if (row.kind === 'message') entry.messages += 1;
+              counts.set(row.restaurant_id, entry);
+            }
+            if (page.length < PAGE) return counts;
+          }
+        })(),
       ]);
       if (restaurantsResult.error) throw restaurantsResult.error;
-      if (usageResult.error) throw usageResult.error;
 
-      const totals = new Map<string, { uploads: number; images: number; messages: number }>();
-      for (const row of (usageResult.data ?? []) as Array<{ restaurant_id: string | null; kind: string }>) {
-        if (!row.restaurant_id) continue;
-        const entry = totals.get(row.restaurant_id) ?? { uploads: 0, images: 0, messages: 0 };
-        if (row.kind === 'upload') entry.uploads += 1;
-        if (row.kind === 'image') entry.images += 1;
-        if (row.kind === 'message') entry.messages += 1;
-        totals.set(row.restaurant_id, entry);
-      }
+      const totals = usageResult;
 
       const rows = ((restaurantsResult.data ?? []) as Array<{ id: string; name: string; owner_email: string }>).map(
         (row) => {
