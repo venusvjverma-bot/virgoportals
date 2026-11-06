@@ -778,7 +778,7 @@ Deno.serve(async (req: Request) => {
       if (!orderId || !newStatus) {
         return json({ error: 'Missing order ID or status.' }, 400);
       }
-      if (!['accepted', 'preparing', 'ready', 'completed', 'cancelled'].includes(newStatus)) {
+      if (!['accepted', 'completed', 'cancelled'].includes(newStatus)) {
         return json({ error: 'Invalid status.' }, 400);
       }
 

@@ -200,7 +200,7 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus)
 import { formatMinor } from '@/lib/currency';
 export { formatMinor };
 
-export const STATUS_FLOW: OrderStatus[] = ['new', 'accepted', 'preparing', 'ready', 'completed'];
+export const STATUS_FLOW: OrderStatus[] = ['new', 'accepted', 'completed'];
 
 export function nextStatus(current: OrderStatus): OrderStatus | null {
   const idx = STATUS_FLOW.indexOf(current);
@@ -291,8 +291,6 @@ export function statusLabel(status: OrderStatus): string {
   const labels: Record<OrderStatus, string> = {
     new: 'New',
     accepted: 'Accepted',
-    preparing: 'Preparing',
-    ready: 'Ready',
     completed: 'Completed',
     cancelled: 'Cancelled',
   };

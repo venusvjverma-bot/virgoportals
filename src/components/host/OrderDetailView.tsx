@@ -20,8 +20,6 @@ import type { Order, OrderStatus } from '@/types';
 const STATUS_COLORS: Record<OrderStatus, string> = {
   new: 'bg-olive-100 text-olive-700',
   accepted: 'bg-blue-100 text-blue-700',
-  preparing: 'bg-amber-100 text-amber-700',
-  ready: 'bg-green-100 text-green-700',
   completed: 'bg-cream-200 text-ink-soft',
   cancelled: 'bg-error-100 text-error-700',
 };

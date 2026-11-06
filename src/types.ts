@@ -180,7 +180,7 @@ export type HostView =
 
 export type ResourceView = 'details' | 'menu' | 'bot' | 'qr' | 'theme' | 'printer';
 
-export type OrderStatus = 'new' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+export type OrderStatus = 'new' | 'accepted' | 'completed' | 'cancelled';
 
 export type TipOption = 'none' | '5' | '10' | '13' | '20' | 'custom';
 
