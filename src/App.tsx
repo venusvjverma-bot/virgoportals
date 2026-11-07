@@ -8,6 +8,7 @@ import { HostSignupPage } from '@/components/HostSignupPage';
 import { LoginPage } from '@/components/LoginPage';
 import { ResetPasswordPage } from '@/components/ResetPasswordPage';
 import { VisitorPage } from '@/components/VisitorPage';
+import { LatteMascotPrototype } from '@/components/dev/LatteMascotPrototype';
 import {
   clearRecoveryHash,
   onAuthChange,
@@ -23,6 +24,10 @@ import type { Session } from '@/types';
 type RecoveryState = 'recovery' | 'error' | null;
 
 function App() {
+  // Isolated dev prototype: /#latte-prototype — remove with the component file.
+  if (window.location.hash === '#latte-prototype') {
+    return <LatteMascotPrototype />;
+  }
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [recovery, setRecovery] = useState<RecoveryState>(() => readRecoveryState());
