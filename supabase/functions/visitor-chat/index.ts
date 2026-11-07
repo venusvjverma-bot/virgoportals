@@ -417,6 +417,12 @@ function cardInstructions(): string {
     'with a short follow-up message for the guest:\n' +
     'FOLLOWUP: <your follow-up message>\n' +
     'Omit the FOLLOWUP line entirely when both the CARDS and COMBOS lines are none.\n\n' +
+    'SECTION HEADING LABELS\n' +
+    'If your reply includes CARDS, add one line translating the four fixed section ' +
+    'labels below into the guest\u2019s language, in this exact order:\n' +
+    'HEADINGS: <Food label>, <Drinks label>, <Add-on label>, <Combos label>\n' +
+    'Translate only these four labels; do not invent new sections. Use the same ' +
+    'wording a menu in the guest\u2019s language would use. Keep each label short.\n\n' +
     'SUGGESTION BUBBLES\n' +
     'Always finish with one final line containing up to two clickable ' +
     'suggestion prompts the guest might want to ask next:\n' +
@@ -482,21 +488,26 @@ function extractDirectives(text: string): {
   combosDirective: string | null;
   followUp: string | null;
   suggestions: string[];
+  headingsDirective: string | null;
 } {
   const kept: string[] = [];
   let cardsDirective: string | null = null;
   let followUp: string | null = null;
   let suggestionsDirective: string | null = null;
   let combosDirective: string | null = null;
+  let headingsDirective: string | null = null;
   for (const line of text.split('\n')) {
     const cardMatch = line.match(/^\s*(?:\*\*)?CARDS(?:\*\*)?\s*:\s*(.*)$/i);
     const followMatch = line.match(/^\s*(?:\*\*)?FOLLOWUP(?:\*\*)?\s*:\s*(.*)$/i);
     const suggestMatch = line.match(/^\s*(?:\*\*)?SUGGESTIONS(?:\*\*)?\s*:\s*(.*)$/i);
     const comboMatch = line.match(/^\s*(?:\*\*)?COMBOS(?:\*\*)?\s*:\s*(.*)$/i);
+    const headingMatch = line.match(/^\s*(?:\*\*)?HEADINGS(?:\*\*)?\s*:\s*(.*)$/i);
     if (cardMatch) {
       cardsDirective = cardMatch[1].replace(/\*\*/g, '').trim();
     } else if (comboMatch) {
       combosDirective = comboMatch[1].replace(/\*\*/g, '').trim();
+    } else if (headingMatch) {
+      headingsDirective = headingMatch[1].replace(/\*\*/g, '').trim();
     } else if (followMatch) {
       followUp = followMatch[1].replace(/\*\*/g, '').trim();
     } else if (suggestMatch) {
@@ -511,7 +522,40 @@ function extractDirectives(text: string): {
     combosDirective,
     followUp,
     suggestions: parseSuggestions(suggestionsDirective),
+    headingsDirective,
   };
+}
+
+/**
+ * Maps the model's HEADINGS line (a comma-separated translation of the four
+ * fixed section labels, in order) onto the predefined section keys. Entries are
+ * validated individually: blank, over-long or unparseable values fall back to
+ * the English defaults on the frontend. Splitting on commas is ambiguous for
+ * labels containing commas, so each entry is also matched against the known
+ * English label or a section keyword to keep the mapping correct.
+ */
+const HEADING_KEY_ORDER: { key: 'food' | 'drinks' | 'add_on' | 'combos'; label: RegExp }[] = [
+  { key: 'food', label: /^food$/i },
+  { key: 'drinks', label: /^drinks$/i },
+  { key: 'add_on', label: /^add-on$|^add on$|^addon$/i },
+  { key: 'combos', label: /^combos$|^combo/i },
+];
+
+const MAX_HEADING_LENGTH = 40;
+
+function parseSectionHeadings(directive: string | null): Record<string, string> | null {
+  if (!directive || /^(none|-)$/i.test(directive.trim())) return null;
+  const entries = directive.split(/[,;]+/).map((raw) =>
+    raw.replace(/[*_`\[\]]/g, '').trim()
+  ).filter((raw) => raw.length > 0);
+  if (entries.length !== HEADING_KEY_ORDER.length) return null;
+  const out: Record<string, string> = {};
+  for (let i = 0; i < HEADING_KEY_ORDER.length; i++) {
+    const entry = entries[i];
+    if (entry.length > MAX_HEADING_LENGTH) continue;
+    out[HEADING_KEY_ORDER[i].key] = entry;
+  }
+  return out;
 }
 
 /** Parses the SUGGESTIONS directive into a clean, de-duplicated list. */
@@ -950,7 +994,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'The chat model returned an empty reply.' }, 502);
     }
 
-    const { reply: prose, cardsDirective, combosDirective, followUp, suggestions } = extractDirectives(rawReply);
+    const { reply: prose, cardsDirective, combosDirective, followUp, suggestions, headingsDirective } = extractDirectives(rawReply);
 
     const inputTokens = extractTokenCount(payload?.usage?.prompt_tokens);
     const outputTokens = extractTokenCount(payload?.usage?.completion_tokens);
@@ -993,7 +1037,7 @@ Deno.serve(async (req: Request) => {
 
     await supabase.from('usage_events').insert({ restaurant_id: restaurantId, kind: 'message' });
 
-    return json({ reply, dishes: matched.map((d) => toCard(d, optionsByDish.get(d.id) ?? [], ingredientsByDish.get(d.id) ?? [], variantsByDish.get(d.id) ?? [], restaurantCurrency)), combos: matchedCombos, followUp: followUpText, suggestions });
+    return json({ reply, dishes: matched.map((d) => toCard(d, optionsByDish.get(d.id) ?? [], ingredientsByDish.get(d.id) ?? [], variantsByDish.get(d.id) ?? [], restaurantCurrency)), combos: matchedCombos, followUp: followUpText, suggestions, sectionHeadings: parseSectionHeadings(headingsDirective) });
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : 'The assistant failed to reply.' },

@@ -43,6 +43,7 @@ interface ChatMessage {
   text: string;
   dishes: Dish[];
   combos?: VisitorCombo[];
+  sectionHeadings?: Record<string, string> | null;
 }
 
 interface LoadedView {
@@ -371,7 +372,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     setSendError(null);
     setSending(true);
     try {
-      const result = await callFunction<{ reply: string; dishes: Dish[]; combos?: VisitorCombo[]; followUp: string; suggestions?: string[] }>('visitor-chat', {
+      const result = await callFunction<{ reply: string; dishes: Dish[]; combos?: VisitorCombo[]; followUp: string; suggestions?: string[]; sectionHeadings?: Record<string, string> | null }>('visitor-chat', {
         restaurantId: view.restaurantId,
         resourceId: view.resourceId,
         resourceType: view.resourceType,
@@ -391,6 +392,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         text: result.reply,
         dishes: result.dishes ?? [],
         combos: result.combos ?? [],
+        sectionHeadings: result.sectionHeadings ?? null,
       };
       const newMessages = [...transcriptRef.current, botMessage];
       const followUp = result.followUp?.trim() ?? '';
@@ -431,7 +433,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     setMessages(transcriptRef.current);
     setSending(true);
     try {
-      const result = await callFunction<{ reply: string; dishes: Dish[]; combos?: VisitorCombo[]; followUp: string; suggestions?: string[] }>('visitor-chat', {
+      const result = await callFunction<{ reply: string; dishes: Dish[]; combos?: VisitorCombo[]; followUp: string; suggestions?: string[]; sectionHeadings?: Record<string, string> | null }>('visitor-chat', {
         restaurantId: view.restaurantId,
         resourceId: view.resourceId,
         resourceType: view.resourceType,
@@ -451,6 +453,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         text: result.reply,
         dishes: result.dishes ?? [],
         combos: result.combos ?? [],
+        sectionHeadings: result.sectionHeadings ?? null,
       };
       const newMessages = [...transcriptRef.current, botMessage];
       const followUp = result.followUp?.trim() ?? '';
@@ -1033,14 +1036,15 @@ function MessageBubble({
 
   // Cards are grouped by their saved menu section, preserving the order the
   // backend returned. A heading is rendered only when its group has cards.
-  const groups: { label: string; start: number; cards: React.ReactNode[] }[] = [];
-  let lastLabel: string | null = null;
+  const sectionHeadings = message.sectionHeadings ?? null;
+  const groups: { key: string; label: string; start: number; cards: React.ReactNode[] }[] = [];
+  let lastKey: string | null = null;
   let cardIndex = 0;
   for (const dish of message.dishes) {
-    const label = sectionLabel(dish.section ?? 'food');
-    if (label !== lastLabel) {
-      groups.push({ label, start: cardIndex, cards: [] });
-      lastLabel = label;
+    const key = dish.section ?? 'food';
+    if (key !== lastKey) {
+      groups.push({ key, label: sectionHeadings?.[key] || sectionLabel(key), start: cardIndex, cards: [] });
+      lastKey = key;
     }
     groups[groups.length - 1].cards.push(
       <DishResult key={`dish-${dish.id}`} dish={dish} currency={currency} onOpen={() => onOpen(dish)} />
@@ -1049,7 +1053,8 @@ function MessageBubble({
   }
   if (combos.length > 0) {
     groups.push({
-      label: 'Combos',
+      key: 'combos',
+      label: sectionHeadings?.combos || 'Combos',
       start: cardIndex,
       cards: combos.map((combo) => (
         <ComboResult key={`combo-${combo.id}`} combo={combo} currency={currency} onOpen={() => onOpenCombo(combo)} />
@@ -1075,7 +1080,7 @@ function MessageBubble({
             {groups.map((group) => {
               if (group.start >= revealed) return null;
               return (
-                <div key={`group-${group.label}`} className="space-y-3">
+                <div key={`group-${group.key}`} className="space-y-3">
                   <CardSectionHeading label={group.label} />
                   {group.cards.slice(0, revealed - group.start)}
                 </div>
