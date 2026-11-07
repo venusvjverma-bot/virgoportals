@@ -5,6 +5,7 @@ import { closeDepartmentSession, durationLabel, enqueueSessionReportPrintJob, li
 import { formatMinor } from '@/lib/currency';
 import { Button } from '@/components/ui/Button';
 import { Notice } from '@/components/ui/Notice';
+import { downloadSessionReportPdf } from '@/lib/sessionReportDownload';
 import { generateSessionReportBlob } from '@/lib/sessionReportTicket';
 import type { Department, DepartmentSessionReport, RestaurantPortal } from '@/types';
 
@@ -46,6 +47,7 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
   const [closingId, setClosingId] = useState<string | null>(null);
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [printFeedback, setPrintFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
 
   const load = useCallback(async (background = false) => {
     if (background) setRefreshing(true);
@@ -90,20 +92,26 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
     if (!report.closedAt || printingId) return;
     setPrintingId(report.id);
     setError(null);
+    setPrintFeedback(null);
     try {
       const ticket = toSessionReportTicketData(report, restaurant.name);
-      const blob = generateSessionReportBlob(ticket);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `${report.departmentName.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()}-session-${new Date(report.startedAt).toISOString().slice(0, 10)}.pdf`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
-      await enqueueSessionReportPrintJob(report.id);
+      downloadSessionReportPdf(ticket, report.departmentName, report.startedAt);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not download and print this report.');
+      setError(err instanceof Error ? err.message : 'Could not download the PDF report.');
+      setPrintingId(null);
+      return;
+    }
+
+    try {
+      await enqueueSessionReportPrintJob(report.id);
+      setPrintFeedback({ tone: 'success', message: `PDF downloaded and sent to the ${report.departmentName} printer.` });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not send the report to the printer.';
+      if (message.toLowerCase().includes('no printer')) {
+        setPrintFeedback({ tone: 'error', message: `The PDF was downloaded, but printing failed: no printer is configured for the ${report.departmentName} department. Set up a printer for this department to print session reports.` });
+      } else {
+        setPrintFeedback({ tone: 'error', message: `The PDF was downloaded, but printing failed: ${message}` });
+      }
     } finally {
       setPrintingId(null);
     }
@@ -143,6 +151,7 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
         </div>
 
         {error ? <Notice tone="error">{error}</Notice> : null}
+        {printFeedback ? <Notice tone={printFeedback.tone}>{printFeedback.message}</Notice> : null}
         <div className="grid gap-3 sm:grid-cols-4">
           <Summary label="Started" value={dateTime(selected.startedAt)} />
           <Summary label="Closed" value={dateTime(selected.closedAt)} />
@@ -171,6 +180,7 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
   return (
     <div className="space-y-7">
       {error ? <Notice tone="error">{error}</Notice> : null}
+      {printFeedback ? <Notice tone={printFeedback.tone}>{printFeedback.message}</Notice> : null}
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-ink-muted">Sessions begin automatically when a Department order is accepted.</p>
         <Button variant="secondary" size="sm" onClick={() => void load(true)} disabled={refreshing}><RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />Refresh</Button>
