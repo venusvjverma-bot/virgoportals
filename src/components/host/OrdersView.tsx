@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, type RefObject } from 'react';
-import { Loader2, ShoppingBag, ChevronRight, Search, X } from 'lucide-react';
+import { Loader2, ShoppingBag, ChevronDown, ChevronRight, Search, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
   listOrders,
@@ -95,6 +95,7 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
   const [departments, setDepartments] = useState<Department[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [alerts, setAlerts] = useState<Order[]>([]);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(() => new Set());
 
   const hasLoadedRef = useRef(false);
   const loadingRef = useRef(false);
@@ -272,6 +273,18 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
     : filtered;
 
   const groups = groupOrdersByScope(searched, departments, events);
+
+  function toggleDate(key: string) {
+    setExpandedDates((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
 
   function toggleLocation(id: string) {
     setLocationFilter((current) => {
@@ -466,7 +479,9 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
         )
       ) : (
         <div className="space-y-8">
-          {groups.map((group) => (
+          {groups.map((group) => {
+            const dateGroups = groupOrdersByDate(group.orders);
+            return (
             <section key={group.key} aria-label={group.title}>
               <div className="mb-3 flex items-center justify-between gap-3 px-1">
                 <h3 className="font-display text-base font-semibold text-ink">{group.title}</h3>
@@ -474,52 +489,81 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
                   {group.orders.length} {group.orders.length === 1 ? 'order' : 'orders'}
                 </span>
               </div>
-              <ul className="space-y-3">
-                {group.orders.map((order) => {
-                  const isOpened = openedIds.has(order.id);
+              <div className="space-y-3">
+                {dateGroups.map((dateGroup) => {
+                  const dateKey = `${group.key}:${dateGroup.dateKey}`;
+                  const isExpanded = expandedDates.has(dateKey);
                   return (
-                    <li key={order.id}>
+                    <div key={dateKey} className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-cream-200">
                       <button
                         type="button"
-                        onClick={() => handleOpenOrder(order)}
-                        className={cn(
-                          'flex w-full items-center gap-4 rounded-2xl p-4 text-left shadow-soft ring-1 transition-all duration-200 hover:shadow-lift hover:ring-olive-200 active:scale-[0.99] sm:p-5',
-                          isOpened
-                            ? 'bg-white ring-cream-200'
-                            : 'bg-orange-200 ring-orange-300 hover:ring-orange-400'
-                        )}
+                        onClick={() => toggleDate(dateKey)}
+                        aria-expanded={isExpanded}
+                        className="flex w-full items-center justify-between gap-3 p-4 text-left transition-colors duration-200 hover:bg-cream-100"
                       >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-display text-sm font-bold text-olive-700">
-                              {order.orderNumber}
-                            </span>
-                            <span
-                              className={cn(
-                                'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold capitalize',
-                                STATUS_COLORS[order.status]
-                              )}
-                            >
-                              {statusLabel(order.status)}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-ink-muted">
-                            {order.itemCount} {order.itemCount === 1 ? 'item' : 'items'}
-                            {' · '}
-                            {formatMinor(order.totalMinor, order.currency)}
-                          </p>
-                          <p className="mt-0.5 text-xs text-ink-faint">
-                            {new Date(order.createdAt).toLocaleString()}
-                          </p>
-                        </div>
-                        <ChevronRight className="h-5 w-5 shrink-0 text-ink-faint" />
+                        <span className="font-display text-sm font-semibold text-ink">{dateGroup.label}</span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-ink-muted">
+                            {dateGroup.orders.length} {dateGroup.orders.length === 1 ? 'order' : 'orders'}
+                          </span>
+                          {isExpanded
+                            ? <ChevronDown className="h-4 w-4 text-ink-faint" />
+                            : <ChevronRight className="h-4 w-4 text-ink-faint" />}
+                        </span>
                       </button>
-                    </li>
+                      {isExpanded ? (
+                        <ul className="space-y-3 border-t border-cream-100 p-3">
+                          {dateGroup.orders.map((order) => {
+                            const isOpened = openedIds.has(order.id);
+                            return (
+                              <li key={order.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenOrder(order)}
+                                  className={cn(
+                                    'flex w-full items-center gap-4 rounded-2xl p-4 text-left shadow-soft ring-1 transition-all duration-200 hover:shadow-lift hover:ring-olive-200 active:scale-[0.99] sm:p-5',
+                                    isOpened
+                                      ? 'bg-white ring-cream-200'
+                                      : 'bg-orange-200 ring-orange-300 hover:ring-orange-400'
+                                  )}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-display text-sm font-bold text-olive-700">
+                                        {order.orderNumber}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold capitalize',
+                                          STATUS_COLORS[order.status]
+                                        )}
+                                      >
+                                        {statusLabel(order.status)}
+                                      </span>
+                                    </div>
+                                    <p className="mt-1 text-xs text-ink-muted">
+                                      {order.itemCount} {order.itemCount === 1 ? 'item' : 'items'}
+                                      {' · '}
+                                      {formatMinor(order.totalMinor, order.currency)}
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-ink-faint">
+                                      {new Date(order.createdAt).toLocaleString()}
+                                    </p>
+                                  </div>
+                                  <ChevronRight className="h-5 w-5 shrink-0 text-ink-faint" />
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
+                    </div>
                   );
                 })}
-              </ul>
+              </div>
             </section>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -534,7 +578,30 @@ function CountCard({ label, value, color }: { label: string; value: number; colo
       </div>
       <p className="mt-2 font-display text-2xl font-bold text-ink">{value}</p>
     </div>
-  );
+  );}
+
+function groupOrdersByDate(orders: Order[]): { dateKey: string; label: string; orders: Order[] }[] {
+  const groups = new Map<string, Order[]>();
+  for (const order of orders) {
+    const d = new Date(order.createdAt);
+    const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const list = groups.get(dateKey);
+    if (list) {
+      list.push(order);
+    } else {
+      groups.set(dateKey, [order]);
+    }
+  }
+  return [...groups.entries()].map(([dateKey, list]) => ({
+    dateKey,
+    label: new Date(list[0].createdAt).toLocaleDateString(undefined, {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }),
+    orders: list,
+  }));
 }
 
 function FilterButton({
