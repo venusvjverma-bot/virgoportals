@@ -817,7 +817,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
             <div className="flex animate-fade-in justify-start">
               <div className="flex max-w-[92%] items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm leading-relaxed text-ink shadow-soft ring-1 ring-cream-200 sm:max-w-[80%]">
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin text-olive-600" />
-                {messages.length === 0 ? 'Preparing your menu assistant…' : 'Looking at the menu…'}
+                <TypingMessage text={messages.length === 0 ? 'Your AI menu assistant is getting ready' : 'Finding something delicious for you'} />
               </div>
             </div>
           ) : null}
@@ -994,6 +994,26 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
 }
 
 const CARD_REVEAL_DELAY_MS = 250;
+
+function TypingDots() {
+  return (
+    <span className="inline-flex" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="inline-block animate-typing-dot"
+          style={{ animationDelay: `${i * 0.3}s` }}
+        >
+          .
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function TypingMessage({ text }: { text: string }) {
+  return <span className="italic text-ink-muted">{text}<TypingDots /></span>;
+}
 
 function MessageBubble({
   message,

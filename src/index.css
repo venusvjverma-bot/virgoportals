@@ -137,3 +137,21 @@
     transform: scale(1);
   }
 }
+
+/*
+ * Typing dots for chat loading messages: each dot fades in sequentially over a
+ * smooth repeating 0.9s cycle. Opacity only, so text stays stationary.
+ * Disabled under prefers-reduced-motion.
+ */
+.animate-typing-dot {
+  animation: typing-dot 0.9s ease-in-out infinite;
+}
+
+@keyframes typing-dot {
+  0%, 100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
