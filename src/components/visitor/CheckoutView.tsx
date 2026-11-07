@@ -247,14 +247,11 @@ export function CheckoutView({
     }
   }, [submitting, error]);
 
-  // Leaving a field (touching anywhere else) hides a field-level listening reaction.
-  useEffect(() => {
-    function onPointerDown() {
-      setMascotState((prev) => (prev === 'listening' ? null : prev));
-    }
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, []);
+  // Latte stays visible for the whole editing session; it hides only when the
+  // active input genuinely loses focus (blur), not on taps, scrolls or keyboard changes.
+  function endListening() {
+    setMascotState((prev) => (prev === 'listening' ? null : prev));
+  }
 
   function showListening(anchor: HTMLElement, side: 'left' | 'right') {
     if (submitting || error) return;
@@ -473,6 +470,7 @@ export function CheckoutView({
                     onFocus={() => {
                       if (serviceLocationRef.current) showListening(serviceLocationRef.current, 'right');
                     }}
+                    onBlur={endListening}
                     placeholder={serviceType === 'room' ? 'e.g. 512B' : 'e.g. A12'}
                     className={cn(
                       'w-full rounded-xl border-0 px-4 py-3 text-sm shadow-soft ring-1 ring-inset transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500',
@@ -686,6 +684,7 @@ export function CheckoutView({
                 onFocus={() => {
                   if (mobileSectionRef.current) showListening(mobileSectionRef.current, 'right');
                 }}
+                onBlur={endListening}
                 placeholder="Enter your number"
                 className="flex-1 rounded-xl border-0 bg-cream-50 px-4 py-3 text-sm text-ink shadow-soft ring-1 ring-inset ring-cream-300 transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500"
                 autoComplete="tel-national"
