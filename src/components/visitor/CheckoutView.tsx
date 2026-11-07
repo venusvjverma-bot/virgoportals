@@ -473,7 +473,7 @@ export function CheckoutView({
                     onBlur={endListening}
                     placeholder={serviceType === 'room' ? 'e.g. 512B' : 'e.g. A12'}
                     className={cn(
-                      'w-full rounded-xl border-0 px-4 py-3 text-sm shadow-soft ring-1 ring-inset transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500',
+                      'mx-auto w-1/2 rounded-xl border-0 px-4 py-3 text-sm shadow-soft ring-1 ring-inset transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500',
                       confirmedLocation ? 'bg-olive-50 text-ink ring-olive-400' : 'bg-cream-50 text-ink ring-cream-300'
                     )}
                   />
