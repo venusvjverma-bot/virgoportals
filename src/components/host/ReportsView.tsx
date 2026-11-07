@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronRight, Clock3, Download, Loader2, Lock, Printer, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Clock3, Download, Loader2, Lock, LockOpen, Printer, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { closeDepartmentSession, durationLabel, enqueueSessionReportPrintJob, listDepartmentSessionReports, paymentLabelForReport, toSessionReportTicketData } from '@/lib/reports';
 import { formatMinor } from '@/lib/currency';
@@ -189,7 +189,28 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
         <h2 className="font-display text-xl font-semibold text-ink">Department sessions</h2>
         <div className="grid gap-3">{departments.map((department) => {
           const report = runningByDepartment.get(department.id);
-          return <div key={department.id} className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-ink">{department.name}</p>{report ? <p className="mt-1 text-sm text-ink-muted">Running since {dateTime(report.startedAt)} · {report.orders.length} {report.orders.length === 1 ? 'order' : 'orders'} · {formatMinor(totalValue(report), report.currency)}</p> : <p className="mt-1 text-sm text-ink-muted">No session is active.</p>}</div>{report ? <div className="flex gap-2"><Button variant="secondary" size="sm" onClick={() => setSelectedId(report.id)}>View session <ChevronRight className="h-4 w-4" /></Button><Button variant="danger" size="sm" onClick={() => void handleClose(report)} disabled={closingId === report.id}><Lock className="h-4 w-4" />Close</Button></div> : null}</div></div>;
+          if (report) {
+            return <div key={department.id} className="flex flex-col gap-5 rounded-2xl bg-green-50 p-5 shadow-soft ring-1 ring-green-200">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="font-semibold text-ink">{department.name}</p>
+                  <p className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-success-700"><LockOpen className="h-4 w-4" />Running Session</p>
+                </div>
+                <div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+                  <SessionDetail label="Start date:" value={sessionDate(report.startedAt)} tone="running" />
+                  <SessionDetail label="Start time:" value={sessionTime(report.startedAt)} tone="running" />
+                  <SessionDetail label="Duration:" value={durationLabel(report.startedAt, report.closedAt)} tone="running" />
+                  <SessionDetail label="Orders:" value={String(report.orders.length)} tone="running" />
+                  <SessionDetail label="Sales:" value={formatMinor(totalValue(report), report.currency)} tone="running" />
+                </div>
+              </div>
+              <Button variant="secondary" size="sm" className="self-start" onClick={() => setSelectedId(report.id)}>View session <ChevronRight className="h-4 w-4" /></Button>
+            </div>;
+          }
+          return <div key={department.id} className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
+            <p className="font-semibold text-ink">{department.name}</p>
+            <p className="mt-1 text-sm text-ink-muted">No session is active.</p>
+          </div>;
         })}</div>
       </section>
       <section className="space-y-3"><h2 className="font-display text-xl font-semibold text-ink">Session history</h2>{history.length === 0 ? <div className="rounded-2xl bg-white p-6 text-sm text-ink-muted shadow-soft ring-1 ring-cream-200">Closed sessions will appear here.</div> : <div className="grid gap-3">{history.map((report) => <div key={report.id} className="flex flex-col gap-5 rounded-2xl bg-orange-50 p-5 shadow-soft ring-1 ring-orange-200"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-semibold text-ink">{report.departmentName}</p><p className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-error-700"><Lock className="h-4 w-4" />Closed Session</p></div><div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2"><SessionDetail label="Start date:" value={sessionDate(report.startedAt)} /><SessionDetail label="Start time:" value={sessionTime(report.startedAt)} /><SessionDetail label="Close date:" value={report.closedAt ? sessionDate(report.closedAt) : '—'} /><SessionDetail label="Close time:" value={report.closedAt ? sessionTime(report.closedAt) : '—'} /><SessionDetail label="Duration:" value={durationLabel(report.startedAt, report.closedAt)} /><SessionDetail label="Orders:" value={String(report.orders.length)} /><SessionDetail label="Sales:" value={formatMinor(totalValue(report), report.currency)} /></div></div><div className="flex flex-wrap gap-2"><Button variant="secondary" size="sm" onClick={() => setSelectedId(report.id)}>View report <ChevronRight className="h-4 w-4" /></Button><Button variant="primary" size="sm" onClick={() => void handlePrint(report)} disabled={printingId === report.id}><Printer className="h-4 w-4" />{printingId === report.id ? 'Preparing…' : 'Print Report'}<Download className="h-3.5 w-3.5" /></Button></div></div>)}</div>}</section>
@@ -201,6 +222,6 @@ function Summary({ label, value }: { label: string; value: string }) {
   return <div className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200"><p className="text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</p><p className="mt-1.5 flex items-center gap-2 text-sm font-semibold text-ink"><Clock3 className="h-3.5 w-3.5 text-olive-600" />{value}</p></div>;
 }
 
-function SessionDetail({ label, value }: { label: string; value: string }) {
-  return <div className="flex items-baseline justify-between gap-4 border-b border-orange-200/70 pb-1.5"><span className="text-ink-muted">{label}</span><span className="text-right font-semibold text-ink">{value}</span></div>;
+function SessionDetail({ label, value, tone = 'closed' }: { label: string; value: string; tone?: 'closed' | 'running' }) {
+  return <div className={`flex items-baseline justify-between gap-4 border-b pb-1.5 ${tone === 'running' ? 'border-green-200/80' : 'border-orange-200/70'}`}><span className="text-ink-muted">{label}</span><span className="text-right font-semibold text-ink">{value}</span></div>;
 }
