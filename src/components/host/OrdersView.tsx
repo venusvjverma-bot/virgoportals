@@ -493,13 +493,20 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
                 {dateGroups.map((dateGroup) => {
                   const dateKey = `${group.key}:${dateGroup.dateKey}`;
                   const isExpanded = expandedDates.has(dateKey);
+                  const hasUnopened = dateGroup.orders.some((order) => !openedIds.has(order.id));
                   return (
-                    <div key={dateKey} className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-cream-200">
+                    <div key={dateKey} className={cn(
+                      'overflow-hidden rounded-2xl shadow-soft ring-1',
+                      hasUnopened ? 'bg-orange-200 ring-orange-300' : 'bg-white ring-cream-200'
+                    )}>
                       <button
                         type="button"
                         onClick={() => toggleDate(dateKey)}
                         aria-expanded={isExpanded}
-                        className="flex w-full items-center justify-between gap-3 p-4 text-left transition-colors duration-200 hover:bg-cream-100"
+                        className={cn(
+                          'flex w-full items-center justify-between gap-3 p-4 text-left transition-colors duration-200',
+                          hasUnopened ? 'hover:bg-orange-100' : 'hover:bg-cream-100'
+                        )}
                       >
                         <span className="font-display text-sm font-semibold text-ink">{dateGroup.label}</span>
                         <span className="flex items-center gap-2">
