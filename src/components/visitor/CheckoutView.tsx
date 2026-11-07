@@ -157,7 +157,7 @@ export function CheckoutView({
   const [showTerms, setShowTerms] = useState(false);
   const [mascotState, setMascotState] = useState<CheckoutMascotState | null>(null);
   const [mascotAnchor, setMascotAnchor] = useState<CheckoutMascotAnchor | null>(null);
-  const serviceLocationRef = useRef<HTMLDivElement | null>(null);
+  const serviceLocationRef = useRef<HTMLElement | null>(null);
   const tipSectionRef = useRef<HTMLDivElement | null>(null);
   const mobileSectionRef = useRef<HTMLDivElement | null>(null);
   const submitSectionRef = useRef<HTMLDivElement | null>(null);
@@ -462,6 +462,7 @@ export function CheckoutView({
                   </label>
                   <input
                     id="service-location"
+                    ref={serviceLocationRef}
                     type="text"
                     value={serviceLocation}
                     maxLength={20}
