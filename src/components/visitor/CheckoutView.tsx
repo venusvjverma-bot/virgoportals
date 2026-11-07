@@ -12,7 +12,7 @@ import { TipSelector } from '@/components/visitor/TipSelector';
 import { ConciergeBell, BedDouble } from 'lucide-react';
 import { PaymentMethodSelector } from '@/components/visitor/PaymentMethodSelector';
 import { TermsPage } from '@/components/visitor/TermsPage';
-import { CheckoutMascot, type CheckoutMascotState } from '@/components/visitor/CheckoutMascot';
+import { CheckoutMascot, type MascotAnchor as CheckoutMascotAnchor, type CheckoutMascotState } from '@/components/visitor/CheckoutMascot';
 import type { BasketItem, PaymentMethod, ResourceType, TipOption } from '@/types';
 
 interface CheckoutViewProps {
@@ -156,6 +156,11 @@ export function CheckoutView({
   const [confirmedLocation, setConfirmedLocation] = useState<string | null>(null);
   const [showTerms, setShowTerms] = useState(false);
   const [mascotState, setMascotState] = useState<CheckoutMascotState | null>(null);
+  const [mascotAnchor, setMascotAnchor] = useState<CheckoutMascotAnchor | null>(null);
+  const serviceLocationRef = useRef<HTMLDivElement | null>(null);
+  const tipSectionRef = useRef<HTMLDivElement | null>(null);
+  const mobileSectionRef = useRef<HTMLDivElement | null>(null);
+  const submitSectionRef = useRef<HTMLDivElement | null>(null);
   const [idempotencyKey] = useState(() => {
     const existing = sessionStorage.getItem('vp_checkout_key');
     if (existing) return existing;
@@ -217,20 +222,27 @@ export function CheckoutView({
   };
   useEffect(() => clearMascotTimer, []);
 
-  // Tip drives visibility directly: No Tip hides Latte, any other tip celebrates.
+  // Tip drives visibility directly: No Tip hides Latte, any other tip celebrates near the tip section.
   useEffect(() => {
     if (submitting || error) return;
     clearMascotTimer();
-    setMascotState(tipOption !== 'none' ? 'celebrating' : null);
+    if (tipOption !== 'none' && tipSectionRef.current) {
+      setMascotAnchor({ el: tipSectionRef.current, side: 'right' });
+      setMascotState('celebrating');
+    } else {
+      setMascotState(null);
+    }
   }, [tipOption, submitting, error]);
 
-  // Processing, success and error follow the real order outcome.
+  // Processing and error anchor near the order submission section.
   useEffect(() => {
-    if (submitting) {
+    if (submitting && submitSectionRef.current) {
       clearMascotTimer();
+      setMascotAnchor({ el: submitSectionRef.current, side: 'right' });
       setMascotState('working');
-    } else if (error) {
+    } else if (error && submitSectionRef.current) {
       clearMascotTimer();
+      setMascotAnchor({ el: submitSectionRef.current, side: 'right' });
       setMascotState('error');
     }
   }, [submitting, error]);
@@ -244,16 +256,18 @@ export function CheckoutView({
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, []);
 
-  function showListening() {
+  function showListening(anchor: HTMLElement, side: 'left' | 'right') {
     if (submitting || error) return;
     clearMascotTimer();
+    setMascotAnchor({ el: anchor, side });
     setMascotState('listening');
   }
 
   function handleLocationConfirmed() {
     setConfirmedLocation(trimmedLocation || null);
-    if (tipOption === 'none' && !submitting) {
+    if (tipOption === 'none' && !submitting && serviceLocationRef.current) {
       clearMascotTimer();
+      setMascotAnchor({ el: serviceLocationRef.current, side: 'right' });
       setMascotState('celebrating');
       mascotTimer.current = window.setTimeout(() => setMascotState(null), 2200);
     }
@@ -455,7 +469,9 @@ export function CheckoutView({
                       setServiceLocation(e.target.value);
                       setConfirmedLocation(null);
                     }}
-                    onFocus={showListening}
+                    onFocus={() => {
+                      if (serviceLocationRef.current) showListening(serviceLocationRef.current, 'right');
+                    }}
                     placeholder={serviceType === 'room' ? 'e.g. 512B' : 'e.g. A12'}
                     className={cn(
                       'w-full rounded-xl border-0 px-4 py-3 text-sm shadow-soft ring-1 ring-inset transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500',
@@ -497,19 +513,21 @@ export function CheckoutView({
           ) : null}
 
           {/* Tip */}
-          <TipSelector
-            currency={currency}
-            subtotalMinor={subtotalMinor}
-            selectedOption={tipOption}
-            customInput={customTipInput}
-            customError={customTipError}
-            tipMinor={tipMinor}
-            totalMinor={grandTotalMinor}
-            serviceChargeMinor={serviceType ? serviceChargeMinor : 0}
-            serviceChargeLabel={serviceType === 'room' ? 'Room service charge' : 'Table service charge'}
-            onSelectOption={setTipOption}
-            onCustomInputChange={setCustomTipInput}
-          />
+          <div ref={tipSectionRef}>
+            <TipSelector
+              currency={currency}
+              subtotalMinor={subtotalMinor}
+              selectedOption={tipOption}
+              customInput={customTipInput}
+              customError={customTipError}
+              tipMinor={tipMinor}
+              totalMinor={grandTotalMinor}
+              serviceChargeMinor={serviceType ? serviceChargeMinor : 0}
+              serviceChargeLabel={serviceType === 'room' ? 'Room service charge' : 'Table service charge'}
+              onSelectOption={setTipOption}
+              onCustomInputChange={setCustomTipInput}
+            />
+          </div>
 
           {/* Items */}
           <div className="mb-5 overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-cream-200">
@@ -581,7 +599,7 @@ export function CheckoutView({
           </div>
 
           {/* Mobile number */}
-          <div className="mb-5 rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
+          <div ref={mobileSectionRef} className="mb-5 rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
             <h3 className="mb-1 text-sm font-semibold text-ink">Mobile number</h3>
             <p className="mb-3 text-xs text-ink-muted">
               Required so the restaurant can contact you about your order.
@@ -664,7 +682,9 @@ export function CheckoutView({
                   setNationalNumber(e.target.value);
                   setPhoneError(null);
                 }}
-                onFocus={showListening}
+                onFocus={() => {
+                  if (mobileSectionRef.current) showListening(mobileSectionRef.current, 'right');
+                }}
                 placeholder="Enter your number"
                 className="flex-1 rounded-xl border-0 bg-cream-50 px-4 py-3 text-sm text-ink shadow-soft ring-1 ring-inset ring-cream-300 transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500"
                 autoComplete="tel-national"
@@ -700,9 +720,10 @@ export function CheckoutView({
             </Notice>
           ) : null}
 
-          <button
-            type="button"
-            onClick={handleConfirm}
+          <div ref={submitSectionRef}>
+            <button
+              type="button"
+              onClick={handleConfirm}
             disabled={
               submitting ||
               items.length === 0 ||
@@ -730,6 +751,7 @@ export function CheckoutView({
               </>
             )}
           </button>
+          </div>
 
           <p className="mt-3 text-center text-xs text-ink-faint">
             {paymentMethod === 'pay_online'
@@ -739,7 +761,7 @@ export function CheckoutView({
         </div>
       </div>
 
-      <CheckoutMascot state={mascotState} />
+      <CheckoutMascot state={mascotState} anchor={mascotAnchor} />
 
       {showTerms ? <TermsPage onClose={() => setShowTerms(false)} /> : null}
     </div>
