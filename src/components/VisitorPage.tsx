@@ -1098,7 +1098,7 @@ function CardSectionHeading({ label }: { label: string }) {
     <div className="flex items-center gap-2" role="presentation">
       <span className="h-px flex-1 bg-white/80" />
       <span
-        className="rounded-full px-3.5 py-1.5 text-xs font-bold shadow-soft"
+        className="rounded-full px-4 py-2 text-[0.8125rem] font-bold shadow-soft"
         style={{ backgroundColor: '#EB7C10', color: '#FFFFFF' }}
       >
         {label}
