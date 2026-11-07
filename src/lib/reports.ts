@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { Department, DepartmentSessionReport, SessionOrder } from '@/types';
+import type { SessionReportTicketData } from '@/lib/sessionReportTicket';
 
 interface SessionRow {
   id: string;
@@ -75,6 +76,40 @@ export async function listDepartmentSessionReports(
 
 export async function closeDepartmentSession(sessionId: string): Promise<void> {
   const { error } = await supabase.rpc('close_department_session', { p_session_id: sessionId });
+  if (error) throw error;
+}
+
+export function toSessionReportTicketData(
+  report: DepartmentSessionReport,
+  restaurantName: string,
+): SessionReportTicketData {
+  const paymentTotals: Record<string, number> = {};
+  for (const order of report.orders) {
+    const label = paymentLabelForReport(order.paymentStatus);
+    paymentTotals[label] = (paymentTotals[label] ?? 0) + order.totalMinor;
+  }
+
+  return {
+    restaurantName,
+    departmentName: report.departmentName,
+    startedAt: report.startedAt,
+    closedAt: report.closedAt ?? report.startedAt,
+    durationMinutes: Math.max(0, Math.floor((Date.parse(report.closedAt ?? report.startedAt) - Date.parse(report.startedAt)) / 60000)),
+    orderCount: report.orders.length,
+    totalMinor: report.orders.reduce((sum, order) => sum + order.totalMinor, 0),
+    currency: report.currency,
+    paymentTotals,
+    orders: report.orders.map((order) => ({
+      orderNumber: order.orderNumber,
+      paymentType: paymentLabelForReport(order.paymentStatus),
+      amountMinor: order.totalMinor,
+      currency: order.currency,
+    })),
+  };
+}
+
+export async function enqueueSessionReportPrintJob(sessionId: string): Promise<void> {
+  const { error } = await supabase.rpc('enqueue_department_session_report', { p_session_id: sessionId });
   if (error) throw error;
 }
 

@@ -62,7 +62,7 @@ Deno.serve(async (req: Request) => {
 
       let query = supabase
         .from('print_jobs')
-        .select('id, department_id, restaurant_id, printer, ticket, attempts, created_at')
+        .select('id, job_type, department_id, restaurant_id, printer, ticket, attempts, created_at')
         .eq('status', 'pending')
         .order('created_at', { ascending: true })
         .limit(20);
@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
         .update({ status: 'printing', claimed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .in('id', ids)
         .eq('status', 'pending')
-        .select('id, department_id, restaurant_id, printer, ticket, attempts, created_at');
+        .select('id, job_type, department_id, restaurant_id, printer, ticket, attempts, created_at');
       if (claimError) return json({ error: claimError.message }, 500);
 
       return json({ jobs: claimed ?? [] });

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronRight, Clock3, Loader2, Lock, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Clock3, Download, Loader2, Lock, Printer, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { closeDepartmentSession, durationLabel, listDepartmentSessionReports, paymentLabelForReport } from '@/lib/reports';
+import { closeDepartmentSession, durationLabel, enqueueSessionReportPrintJob, listDepartmentSessionReports, paymentLabelForReport, toSessionReportTicketData } from '@/lib/reports';
 import { formatMinor } from '@/lib/currency';
 import { Button } from '@/components/ui/Button';
 import { Notice } from '@/components/ui/Notice';
+import { generateSessionReportBlob } from '@/lib/sessionReportTicket';
 import type { Department, DepartmentSessionReport, RestaurantPortal } from '@/types';
 
 interface ReportsViewProps {
@@ -43,6 +44,7 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [printingId, setPrintingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (background = false) => {
@@ -83,6 +85,29 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
 
   const selected = selectedId ? reports.find((report) => report.id === selectedId) ?? null : null;
   const history = reports.filter((report) => report.closedAt);
+
+  async function handlePrint(report: DepartmentSessionReport) {
+    if (!report.closedAt || printingId) return;
+    setPrintingId(report.id);
+    setError(null);
+    try {
+      const ticket = toSessionReportTicketData(report, restaurant.name);
+      const blob = generateSessionReportBlob(ticket);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${report.departmentName.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()}-session-${new Date(report.startedAt).toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      await enqueueSessionReportPrintJob(report.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not download and print this report.');
+    } finally {
+      setPrintingId(null);
+    }
+  }
 
   async function handleClose(report: DepartmentSessionReport) {
     if (report.closedAt || closingId) return;
@@ -157,7 +182,7 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
           return <div key={department.id} className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-ink">{department.name}</p>{report ? <p className="mt-1 text-sm text-ink-muted">Running since {dateTime(report.startedAt)} · {report.orders.length} {report.orders.length === 1 ? 'order' : 'orders'} · {formatMinor(totalValue(report), report.currency)}</p> : <p className="mt-1 text-sm text-ink-muted">No session is active.</p>}</div>{report ? <div className="flex gap-2"><Button variant="secondary" size="sm" onClick={() => setSelectedId(report.id)}>View session <ChevronRight className="h-4 w-4" /></Button><Button variant="danger" size="sm" onClick={() => void handleClose(report)} disabled={closingId === report.id}><Lock className="h-4 w-4" />Close</Button></div> : null}</div></div>;
         })}</div>
       </section>
-      <section className="space-y-3"><h2 className="font-display text-xl font-semibold text-ink">Session history</h2>{history.length === 0 ? <div className="rounded-2xl bg-white p-6 text-sm text-ink-muted shadow-soft ring-1 ring-cream-200">Closed sessions will appear here.</div> : <div className="grid gap-3">{history.map((report) => <div key={report.id} className="flex flex-col gap-5 rounded-2xl bg-orange-50 p-5 shadow-soft ring-1 ring-orange-200"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-semibold text-ink">{report.departmentName}</p><p className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-error-700"><Lock className="h-4 w-4" />Closed Session</p></div><div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2"><SessionDetail label="Start date:" value={sessionDate(report.startedAt)} /><SessionDetail label="Start time:" value={sessionTime(report.startedAt)} /><SessionDetail label="Close date:" value={report.closedAt ? sessionDate(report.closedAt) : '—'} /><SessionDetail label="Close time:" value={report.closedAt ? sessionTime(report.closedAt) : '—'} /><SessionDetail label="Duration:" value={durationLabel(report.startedAt, report.closedAt)} /><SessionDetail label="Orders:" value={String(report.orders.length)} /><SessionDetail label="Sales:" value={formatMinor(totalValue(report), report.currency)} /></div></div><Button variant="secondary" size="sm" className="self-start" onClick={() => setSelectedId(report.id)}>View report <ChevronRight className="h-4 w-4" /></Button></div>)}</div>}</section>
+      <section className="space-y-3"><h2 className="font-display text-xl font-semibold text-ink">Session history</h2>{history.length === 0 ? <div className="rounded-2xl bg-white p-6 text-sm text-ink-muted shadow-soft ring-1 ring-cream-200">Closed sessions will appear here.</div> : <div className="grid gap-3">{history.map((report) => <div key={report.id} className="flex flex-col gap-5 rounded-2xl bg-orange-50 p-5 shadow-soft ring-1 ring-orange-200"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-semibold text-ink">{report.departmentName}</p><p className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-error-700"><Lock className="h-4 w-4" />Closed Session</p></div><div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2"><SessionDetail label="Start date:" value={sessionDate(report.startedAt)} /><SessionDetail label="Start time:" value={sessionTime(report.startedAt)} /><SessionDetail label="Close date:" value={report.closedAt ? sessionDate(report.closedAt) : '—'} /><SessionDetail label="Close time:" value={report.closedAt ? sessionTime(report.closedAt) : '—'} /><SessionDetail label="Duration:" value={durationLabel(report.startedAt, report.closedAt)} /><SessionDetail label="Orders:" value={String(report.orders.length)} /><SessionDetail label="Sales:" value={formatMinor(totalValue(report), report.currency)} /></div></div><div className="flex flex-wrap gap-2"><Button variant="secondary" size="sm" onClick={() => setSelectedId(report.id)}>View report <ChevronRight className="h-4 w-4" /></Button><Button variant="primary" size="sm" onClick={() => void handlePrint(report)} disabled={printingId === report.id}><Printer className="h-4 w-4" />{printingId === report.id ? 'Preparing…' : 'Print Report'}<Download className="h-3.5 w-3.5" /></Button></div></div>)}</div>}</section>
     </div>
   );
 }
