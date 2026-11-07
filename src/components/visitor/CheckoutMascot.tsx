@@ -36,9 +36,7 @@ export function CheckoutMascot({
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const update = useCallback(() => {
-    if (!anchor || !mascotRef.current) return;
-    const box = mascotRef.current;
-    const rect = anchor.el.getBoundingClientRect();
+    if (!mascotRef.current) return;
     const vv = window.visualViewport;
     const vpTop = vv ? vv.offsetTop : 0;
     const vpLeft = vv ? vv.offsetLeft : 0;
@@ -46,6 +44,18 @@ export function CheckoutMascot({
     const visRight = vv ? Math.min(vpLeft + vv.width, window.innerWidth - VIEWPORT_MARGIN) : window.innerWidth - VIEWPORT_MARGIN;
     const visTop = vv ? Math.max(vpTop, VIEWPORT_MARGIN) : VIEWPORT_MARGIN;
     const visBottom = vv ? Math.min(vpTop + vv.height, window.innerHeight - VIEWPORT_MARGIN) : window.innerHeight - VIEWPORT_MARGIN;
+
+    // Reliable fallback: top-right of the visible viewport. Used when the
+    // anchor is missing or unmeasurable so the mascot never ends up hidden.
+    if (!anchor || !anchor.el.isConnected) {
+      setPos({ top: visTop, left: visRight - MASCOT_PX });
+      return;
+    }
+    const rect = anchor.el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) {
+      setPos({ top: visTop, left: visRight - MASCOT_PX });
+      return;
+    }
 
     // Preferred side first; if the mascot would leave the visible area, flip.
     let left: number;
@@ -96,6 +106,7 @@ export function CheckoutMascot({
 
   return (
     <div
+      ref={mascotRef}
       aria-hidden={state === null}
       style={{
         position: 'fixed',
