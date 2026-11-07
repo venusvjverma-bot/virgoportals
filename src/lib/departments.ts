@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { Department } from '@/types';
 
-const COLUMNS = 'id, restaurant_id, name, is_default, open_time, close_time, system_prompt, is_active, archived, chat_background_asset_id, printer_enabled, printer_name, printer_connection, printer_ip, printer_port, created_at';
+const COLUMNS = 'id, restaurant_id, name, is_default, open_time, close_time, system_prompt, is_active, archived, chat_background_asset_id, printer_enabled, printer_name, printer_connection, printer_ip, printer_port, table_service_enabled, table_service_charge, room_service_enabled, room_service_charge, created_at';
 
 interface DepartmentRow {
   id: string;
@@ -19,6 +19,10 @@ interface DepartmentRow {
   printer_connection: string | null;
   printer_ip: string | null;
   printer_port: number | null;
+  table_service_enabled: boolean;
+  table_service_charge: number;
+  room_service_enabled: boolean;
+  room_service_charge: number;
   created_at: string;
 }
 
@@ -39,6 +43,10 @@ function mapDepartment(row: DepartmentRow): Department {
     printerConnection: row.printer_connection === 'wifi' || row.printer_connection === 'lan' ? row.printer_connection : null,
     printerIp: row.printer_ip,
     printerPort: row.printer_port,
+    tableServiceEnabled: row.table_service_enabled,
+    tableServiceCharge: row.table_service_charge,
+    roomServiceEnabled: row.room_service_enabled,
+    roomServiceCharge: row.room_service_charge,
     createdAt: row.created_at,
   };
 }
@@ -70,7 +78,7 @@ export async function createDepartment(
 
 export async function updateDepartment(
   departmentId: string,
-  patch: Partial<Pick<Department, 'name' | 'openTime' | 'closeTime' | 'systemPrompt' | 'isActive' | 'chatBackgroundAssetId' | 'printerEnabled' | 'printerName' | 'printerConnection' | 'printerIp' | 'printerPort'>>
+  patch: Partial<Pick<Department, 'name' | 'openTime' | 'closeTime' | 'systemPrompt' | 'isActive' | 'chatBackgroundAssetId' | 'printerEnabled' | 'printerName' | 'printerConnection' | 'printerIp' | 'printerPort' | 'tableServiceEnabled' | 'tableServiceCharge' | 'roomServiceEnabled' | 'roomServiceCharge'>>
 ): Promise<Department> {
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.name !== undefined) update.name = patch.name;
@@ -84,6 +92,10 @@ export async function updateDepartment(
   if (patch.printerConnection !== undefined) update.printer_connection = patch.printerConnection;
   if (patch.printerIp !== undefined) update.printer_ip = patch.printerIp;
   if (patch.printerPort !== undefined) update.printer_port = patch.printerPort;
+  if (patch.tableServiceEnabled !== undefined) update.table_service_enabled = patch.tableServiceEnabled;
+  if (patch.tableServiceCharge !== undefined) update.table_service_charge = patch.tableServiceCharge;
+  if (patch.roomServiceEnabled !== undefined) update.room_service_enabled = patch.roomServiceEnabled;
+  if (patch.roomServiceCharge !== undefined) update.room_service_charge = patch.roomServiceCharge;
 
   const { data, error } = await supabase
     .from('departments')

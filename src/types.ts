@@ -122,6 +122,10 @@ export interface Department {
   printerConnection: 'wifi' | 'lan' | null;
   printerIp: string | null;
   printerPort: number | null;
+  tableServiceEnabled: boolean;
+  tableServiceCharge: number;
+  roomServiceEnabled: boolean;
+  roomServiceCharge: number;
   createdAt: string;
 }
 
@@ -136,6 +140,10 @@ export interface EventItem {
   systemPrompt: string;
   status: 'upcoming' | 'active' | 'ended' | 'archived';
   chatBackgroundAssetId: string | null;
+  tableServiceEnabled: boolean;
+  tableServiceCharge: number;
+  roomServiceEnabled: boolean;
+  roomServiceCharge: number;
   createdAt: string;
 }
 

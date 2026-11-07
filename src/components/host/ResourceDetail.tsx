@@ -28,6 +28,7 @@ import { MenuView } from '@/components/host/MenuView';
 import { BotView } from '@/components/host/BotView';
 import { QrView } from '@/components/host/QrView';
 import { ChatThemeView } from '@/components/host/ChatThemeView';
+import { TypeOfServiceSection } from '@/components/host/TypeOfServiceSection';
 import { PrinterView } from '@/components/host/PrinterView';
 import { listDishesByDepartment, listDishesByEvent, uploadMenuFile, createDish, deleteDish, updateDish, replaceServingOptions, replaceRemovableIngredients, replaceVariants } from '@/lib/portal';
 import { updateDepartment, deleteDepartment, archiveDepartment } from '@/lib/departments';
@@ -665,6 +666,20 @@ function DepartmentDetails({
             </InfoRow>
           </ReadOnlyPanel>
 
+          <TypeOfServiceSection
+            value={{
+              tableServiceEnabled: department.tableServiceEnabled,
+              tableServiceCharge: department.tableServiceCharge,
+              roomServiceEnabled: department.roomServiceEnabled,
+              roomServiceCharge: department.roomServiceCharge,
+            }}
+            currency={restaurant.currency}
+            onSave={async (value) => {
+              await updateDepartment(department.id, value);
+              onSaved();
+            }}
+          />
+
           {!department.isDefault ? (
             <ArchiveDeleteSection
               heading="Remove department"
@@ -908,6 +923,20 @@ function EventDetails({
               <EventStatusBadge status={dynamicStatus} />
             </InfoRow>
           </ReadOnlyPanel>
+
+          <TypeOfServiceSection
+            value={{
+              tableServiceEnabled: event.tableServiceEnabled,
+              tableServiceCharge: event.tableServiceCharge,
+              roomServiceEnabled: event.roomServiceEnabled,
+              roomServiceCharge: event.roomServiceCharge,
+            }}
+            currency={restaurant.currency}
+            onSave={async (value) => {
+              await updateEvent(event.id, value);
+              onSaved();
+            }}
+          />
 
           <ArchiveDeleteSection
             heading="Remove event"

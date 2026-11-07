@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { EventItem } from '@/types';
 
-const COLUMNS = 'id, restaurant_id, name, start_date, end_date, start_time, end_time, system_prompt, status, chat_background_asset_id, created_at';
+const COLUMNS = 'id, restaurant_id, name, start_date, end_date, start_time, end_time, system_prompt, status, chat_background_asset_id, table_service_enabled, table_service_charge, room_service_enabled, room_service_charge, created_at';
 
 interface EventRow {
   id: string;
@@ -14,6 +14,10 @@ interface EventRow {
   system_prompt: string;
   status: string;
   chat_background_asset_id: string | null;
+  table_service_enabled: boolean;
+  table_service_charge: number;
+  room_service_enabled: boolean;
+  room_service_charge: number;
   created_at: string;
 }
 
@@ -33,6 +37,10 @@ function mapEvent(row: EventRow): EventItem {
       ? (row.status as EventItem['status'])
       : 'upcoming',
     chatBackgroundAssetId: row.chat_background_asset_id,
+    tableServiceEnabled: row.table_service_enabled,
+    tableServiceCharge: row.table_service_charge,
+    roomServiceEnabled: row.room_service_enabled,
+    roomServiceCharge: row.room_service_charge,
     createdAt: row.created_at,
   };
 }
@@ -73,7 +81,7 @@ export async function updateEvent(
   patch: Partial<
     Pick<
       EventItem,
-      'name' | 'startDate' | 'endDate' | 'startTime' | 'endTime' | 'systemPrompt' | 'status' | 'chatBackgroundAssetId'
+      'name' | 'startDate' | 'endDate' | 'startTime' | 'endTime' | 'systemPrompt' | 'status' | 'chatBackgroundAssetId' | 'tableServiceEnabled' | 'tableServiceCharge' | 'roomServiceEnabled' | 'roomServiceCharge'
     >
   >
 ): Promise<EventItem> {
@@ -86,6 +94,10 @@ export async function updateEvent(
   if (patch.systemPrompt !== undefined) update.system_prompt = patch.systemPrompt;
   if (patch.status !== undefined) update.status = patch.status;
   if (patch.chatBackgroundAssetId !== undefined) update.chat_background_asset_id = patch.chatBackgroundAssetId;
+  if (patch.tableServiceEnabled !== undefined) update.table_service_enabled = patch.tableServiceEnabled;
+  if (patch.tableServiceCharge !== undefined) update.table_service_charge = patch.tableServiceCharge;
+  if (patch.roomServiceEnabled !== undefined) update.room_service_enabled = patch.roomServiceEnabled;
+  if (patch.roomServiceCharge !== undefined) update.room_service_charge = patch.roomServiceCharge;
 
   const { data, error } = await supabase
     .from('events')
