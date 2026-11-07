@@ -233,6 +233,7 @@ export interface DepartmentSession {
 export interface SessionOrder {
   id: string;
   orderNumber: string;
+  status: string;
   paymentStatus: string;
   totalMinor: number;
   currency: string;

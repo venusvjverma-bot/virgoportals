@@ -13,6 +13,7 @@ interface SessionOrderRow {
   id: string;
   session_id: string;
   order_number: string;
+  status: string;
   payment_status: string;
   total_minor: number;
   currency: string;
@@ -20,12 +21,13 @@ interface SessionOrderRow {
 }
 
 const SESSION_COLUMNS = 'id, department_id, started_at, closed_at';
-const ORDER_COLUMNS = 'id, session_id, order_number, payment_status, total_minor, currency, created_at';
+const ORDER_COLUMNS = 'id, session_id, order_number, status, payment_status, total_minor, currency, created_at';
 
 function mapOrder(row: SessionOrderRow): SessionOrder {
   return {
     id: row.id,
     orderNumber: row.order_number,
+    status: row.status,
     paymentStatus: row.payment_status,
     totalMinor: row.total_minor,
     currency: row.currency,
@@ -79,6 +81,17 @@ export async function closeDepartmentSession(sessionId: string): Promise<void> {
   if (error) throw error;
 }
 
+export function outstandingAcceptedOrders(report: DepartmentSessionReport): SessionOrder[] {
+  return report.orders.filter((order) => order.status === 'accepted');
+}
+
+export function closureBlockedMessage(kind: 'session' | 'event', blocked: SessionOrder[]): string {
+  const count = blocked.length;
+  const numbers = blocked.map((order) => order.orderNumber).join(', ');
+  const subject = kind === 'session' ? 'session' : 'event';
+  return `This ${subject} cannot be closed yet: ${count} accepted order${count === 1 ? '' : 's'} still need${count === 1 ? 's' : ''} to be completed or cancelled (${numbers}).`;
+}
+
 export function toSessionReportTicketData(
   report: DepartmentSessionReport,
   restaurantName: string,
@@ -115,6 +128,10 @@ export async function enqueueSessionReportPrintJob(sessionId: string): Promise<v
 
 export function paymentLabelForReport(paymentStatus: string): string {
   return paymentStatus === 'pay_to_staff' ? 'Staff Payment' : 'Online Payment';
+}
+
+export function isAcceptedStatus(status: string): boolean {
+  return status === 'accepted';
 }
 
 export function durationLabel(startedAt: string, closedAt: string | null): string {

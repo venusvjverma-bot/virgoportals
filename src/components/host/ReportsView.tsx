@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronRight, Clock3, Download, Loader2, Lock, LockOpen, Printer, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { closeDepartmentSession, durationLabel, enqueueSessionReportPrintJob, listDepartmentSessionReports, paymentLabelForReport, toSessionReportTicketData } from '@/lib/reports';
+import { closeDepartmentSession, closureBlockedMessage, durationLabel, enqueueSessionReportPrintJob, listDepartmentSessionReports, outstandingAcceptedOrders, paymentLabelForReport, toSessionReportTicketData } from '@/lib/reports';
 import { formatMinor } from '@/lib/currency';
 import { Button } from '@/components/ui/Button';
 import { Notice } from '@/components/ui/Notice';
@@ -119,6 +119,11 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
 
   async function handleClose(report: DepartmentSessionReport) {
     if (report.closedAt || closingId) return;
+    const outstanding = outstandingAcceptedOrders(report);
+    if (outstanding.length > 0) {
+      setError(closureBlockedMessage('session', outstanding));
+      return;
+    }
     if (!window.confirm(`Close the ${report.departmentName} session? New accepted orders will start a new session.`)) return;
     setClosingId(report.id);
     try {
@@ -126,7 +131,14 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
       await load(true);
       setSelectedId(report.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not close this session.');
+      const message = err instanceof Error ? err.message : '';
+      if (message.startsWith('Cannot close this session:')) {
+        setError(outstandingAcceptedOrders(report).length
+          ? closureBlockedMessage('session', outstandingAcceptedOrders(report))
+          : 'This session cannot be closed yet because it still contains accepted orders. Complete or cancel them first, then refresh.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Could not close this session.');
+      }
     } finally {
       setClosingId(null);
     }
@@ -171,7 +183,7 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
         {!selected.closedAt ? <Button variant="danger" onClick={() => void handleClose(selected)} disabled={closingId === selected.id}><Lock className="h-4 w-4" />{closingId === selected.id ? 'Closing…' : 'Close session'}</Button> : null}
         <div className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-cream-200">
           <div className="border-b border-cream-200 px-4 py-3"><h3 className="text-sm font-semibold text-ink">Orders in this session</h3></div>
-          {selected.orders.length === 0 ? <p className="px-4 py-8 text-center text-sm text-ink-muted">No accepted orders have joined this session yet.</p> : <div className="divide-y divide-cream-100">{selected.orders.map((order) => <div key={order.id} className="flex items-center justify-between gap-4 px-4 py-3"><div><p className="text-sm font-semibold text-ink">{order.orderNumber}</p><p className="text-xs text-ink-muted">{paymentLabelForReport(order.paymentStatus)} · {new Date(order.createdAt).toLocaleString()}</p></div><p className="text-sm font-semibold text-ink">{formatMinor(order.totalMinor, order.currency)}</p></div>)}</div>}
+          {selected.orders.length === 0 ? <p className="px-4 py-8 text-center text-sm text-ink-muted">No accepted orders have joined this session yet.</p> : <div className="divide-y divide-cream-100">{selected.orders.map((order) => <div key={order.id} className="flex items-center justify-between gap-4 px-4 py-3"><div><p className="text-sm font-semibold text-ink">{order.orderNumber}</p><p className="text-xs text-ink-muted">{orderStatusLabel(order.status)} · {paymentLabelForReport(order.paymentStatus)} · {new Date(order.createdAt).toLocaleString()}</p></div><p className="text-sm font-semibold text-ink">{formatMinor(order.totalMinor, order.currency)}</p></div>)}</div>}
         </div>
       </div>
     );
@@ -224,4 +236,14 @@ function Summary({ label, value }: { label: string; value: string }) {
 
 function SessionDetail({ label, value, tone = 'closed' }: { label: string; value: string; tone?: 'closed' | 'running' }) {
   return <div className={`flex items-baseline justify-between gap-4 border-b pb-1.5 ${tone === 'running' ? 'border-green-200/80' : 'border-orange-200/70'}`}><span className="text-ink-muted">{label}</span><span className="text-right font-semibold text-ink">{value}</span></div>;
+}
+
+function orderStatusLabel(status: string): string {
+  switch (status) {
+    case 'new': return 'New';
+    case 'accepted': return 'Accepted';
+    case 'completed': return 'Completed';
+    case 'cancelled': return 'Cancelled';
+    default: return status;
+  }
 }

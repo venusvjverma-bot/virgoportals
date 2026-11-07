@@ -102,6 +102,11 @@ export async function deleteEvent(eventId: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function closeEvent(eventId: string): Promise<void> {
+  const { error } = await supabase.rpc('close_event', { p_event_id: eventId });
+  if (error) throw error;
+}
+
 export async function archiveEvent(eventId: string): Promise<void> {
   const { error } = await supabase
     .from('events')
