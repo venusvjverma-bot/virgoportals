@@ -26,6 +26,7 @@ import {
 } from '@/lib/visitorStorage';
 import { createOrder } from '@/lib/orders';
 import { listVisitorCombos } from '@/lib/combos';
+import { sectionLabel } from '@/lib/menuSections';
 import { cn } from '@/lib/cn';
 import { formatPriceInput, normalizeCurrency } from '@/lib/currency';
 import type { AddOnOption, BasketItem, Dish, DishServingOption, DishVariant, ResourceType, VisitorCombo } from '@/types';
@@ -1029,14 +1030,32 @@ function MessageBubble({
   }, [message.id, message.dishes.length, message.combos?.length]);
 
   const combos = message.combos ?? [];
-  const cards = [
-    ...message.dishes.map((dish) => (
+
+  // Cards are grouped by their saved menu section, preserving the order the
+  // backend returned. A heading is rendered only when its group has cards.
+  const groups: { label: string; start: number; cards: React.ReactNode[] }[] = [];
+  let lastLabel: string | null = null;
+  let cardIndex = 0;
+  for (const dish of message.dishes) {
+    const label = sectionLabel(dish.section ?? 'food');
+    if (label !== lastLabel) {
+      groups.push({ label, start: cardIndex, cards: [] });
+      lastLabel = label;
+    }
+    groups[groups.length - 1].cards.push(
       <DishResult key={`dish-${dish.id}`} dish={dish} currency={currency} onOpen={() => onOpen(dish)} />
-    )),
-    ...combos.map((combo) => (
-      <ComboResult key={`combo-${combo.id}`} combo={combo} currency={currency} onOpen={() => onOpenCombo(combo)} />
-    )),
-  ];
+    );
+    cardIndex += 1;
+  }
+  if (combos.length > 0) {
+    groups.push({
+      label: 'Combos',
+      start: cardIndex,
+      cards: combos.map((combo) => (
+        <ComboResult key={`combo-${combo.id}`} combo={combo} currency={currency} onOpen={() => onOpenCombo(combo)} />
+      )),
+    });
+  }
 
   return (
     <div className={cn('flex animate-fade-in', isVisitor ? 'justify-end' : 'justify-start')}>
@@ -1051,8 +1070,35 @@ function MessageBubble({
         >
           {isVisitor ? message.text : <AssistantMarkdown text={message.text} />}
         </div>
-        {cards.length > 0 ? <div className="space-y-3">{cards.slice(0, revealed)}</div> : null}
+        {groups.length > 0 ? (
+          <div className="space-y-3">
+            {groups.map((group) => {
+              if (group.start >= revealed) return null;
+              return (
+                <div key={`group-${group.label}`} className="space-y-3">
+                  <CardSectionHeading label={group.label} />
+                  {group.cards.slice(0, revealed - group.start)}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+function CardSectionHeading({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-2" role="presentation">
+      <span className="h-px flex-1 bg-white/80" />
+      <span
+        className="rounded-full px-3.5 py-1.5 text-xs font-bold shadow-soft"
+        style={{ backgroundColor: '#EB7C10', color: '#FFFFFF' }}
+      >
+        {label}
+      </span>
+      <span className="h-px flex-1 bg-white/80" />
     </div>
   );
 }
