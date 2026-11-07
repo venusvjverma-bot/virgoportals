@@ -29,6 +29,14 @@ function dateTime(value: string | null): string {
   return value ? new Date(value).toLocaleString() : 'Running';
 }
 
+function sessionDate(value: string): string {
+  return new Date(value).toLocaleDateString();
+}
+
+function sessionTime(value: string): string {
+  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 export function ReportsView({ restaurant, departments }: ReportsViewProps) {
   const [reports, setReports] = useState<DepartmentSessionReport[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -149,11 +157,15 @@ export function ReportsView({ restaurant, departments }: ReportsViewProps) {
           return <div key={department.id} className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-ink">{department.name}</p>{report ? <p className="mt-1 text-sm text-ink-muted">Running since {dateTime(report.startedAt)} · {report.orders.length} {report.orders.length === 1 ? 'order' : 'orders'} · {formatMinor(totalValue(report), report.currency)}</p> : <p className="mt-1 text-sm text-ink-muted">No session is active.</p>}</div>{report ? <div className="flex gap-2"><Button variant="secondary" size="sm" onClick={() => setSelectedId(report.id)}>View session <ChevronRight className="h-4 w-4" /></Button><Button variant="danger" size="sm" onClick={() => void handleClose(report)} disabled={closingId === report.id}><Lock className="h-4 w-4" />Close</Button></div> : null}</div></div>;
         })}</div>
       </section>
-      <section className="space-y-3"><h2 className="font-display text-xl font-semibold text-ink">Session history</h2>{history.length === 0 ? <div className="rounded-2xl bg-white p-6 text-sm text-ink-muted shadow-soft ring-1 ring-cream-200">Closed sessions will appear here.</div> : <div className="grid gap-3">{history.map((report) => <div key={report.id} className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-ink">{report.departmentName}</p><p className="mt-1 text-sm text-ink-muted">{dateTime(report.startedAt)} – {dateTime(report.closedAt)} · {durationLabel(report.startedAt, report.closedAt)} · {report.orders.length} orders · {formatMinor(totalValue(report), report.currency)}</p></div><Button variant="secondary" size="sm" onClick={() => setSelectedId(report.id)}>View report <ChevronRight className="h-4 w-4" /></Button></div>)}</div>}</section>
+      <section className="space-y-3"><h2 className="font-display text-xl font-semibold text-ink">Session history</h2>{history.length === 0 ? <div className="rounded-2xl bg-white p-6 text-sm text-ink-muted shadow-soft ring-1 ring-cream-200">Closed sessions will appear here.</div> : <div className="grid gap-3">{history.map((report) => <div key={report.id} className="flex flex-col gap-5 rounded-2xl bg-orange-50 p-5 shadow-soft ring-1 ring-orange-200"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-semibold text-ink">{report.departmentName}</p><p className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-error-700"><Lock className="h-4 w-4" />Closed Session</p></div><div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2"><SessionDetail label="Start date:" value={sessionDate(report.startedAt)} /><SessionDetail label="Start time:" value={sessionTime(report.startedAt)} /><SessionDetail label="Close date:" value={report.closedAt ? sessionDate(report.closedAt) : '—'} /><SessionDetail label="Close time:" value={report.closedAt ? sessionTime(report.closedAt) : '—'} /><SessionDetail label="Duration:" value={durationLabel(report.startedAt, report.closedAt)} /><SessionDetail label="Orders:" value={String(report.orders.length)} /><SessionDetail label="Sales:" value={formatMinor(totalValue(report), report.currency)} /></div></div><Button variant="secondary" size="sm" className="self-start" onClick={() => setSelectedId(report.id)}>View report <ChevronRight className="h-4 w-4" /></Button></div>)}</div>}</section>
     </div>
   );
 }
 
 function Summary({ label, value }: { label: string; value: string }) {
   return <div className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200"><p className="text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</p><p className="mt-1.5 flex items-center gap-2 text-sm font-semibold text-ink"><Clock3 className="h-3.5 w-3.5 text-olive-600" />{value}</p></div>;
+}
+
+function SessionDetail({ label, value }: { label: string; value: string }) {
+  return <div className="flex items-baseline justify-between gap-4 border-b border-orange-200/70 pb-1.5"><span className="text-ink-muted">{label}</span><span className="text-right font-semibold text-ink">{value}</span></div>;
 }
