@@ -9,6 +9,7 @@ import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency
 import { computeTipMinor } from '@/lib/tip';
 import { Notice } from '@/components/ui/Notice';
 import { TipSelector } from '@/components/visitor/TipSelector';
+import { ConciergeBell, BedDouble } from 'lucide-react';
 import { PaymentMethodSelector } from '@/components/visitor/PaymentMethodSelector';
 import { TermsPage } from '@/components/visitor/TermsPage';
 import type { BasketItem, PaymentMethod, ResourceType, TipOption } from '@/types';
@@ -21,6 +22,10 @@ interface CheckoutViewProps {
   resourceId?: string;
   resourceType?: ResourceType;
   currency: string;
+  tableServiceEnabled?: boolean;
+  tableServiceCharge?: number;
+  roomServiceEnabled?: boolean;
+  roomServiceCharge?: number;
   onBack: () => void;
   onConfirmed: (result: ConfirmedOrder) => void;
 }
@@ -30,6 +35,9 @@ export interface ConfirmedOrder {
   orderNumber: string;
   status: string;
   paymentStatus: string;
+  serviceType?: 'table' | 'room' | null;
+  serviceLocation?: string | null;
+  serviceChargeMinor?: number;
   subtotalMinor: number;
   tipOption: TipOption;
   tipMinor: number;
@@ -121,6 +129,10 @@ export function CheckoutView({
   resourceId,
   resourceType,
   currency,
+  tableServiceEnabled = false,
+  tableServiceCharge = 0,
+  roomServiceEnabled = false,
+  roomServiceCharge = 0,
   onBack,
   onConfirmed,
 }: CheckoutViewProps) {
@@ -134,6 +146,12 @@ export function CheckoutView({
   const [tipOption, setTipOption] = useState<TipOption>('none');
   const [customTipInput, setCustomTipInput] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pay_to_staff');
+  const anyServiceEnabled = tableServiceEnabled || roomServiceEnabled;
+  const bothServicesEnabled = tableServiceEnabled && roomServiceEnabled;
+  const [serviceType, setServiceType] = useState<'table' | 'room' | null>(
+    anyServiceEnabled ? (roomServiceEnabled && !tableServiceEnabled ? 'room' : 'table') : null
+  );
+  const [serviceLocation, setServiceLocation] = useState('');
   const [showTerms, setShowTerms] = useState(false);
   const [idempotencyKey] = useState(() => {
     const existing = sessionStorage.getItem('vp_checkout_key');
@@ -155,7 +173,12 @@ export function CheckoutView({
   const effectiveTipOption: TipOption =
     tipOption === 'custom' && customTipMinor === null ? 'none' : tipOption;
   const tipMinor = computeTipMinor(effectiveTipOption, customTipMinor ?? 0, subtotalMinor);
-  const grandTotalMinor = subtotalMinor + tipMinor;
+  const serviceChargeMinor =
+    serviceType === 'table' ? tableServiceCharge : serviceType === 'room' ? roomServiceCharge : 0;
+  const grandTotalMinor = subtotalMinor + tipMinor + serviceChargeMinor;
+  const trimmedLocation = serviceLocation.trim();
+  const serviceLocationMissing = anyServiceEnabled && trimmedLocation === '';
+  const serviceLocationInvalid = anyServiceEnabled && trimmedLocation.length > 20;
 
   function normalizePhone(): string | null {
     if (!nationalNumber.trim() || !selectedCountry) return null;
@@ -200,6 +223,11 @@ export function CheckoutView({
       return;
     }
 
+    if (serviceLocationMissing || serviceLocationInvalid) {
+      setError(null);
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
@@ -219,6 +247,10 @@ export function CheckoutView({
         ),
         mobileNumber: normalizedMobile,
         paymentMethod,
+        service:
+          serviceType && trimmedLocation && !serviceLocationInvalid
+            ? { type: serviceType, location: trimmedLocation }
+            : undefined,
         tip: {
           option: effectiveTipOption,
           customMinor: effectiveTipOption === 'custom' ? customTipMinor ?? undefined : undefined,
@@ -291,6 +323,96 @@ export function CheckoutView({
             onCustomInputChange={setCustomTipInput}
           />
 
+          {/* Serving area */}
+          {anyServiceEnabled ? (
+            <div className="mb-5 rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
+              <h3 className="text-sm font-semibold text-ink">Serving area</h3>
+              <p className="mb-3 mt-0.5 text-xs text-ink-muted">
+                {bothServicesEnabled
+                  ? 'Choose how your order should be served.'
+                  : serviceType === 'room'
+                    ? 'Your order will be delivered to your room.'
+                    : 'Your order will be served at your table.'}
+              </p>
+              {bothServicesEnabled ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    {
+                      value: 'table' as const,
+                      label: 'Table Service',
+                      hint: 'Served at your table',
+                      icon: <ConciergeBell className="h-4 w-4" />,
+                    },
+                    {
+                      value: 'room' as const,
+                      label: 'Room Service',
+                      hint: 'Delivered to your room',
+                      icon: <BedDouble className="h-4 w-4" />,
+                    },
+                  ]).map((opt) => {
+                    const selected = serviceType === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setServiceType(opt.value)}
+                        aria-pressed={selected}
+                        className={cn(
+                          'flex flex-col items-start gap-1 rounded-xl p-3 text-left ring-1 transition-all duration-200',
+                          selected
+                            ? 'bg-olive-50 ring-2 ring-olive-600'
+                            : 'bg-cream-50 ring-cream-200 hover:ring-olive-300'
+                        )}
+                      >
+                        <span className="flex w-full items-center justify-between">
+                          <span className={cn('shrink-0', selected ? 'text-olive-700' : 'text-ink-muted')}>
+                            {opt.icon}
+                          </span>
+                          <span
+                            className={cn(
+                              'h-4 w-4 rounded-full border-2 transition-colors',
+                              selected ? 'border-olive-600 bg-olive-600' : 'border-cream-300 bg-white'
+                            )}
+                          >
+                            {selected ? <Check className="h-3 w-3 text-white" /> : null}
+                          </span>
+                        </span>
+                        <span className={cn('text-sm font-semibold', selected ? 'text-olive-800' : 'text-ink')}>
+                          {opt.label}
+                        </span>
+                        <span className="text-xs text-ink-muted">{opt.hint}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {serviceType ? (
+                <div className="mt-3">
+                  <label
+                    htmlFor="service-location"
+                    className="mb-1 block text-xs font-medium uppercase tracking-wide text-ink-muted"
+                  >
+                    {serviceType === 'room' ? 'Room number' : 'Table number'}
+                  </label>
+                  <input
+                    id="service-location"
+                    type="text"
+                    value={serviceLocation}
+                    maxLength={20}
+                    onChange={(e) => setServiceLocation(e.target.value)}
+                    placeholder={serviceType === 'room' ? 'e.g. 512B' : 'e.g. A12'}
+                    className="w-full rounded-xl border-0 bg-cream-50 px-4 py-3 text-sm text-ink shadow-soft ring-1 ring-inset ring-cream-300 transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500"
+                  />
+                  {serviceLocationInvalid ? (
+                    <p className="mt-1.5 text-xs font-medium text-error-600">
+                      Please use at most 20 characters.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {/* Items */}
           <div className="mb-5 overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-cream-200">
             <div className="border-b border-cream-200 px-4 py-3">
@@ -340,6 +462,16 @@ export function CheckoutView({
               <div className="flex items-center justify-between border-t border-cream-200 px-4 py-3">
                 <span className="text-sm text-ink-soft">Tip</span>
                 <span className="text-sm font-medium text-ink">{formatMinor(tipMinor, currency)}</span>
+              </div>
+            ) : null}
+            {serviceType && serviceChargeMinor > 0 ? (
+              <div className="flex items-center justify-between border-t border-cream-200 px-4 py-3">
+                <span className="text-sm text-ink-soft">
+                  {serviceType === 'room' ? 'Room service charge' : 'Table service charge'}
+                </span>
+                <span className="text-sm font-medium text-ink">
+                  {formatMinor(serviceChargeMinor, currency)}
+                </span>
               </div>
             ) : null}
             <div className="flex items-center justify-between border-t border-cream-200 px-4 py-3">
@@ -472,7 +604,14 @@ export function CheckoutView({
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={submitting || items.length === 0 || !phoneValid || customTipError !== null}
+            disabled={
+              submitting ||
+              items.length === 0 ||
+              !phoneValid ||
+              customTipError !== null ||
+              serviceLocationMissing ||
+              serviceLocationInvalid
+            }
             className={cn(
               'flex w-full items-center justify-center gap-2 rounded-xl py-4 text-sm font-semibold text-white shadow-soft transition-all duration-200',
               'bg-olive-700 hover:bg-olive-800 hover:shadow-lift active:scale-[0.99]',

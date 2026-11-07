@@ -167,6 +167,10 @@ export interface PublicResource {
   timezone: string;
   currency: string;
   chatBackgroundPath: string | null;
+  tableServiceEnabled: boolean;
+  tableServiceCharge: number;
+  roomServiceEnabled: boolean;
+  roomServiceCharge: number;
 }
 
 export interface UsageRow {
@@ -265,6 +269,9 @@ export interface Order {
   restaurantName: string;
   status: OrderStatus;
   paymentStatus: string;
+  serviceType: 'table' | 'room' | null;
+  serviceLocation: string | null;
+  serviceChargeMinor: number;
   subtotalMinor: number;
   tipOption: TipOption;
   tipMinor: number;

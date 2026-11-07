@@ -32,6 +32,9 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
       status: order.status,
       paymentStatus: order.paymentStatus,
       tipMinor: order.tipMinor,
+      serviceType: order.serviceType ?? null,
+      serviceLocation: order.serviceLocation ?? null,
+      serviceChargeMinor: order.serviceChargeMinor ?? 0,
       totalMinor: order.totalMinor,
       currency: order.currency,
       createdAt: order.createdAt,
@@ -164,6 +167,14 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
               <Clock className="h-3.5 w-3.5" />
               {created.toLocaleString()}
             </div>
+            {order.serviceType && order.serviceLocation ? (
+              <div className="mt-3 flex items-center justify-between border-t border-cream-200 pt-3">
+                <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                  {order.serviceType === 'room' ? 'Room Service · Room Number' : 'Table Service · Table Number'}
+                </span>
+                <span className="text-sm font-semibold text-ink">{order.serviceLocation}</span>
+              </div>
+            ) : null}
           </div>
 
           {/* Items */}
@@ -191,6 +202,16 @@ export function OrderConfirmation({ order, onClose }: OrderConfirmationProps) {
               <div className="flex items-center justify-between border-t border-cream-200 px-5 py-3">
                 <span className="text-sm text-ink-soft">Tip</span>
                 <span className="text-sm font-medium text-ink">{formatMinor(order.tipMinor, order.currency)}</span>
+              </div>
+            ) : null}
+            {order.serviceType && (order.serviceChargeMinor ?? 0) > 0 ? (
+              <div className="flex items-center justify-between border-t border-cream-200 px-5 py-3">
+                <span className="text-sm text-ink-soft">
+                  {order.serviceType === 'room' ? 'Room service charge' : 'Table service charge'}
+                </span>
+                <span className="text-sm font-medium text-ink">
+                  {formatMinor(order.serviceChargeMinor ?? 0, order.currency)}
+                </span>
               </div>
             ) : null}
             <div className="flex items-center justify-between border-t border-cream-200 px-5 py-3">

@@ -40,6 +40,11 @@ interface TipInput {
   customMinor?: number;
 }
 
+interface ServiceInput {
+  type?: string;
+  location?: string;
+}
+
 interface OrderPayload {
   action: 'create' | 'status';
   idempotencyKey: string;
@@ -51,6 +56,7 @@ interface OrderPayload {
   orderId?: string;
   newStatus?: string;
   mobileNumber?: string;
+  service?: ServiceInput;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -62,6 +68,47 @@ function json(body: unknown, status = 200): Response {
 
 const TIP_PERCENTS = new Map<string, number>([['5', 5], ['10', 10], ['13', 13], ['20', 20]]);
 const MAX_CUSTOM_TIP_MINOR = 1_000_000;
+const MAX_SERVICE_LOCATION_CHARS = 20;
+
+interface ResolvedService {
+  serviceType: 'table' | 'room';
+  serviceLocation: string;
+  serviceChargeMinor: number;
+}
+
+function resolveService(
+  service: ServiceInput | undefined,
+  resourceType: string,
+  resourceRow: { table_service_enabled: boolean; table_service_charge: number; room_service_enabled: boolean; room_service_charge: number } | null,
+): ResolvedService | { error: string } {
+  if (!service) return { serviceType: 'table', serviceLocation: '', serviceChargeMinor: 0 } as ResolvedService;
+  if (service.type !== 'table' && service.type !== 'room') {
+    return { error: 'Please choose a valid service option.' };
+  }
+  if (resourceType !== 'department' && resourceType !== 'event') {
+    return { error: 'This service option is not available here.' };
+  }
+  if (!resourceRow) {
+    return { error: 'This service option is not available here.' };
+  }
+  const enabled = service.type === 'table' ? resourceRow.table_service_enabled : resourceRow.room_service_enabled;
+  if (!enabled) {
+    return { error: 'This service option is no longer available. Please review your order.' };
+  }
+  const rawLocation = service.location;
+  if (typeof rawLocation !== 'string') {
+    return { error: service.type === 'table' ? 'Please enter your table number.' : 'Please enter your room number.' };
+  }
+  const location = rawLocation.trim();
+  if (!location || location.length > MAX_SERVICE_LOCATION_CHARS) {
+    return { error: service.type === 'table' ? 'Please enter your table number (up to 20 characters).' : 'Please enter your room number (up to 20 characters).' };
+  }
+  return {
+    serviceType: service.type,
+    serviceLocation: location,
+    serviceChargeMinor: service.type === 'table' ? resourceRow.table_service_charge : resourceRow.room_service_charge,
+  };
+}
 
 function resolveTip(
   tip: TipInput | undefined,
@@ -149,7 +196,7 @@ Deno.serve(async (req: Request) => {
       // ── Idempotency check: if an order already exists with this key, return it ──
       const { data: existing } = await supabase
         .from('orders')
-        .select('id, order_number, status, payment_status, total_minor, subtotal_minor, tip_option, tip_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number')
+        .select('id, order_number, status, payment_status, total_minor, subtotal_minor, tip_option, tip_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number, service_type, service_location, service_charge_minor')
         .eq('idempotency_key', idempotencyKey)
         .maybeSingle();
 
@@ -176,6 +223,9 @@ Deno.serve(async (req: Request) => {
           restaurantName: existing.restaurant_name,
           resourceName: existing.resource_name,
           resourceType: existing.resource_type,
+          serviceType: existing.service_type,
+          serviceLocation: existing.service_location,
+          serviceChargeMinor: existing.service_charge_minor,
           mobileNumber: existing.mobile_number ?? mobileNumber!,
           items: (existingItems ?? []).map((i: { name: string; price_minor: number; quantity: number; line_total_minor: number; serving_label: string | null; variant_name: string | null; removed_ingredients: string; add_ons: { name: string; price_minor: number }[] | null }) => ({
             name: i.name,
@@ -211,11 +261,17 @@ Deno.serve(async (req: Request) => {
       let resourceName = restaurant.name;
       let departmentId: string | null = null;
       let eventId: string | null = null;
+      let resourceServiceRow: {
+        table_service_enabled: boolean;
+        table_service_charge: number;
+        room_service_enabled: boolean;
+        room_service_charge: number;
+      } | null = null;
 
       if (resourceType === 'department' && resourceId) {
         const { data: dept } = await supabase
           .from('departments')
-          .select('id, name, restaurant_id, is_active, archived')
+          .select('id, name, restaurant_id, is_active, archived, table_service_enabled, table_service_charge, room_service_enabled, room_service_charge')
           .eq('id', resourceId)
           .maybeSingle();
         if (!dept || dept.restaurant_id !== restaurantId) {
@@ -226,10 +282,11 @@ Deno.serve(async (req: Request) => {
         }
         resourceName = dept.name;
         departmentId = dept.id;
+        resourceServiceRow = dept;
       } else if (resourceType === 'event' && resourceId) {
         const { data: evt } = await supabase
           .from('events')
-          .select('id, name, restaurant_id, status')
+          .select('id, name, restaurant_id, status, table_service_enabled, table_service_charge, room_service_enabled, room_service_charge')
           .eq('id', resourceId)
           .maybeSingle();
         if (!evt || evt.restaurant_id !== restaurantId) {
@@ -240,9 +297,21 @@ Deno.serve(async (req: Request) => {
         }
         resourceName = evt.name;
         eventId = evt.id;
+        resourceServiceRow = evt;
       } else if (resourceType !== 'restaurant') {
         return json({ error: 'Invalid resource type.' }, 400);
       }
+
+      // ── Validate the selected serving service against the saved host ──
+      // configuration for this exact resource. The charge is taken from the
+      // database, never from the request.
+      const serviceResult = resolveService(body.service, resourceType, resourceServiceRow);
+      if ('error' in serviceResult) {
+        return json({ error: serviceResult.error }, 400);
+      }
+      const serviceType: 'table' | 'room' | null = body.service ? serviceResult.serviceType : null;
+      const serviceLocation = serviceType ? serviceResult.serviceLocation : null;
+      const serviceChargeMinor = serviceType ? serviceResult.serviceChargeMinor : 0;
 
       // ── Validate all dish IDs belong to this restaurant ──
       const dishIds = [...new Set([
@@ -537,6 +606,7 @@ Deno.serve(async (req: Request) => {
         return json({ error: tipResult.error }, 400);
       }
       const subtotalMinor = totalMinor;
+      const finalTotalMinor = subtotalMinor + tipResult.tipMinor + serviceChargeMinor;
 
       // ── Generate unique order number ──
       let orderNumber = '';
@@ -573,13 +643,16 @@ Deno.serve(async (req: Request) => {
           subtotal_minor: subtotalMinor,
           tip_option: tipResult.tipOption,
           tip_minor: tipResult.tipMinor,
-          total_minor: subtotalMinor + tipResult.tipMinor,
+          service_type: serviceType,
+          service_location: serviceLocation,
+          service_charge_minor: serviceChargeMinor,
+          total_minor: finalTotalMinor,
           currency: orderCurrency,
           idempotency_key: idempotencyKey,
           item_count: itemCount,
           mobile_number: mobileNumber,
         })
-        .select('id, order_number, status, payment_status, total_minor, subtotal_minor, tip_option, tip_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number')
+        .select('id, order_number, status, payment_status, total_minor, subtotal_minor, tip_option, tip_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number, service_type, service_location, service_charge_minor')
         .single();
 
       if (orderError) {
@@ -588,7 +661,7 @@ Deno.serve(async (req: Request) => {
         if (orderError.code === '23505') {
           const { data: raced } = await supabase
             .from('orders')
-            .select('id, order_number, status, payment_status, total_minor, subtotal_minor, tip_option, tip_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number')
+            .select('id, order_number, status, payment_status, total_minor, subtotal_minor, tip_option, tip_minor, currency, item_count, created_at, restaurant_name, resource_name, resource_type, mobile_number, service_type, service_location, service_charge_minor')
             .eq('idempotency_key', idempotencyKey)
             .maybeSingle();
           if (raced) {
@@ -611,6 +684,9 @@ Deno.serve(async (req: Request) => {
               restaurantName: raced.restaurant_name,
               resourceName: raced.resource_name,
               resourceType: raced.resource_type,
+              serviceType: raced.service_type,
+              serviceLocation: raced.service_location,
+              serviceChargeMinor: raced.service_charge_minor,
               mobileNumber: raced.mobile_number ?? mobileNumber!,
               items: (racedItems ?? []).map((i: { name: string; price_minor: number; quantity: number; line_total_minor: number; serving_label: string | null; variant_name: string | null; removed_ingredients: string; add_ons: { name: string; price_minor: number }[] | null }) => ({
                 name: i.name,
@@ -680,6 +756,9 @@ Deno.serve(async (req: Request) => {
               status: order!.status,
               paymentStatus: order!.payment_status,
               tipMinor: order!.tip_minor,
+              serviceType: order!.service_type,
+              serviceLocation: order!.service_location,
+              serviceChargeMinor: order!.service_charge_minor,
               totalMinor: order!.total_minor,
               currency: orderCurrency,
               createdAt: order!.created_at,
@@ -721,6 +800,9 @@ Deno.serve(async (req: Request) => {
         subtotalMinor: order!.subtotal_minor,
         tipOption: order!.tip_option,
         tipMinor: order!.tip_minor,
+        serviceType: order!.service_type,
+        serviceLocation: order!.service_location,
+        serviceChargeMinor: order!.service_charge_minor,
         currency: order!.currency,
         itemCount: order!.item_count,
         createdAt: order!.created_at,

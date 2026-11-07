@@ -54,6 +54,10 @@ interface LoadedView {
   resourceId?: string;
   resourceType?: ResourceType;
   chatBackgroundPath?: string | null;
+  tableServiceEnabled?: boolean;
+  tableServiceCharge?: number;
+  roomServiceEnabled?: boolean;
+  roomServiceCharge?: number;
 }
 
 type VisitorOverlay = null | 'basket' | 'checkout' | 'confirmation' | 'combos';
@@ -145,6 +149,10 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
             resourceId,
             resourceType,
             chatBackgroundPath: resource.chatBackgroundPath ?? null,
+            tableServiceEnabled: resource.tableServiceEnabled,
+            tableServiceCharge: resource.tableServiceCharge,
+            roomServiceEnabled: resource.roomServiceEnabled,
+            roomServiceCharge: resource.roomServiceCharge,
           };
         } else if (portalId) {
           const portal: PublicPortal | null = await getPublicPortal(portalId);
@@ -971,6 +979,10 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           resourceId={view.resourceId}
           resourceType={view.resourceType}
           currency={view.currency}
+          tableServiceEnabled={view.tableServiceEnabled}
+          tableServiceCharge={view.tableServiceCharge}
+          roomServiceEnabled={view.roomServiceEnabled}
+          roomServiceCharge={view.roomServiceCharge}
           onBack={() => setOverlay('basket')}
           onConfirmed={handleCheckoutConfirmed}
         />

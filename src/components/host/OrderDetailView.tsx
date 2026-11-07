@@ -104,6 +104,9 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
         status: order.status,
         paymentStatus: order.paymentStatus,
         tipMinor: order.tipMinor,
+        serviceType: order.serviceType,
+        serviceLocation: order.serviceLocation,
+        serviceChargeMinor: order.serviceChargeMinor,
         totalMinor: order.totalMinor,
         currency: order.currency,
         createdAt: order.createdAt,
@@ -296,6 +299,22 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
         )}
       </div>
 
+      {/* Serving area */}
+      {order.serviceType ? (
+        <div className="rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Serving area</p>
+          <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm font-semibold text-ink">
+            {order.serviceType === 'room' ? 'Room Service' : 'Table Service'}
+            <span
+              className="inline-flex items-center rounded-full px-3 py-1 text-base font-bold"
+              style={{ backgroundColor: '#E4E8DF', color: '#292A27' }}
+            >
+              {order.serviceType === 'room' ? 'Room' : 'Table'} {order.serviceLocation}
+            </span>
+          </p>
+        </div>
+      ) : null}
+
       {/* Items */}
       <div className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-cream-200">
         <div className="border-b border-cream-200 px-4 py-3">
@@ -370,6 +389,16 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
               </span>
               <span className="font-medium text-ink">{formatMinor(order.tipMinor, order.currency)}</span>
             </div>
+            {order.serviceType && order.serviceChargeMinor > 0 ? (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-ink-soft">
+                  {order.serviceType === 'room' ? 'Room service charge' : 'Table service charge'}
+                </span>
+                <span className="font-medium text-ink">
+                  {formatMinor(order.serviceChargeMinor, order.currency)}
+                </span>
+              </div>
+            ) : null}
           </div>
         ) : null}
         <div className="flex items-center justify-between border-t border-cream-200 px-4 py-3">

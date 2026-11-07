@@ -27,6 +27,9 @@ export interface ReceiptTicketData {
   status: string;
   paymentStatus: string;
   tipMinor: number;
+  serviceType?: 'table' | 'room' | null;
+  serviceLocation?: string | null;
+  serviceChargeMinor?: number;
   totalMinor: number;
   currency: string;
   createdAt: string;
@@ -93,6 +96,19 @@ function drawReceipt(doc: jsPDF, order: ReceiptTicketData): number {
   doc.setFont('helvetica', 'bold');
   doc.text(`Status: ${order.status.charAt(0).toUpperCase()}${order.status.slice(1)}`, margin, y);
   y += 5;
+
+  // Serving destination — prominent so staff can route the order
+  if (order.serviceType && order.serviceLocation) {
+    doc.setFontSize(11);
+    doc.text(
+      order.serviceType === 'room'
+        ? `ROOM SERVICE - ROOM ${order.serviceLocation.toUpperCase()}`
+        : `TABLE SERVICE - TABLE ${order.serviceLocation.toUpperCase()}`,
+      margin,
+      y,
+    );
+    y += 5;
+  }
   sep();
   y += 4;
 
@@ -135,6 +151,16 @@ function drawReceipt(doc: jsPDF, order: ReceiptTicketData): number {
     doc.setFontSize(9);
     doc.text('Tip', margin, y);
     doc.text(formatMinor(order.tipMinor, order.currency), right, y, { align: 'right' });
+    y += 4.5;
+    sep();
+    y += 3.5;
+  }
+
+  if (order.serviceType && (order.serviceChargeMinor ?? 0) > 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(order.serviceType === 'room' ? 'Room service charge' : 'Table service charge', margin, y);
+    doc.text(formatMinor(order.serviceChargeMinor ?? 0, order.currency), right, y, { align: 'right' });
     y += 4.5;
     sep();
     y += 3.5;

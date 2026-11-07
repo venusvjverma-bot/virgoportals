@@ -553,6 +553,11 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
                                       {' · '}
                                       {formatMinor(order.totalMinor, order.currency)}
                                     </p>
+                                    {order.serviceType && order.serviceLocation ? (
+                                      <p className="mt-0.5 text-xs font-bold text-olive-800">
+                                        {order.serviceType === 'room' ? 'ROOM' : 'TABLE'} {order.serviceLocation}
+                                      </p>
+                                    ) : null}
                                     <p className="mt-0.5 text-xs text-ink-faint">
                                       {new Date(order.createdAt).toLocaleString()}
                                     </p>

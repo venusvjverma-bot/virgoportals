@@ -13,6 +13,9 @@ interface OrderRow {
   restaurant_name: string;
   status: string;
   payment_status: string;
+  service_type: 'table' | 'room' | null;
+  service_location: string | null;
+  service_charge_minor: number;
   subtotal_minor: number;
   tip_option: TipOption;
   tip_minor: number;
@@ -74,6 +77,9 @@ function mapOrder(row: OrderRow, items: OrderItem[]): Order {
     restaurantName: row.restaurant_name,
     status: row.status as OrderStatus,
     paymentStatus: row.payment_status,
+    serviceType: row.service_type,
+    serviceLocation: row.service_location,
+    serviceChargeMinor: row.service_charge_minor ?? 0,
     subtotalMinor: row.subtotal_minor,
     tipOption: row.tip_option,
     tipMinor: row.tip_minor,
@@ -88,7 +94,7 @@ function mapOrder(row: OrderRow, items: OrderItem[]): Order {
 }
 
 const ORDER_COLUMNS =
-  'id, order_number, restaurant_id, department_id, event_id, resource_type, resource_name, restaurant_name, status, payment_status, subtotal_minor, tip_option, tip_minor, total_minor, currency, item_count, mobile_number, created_at, status_updated_at';
+  'id, order_number, restaurant_id, department_id, event_id, resource_type, resource_name, restaurant_name, status, payment_status, service_type, service_location, service_charge_minor, subtotal_minor, tip_option, tip_minor, total_minor, currency, item_count, mobile_number, created_at, status_updated_at';
 
 const ITEM_COLUMNS = 'id, order_id, dish_id, combo_id, name, price_minor, quantity, line_total_minor, serving_label, removed_ingredients, additional_request, selections, variant_name, variant_additional_minor, add_ons';
 
@@ -143,6 +149,9 @@ interface CreateOrderResult {
   orderNumber: string;
   status: string;
   paymentStatus: string;
+  serviceType: 'table' | 'room' | null;
+  serviceLocation: string | null;
+  serviceChargeMinor: number;
   subtotalMinor: number;
   tipOption: TipOption;
   tipMinor: number;
@@ -171,6 +180,7 @@ export async function createOrder(params: {
   mobileNumber: string;
   tip?: { option: TipOption; customMinor?: number };
   paymentMethod: PaymentMethod;
+  service?: { type: 'table' | 'room'; location: string };
 }): Promise<CreateOrderResult> {
   return callFunction<CreateOrderResult>('visitor-orders', {
     action: 'create',
@@ -186,6 +196,7 @@ export async function createOrder(params: {
     mobileNumber: params.mobileNumber,
     tip: params.tip,
     paymentMethod: params.paymentMethod,
+    service: params.service,
   });
 }
 

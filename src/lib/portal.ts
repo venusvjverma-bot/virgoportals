@@ -133,6 +133,10 @@ interface PublicResourceRow {
   timezone: string;
   currency: string;
   chat_background_path: string | null;
+  table_service_enabled: boolean;
+  table_service_charge: number;
+  room_service_enabled: boolean;
+  room_service_charge: number;
 }
 
 function mapPublicResource(row: PublicResourceRow): PublicResource {
@@ -154,6 +158,10 @@ function mapPublicResource(row: PublicResourceRow): PublicResource {
     timezone: row.timezone,
     currency: row.currency ?? 'SEK',
     chatBackgroundPath: row.chat_background_path,
+    tableServiceEnabled: row.table_service_enabled ?? false,
+    tableServiceCharge: row.table_service_charge ?? 0,
+    roomServiceEnabled: row.room_service_enabled ?? false,
+    roomServiceCharge: row.room_service_charge ?? 0,
   };
 }
 

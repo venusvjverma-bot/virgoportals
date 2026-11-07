@@ -156,6 +156,13 @@ function renderTicket(ticket) {
   out.push(`Order ID: ${ticket.orderId ?? ''}`);
   out.push(`Date: ${ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : ''}`);
   out.push(`Status: ${ticket.status ?? ''}`);
+  if (ticket.serviceType && ticket.serviceLocation) {
+    out.push(
+      ticket.serviceType === 'room'
+        ? `ROOM SERVICE - ROOM ${String(ticket.serviceLocation).toUpperCase()}`
+        : `TABLE SERVICE - TABLE ${String(ticket.serviceLocation).toUpperCase()}`
+    );
+  }
   out.push('-'.repeat(W));
   out.push('ITEMS');
   for (const item of ticket.items ?? []) {
@@ -175,6 +182,16 @@ function renderTicket(ticket) {
   out.push('-'.repeat(W));
   if ((ticket.tipMinor ?? 0) > 0) {
     out.push(padCost('Tip', fmt(ticket.tipMinor, ticket.currency), W));
+    out.push('-'.repeat(W));
+  }
+  if (ticket.serviceType && (ticket.serviceChargeMinor ?? 0) > 0) {
+    out.push(
+      padCost(
+        ticket.serviceType === 'room' ? 'Room service charge' : 'Table service charge',
+        fmt(ticket.serviceChargeMinor, ticket.currency),
+        W
+      )
+    );
     out.push('-'.repeat(W));
   }
   out.push(padCost('TOTAL', fmt(ticket.totalMinor, ticket.currency), W));
