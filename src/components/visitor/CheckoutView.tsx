@@ -152,6 +152,7 @@ export function CheckoutView({
     anyServiceEnabled ? (roomServiceEnabled && !tableServiceEnabled ? 'room' : 'table') : null
   );
   const [serviceLocation, setServiceLocation] = useState('');
+  const [confirmedLocation, setConfirmedLocation] = useState<string | null>(null);
   const [showTerms, setShowTerms] = useState(false);
   const [idempotencyKey] = useState(() => {
     const existing = sessionStorage.getItem('vp_checkout_key');
@@ -179,6 +180,12 @@ export function CheckoutView({
   const trimmedLocation = serviceLocation.trim();
   const serviceLocationMissing = anyServiceEnabled && trimmedLocation === '';
   const serviceLocationInvalid = anyServiceEnabled && trimmedLocation.length > 20;
+  const locationConfirmed =
+    anyServiceEnabled && confirmedLocation !== null && confirmedLocation === trimmedLocation;
+  const serviceChangedTo = (next: 'table' | 'room') => {
+    setServiceType(next);
+    setConfirmedLocation(null);
+  };
 
   function normalizePhone(): string | null {
     if (!nationalNumber.trim() || !selectedCountry) return null;
@@ -224,6 +231,10 @@ export function CheckoutView({
     }
 
     if (serviceLocationMissing || serviceLocationInvalid) {
+      setError(null);
+      return;
+    }
+    if (anyServiceEnabled && !locationConfirmed) {
       setError(null);
       return;
     }
@@ -310,19 +321,6 @@ export function CheckoutView({
             ) : null}
           </div>
 
-          {/* Tip */}
-          <TipSelector
-            currency={currency}
-            subtotalMinor={subtotalMinor}
-            selectedOption={tipOption}
-            customInput={customTipInput}
-            customError={customTipError}
-            tipMinor={tipMinor}
-            totalMinor={grandTotalMinor}
-            onSelectOption={setTipOption}
-            onCustomInputChange={setCustomTipInput}
-          />
-
           {/* Serving area */}
           {anyServiceEnabled ? (
             <div className="mb-5 rounded-2xl bg-white p-4 shadow-soft ring-1 ring-cream-200">
@@ -355,7 +353,7 @@ export function CheckoutView({
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => setServiceType(opt.value)}
+                        onClick={() => serviceChangedTo(opt.value)}
                         aria-pressed={selected}
                         className={cn(
                           'flex flex-col items-start gap-1 rounded-xl p-3 text-left ring-1 transition-all duration-200',
@@ -399,10 +397,40 @@ export function CheckoutView({
                     type="text"
                     value={serviceLocation}
                     maxLength={20}
-                    onChange={(e) => setServiceLocation(e.target.value)}
+                    onChange={(e) => {
+                      setServiceLocation(e.target.value);
+                      setConfirmedLocation(null);
+                    }}
                     placeholder={serviceType === 'room' ? 'e.g. 512B' : 'e.g. A12'}
-                    className="w-full rounded-xl border-0 bg-cream-50 px-4 py-3 text-sm text-ink shadow-soft ring-1 ring-inset ring-cream-300 transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500"
+                    className={cn(
+                      'w-full rounded-xl border-0 px-4 py-3 text-sm shadow-soft ring-1 ring-inset transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500',
+                      confirmedLocation ? 'bg-olive-50 text-ink ring-olive-400' : 'bg-cream-50 text-ink ring-cream-300'
+                    )}
                   />
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmedLocation(trimmedLocation || null)}
+                      disabled={!trimmedLocation || serviceLocationInvalid}
+                      aria-pressed={locationConfirmed}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold shadow-soft transition-all duration-200 active:scale-[0.98] disabled:opacity-50',
+                        locationConfirmed
+                          ? 'bg-olive-100 text-olive-800 ring-1 ring-olive-300'
+                          : 'bg-olive-700 text-white hover:bg-olive-800'
+                      )}
+                    >
+                      {locationConfirmed ? <Check className="h-3.5 w-3.5" /> : null}
+                      {locationConfirmed ? 'Confirmed' : 'OK'}
+                    </button>
+                    {locationConfirmed ? (
+                      <span className="text-xs font-medium text-olive-700">
+                        {serviceType === 'room' ? 'Room' : 'Table'} {confirmedLocation} confirmed
+                      </span>
+                    ) : (
+                      <span className="text-xs text-ink-muted">Tap OK to confirm your entry</span>
+                    )}
+                  </div>
                   {serviceLocationInvalid ? (
                     <p className="mt-1.5 text-xs font-medium text-error-600">
                       Please use at most 20 characters.
@@ -412,6 +440,21 @@ export function CheckoutView({
               ) : null}
             </div>
           ) : null}
+
+          {/* Tip */}
+          <TipSelector
+            currency={currency}
+            subtotalMinor={subtotalMinor}
+            selectedOption={tipOption}
+            customInput={customTipInput}
+            customError={customTipError}
+            tipMinor={tipMinor}
+            totalMinor={grandTotalMinor}
+            serviceChargeMinor={serviceType ? serviceChargeMinor : 0}
+            serviceChargeLabel={serviceType === 'room' ? 'Room service charge' : 'Table service charge'}
+            onSelectOption={setTipOption}
+            onCustomInputChange={setCustomTipInput}
+          />
 
           {/* Items */}
           <div className="mb-5 overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-cream-200">
@@ -610,7 +653,8 @@ export function CheckoutView({
               !phoneValid ||
               customTipError !== null ||
               serviceLocationMissing ||
-              serviceLocationInvalid
+              serviceLocationInvalid ||
+              (anyServiceEnabled && !locationConfirmed)
             }
             className={cn(
               'flex w-full items-center justify-center gap-2 rounded-xl py-4 text-sm font-semibold text-white shadow-soft transition-all duration-200',

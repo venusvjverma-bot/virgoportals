@@ -12,6 +12,8 @@ interface TipSelectorProps {
   customError: string | null;
   tipMinor: number;
   totalMinor: number;
+  serviceChargeMinor?: number;
+  serviceChargeLabel?: string;
   onSelectOption: (option: TipOption) => void;
   onCustomInputChange: (value: string) => void;
 }
@@ -24,6 +26,8 @@ export function TipSelector({
   customError,
   tipMinor,
   totalMinor,
+  serviceChargeMinor = 0,
+  serviceChargeLabel,
   onSelectOption,
   onCustomInputChange,
 }: TipSelectorProps) {
@@ -122,8 +126,16 @@ export function TipSelector({
           <dt className="text-ink-soft">Your tip</dt>
           <dd className="font-medium text-ink">{formatMinor(tipMinor, currency)}</dd>
         </div>
+        {serviceChargeMinor > 0 && serviceChargeLabel ? (
+          <div className="flex items-center justify-between">
+            <dt className="text-ink-soft">{serviceChargeLabel}</dt>
+            <dd className="font-medium text-ink">{formatMinor(serviceChargeMinor, currency)}</dd>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between pt-1">
-          <dt className="font-semibold text-ink">Total including tip</dt>
+          <dt className="font-semibold text-ink">
+            {serviceChargeMinor > 0 ? 'Total including tip and service charge' : 'Total including tip'}
+          </dt>
           <dd className="font-display text-lg font-semibold text-ink">{formatMinor(totalMinor, currency)}</dd>
         </div>
       </dl>
