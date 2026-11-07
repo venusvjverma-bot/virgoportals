@@ -175,6 +175,7 @@ export type HostView =
   | 'departments'
   | 'events'
   | 'orders'
+  | 'reports'
   | 'order-detail'
   | 'department-detail'
   | 'event-detail';
@@ -220,6 +221,28 @@ export interface OrderItem {
   removedIngredients: string;
   additionalRequest: string;
   addOns: { name: string; priceMinor: number }[];
+}
+
+export interface DepartmentSession {
+  id: string;
+  departmentId: string;
+  startedAt: string;
+  closedAt: string | null;
+}
+
+export interface SessionOrder {
+  id: string;
+  orderNumber: string;
+  paymentStatus: string;
+  totalMinor: number;
+  currency: string;
+  createdAt: string;
+}
+
+export interface DepartmentSessionReport extends DepartmentSession {
+  departmentName: string;
+  currency: string;
+  orders: SessionOrder[];
 }
 
 export interface Order {

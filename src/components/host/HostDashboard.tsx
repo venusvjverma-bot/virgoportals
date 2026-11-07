@@ -9,6 +9,7 @@ import { EventsView } from '@/components/host/EventsView';
 import { ResourceDetail } from '@/components/host/ResourceDetail';
 import { OrdersView } from '@/components/host/OrdersView';
 import { OrderDetailView } from '@/components/host/OrderDetailView';
+import { ReportsView } from '@/components/host/ReportsView';
 import { Button } from '@/components/ui/Button';
 import { Notice } from '@/components/ui/Notice';
 import { getOwnPortal, updatePortal } from '@/lib/portal';
@@ -150,6 +151,10 @@ export function HostDashboard({ onLogout }: HostDashboardProps) {
           onOpenEvent={openEvent}
           onReload={async () => { await reloadResources(); }}
         />
+      ) : null}
+
+      {view === 'reports' ? (
+        <ReportsView restaurant={portal} departments={departments} />
       ) : null}
 
       {view === 'orders' ? (
