@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Check, Loader2, AlertCircle, Search, ChevronDown } from 'lucide-react';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { cn } from '@/lib/cn';
@@ -12,6 +12,7 @@ import { TipSelector } from '@/components/visitor/TipSelector';
 import { ConciergeBell, BedDouble } from 'lucide-react';
 import { PaymentMethodSelector } from '@/components/visitor/PaymentMethodSelector';
 import { TermsPage } from '@/components/visitor/TermsPage';
+import { CheckoutMascot, type CheckoutMascotState } from '@/components/visitor/CheckoutMascot';
 import type { BasketItem, PaymentMethod, ResourceType, TipOption } from '@/types';
 
 interface CheckoutViewProps {
@@ -154,6 +155,7 @@ export function CheckoutView({
   const [serviceLocation, setServiceLocation] = useState('');
   const [confirmedLocation, setConfirmedLocation] = useState<string | null>(null);
   const [showTerms, setShowTerms] = useState(false);
+  const [mascotState, setMascotState] = useState<CheckoutMascotState | null>(null);
   const [idempotencyKey] = useState(() => {
     const existing = sessionStorage.getItem('vp_checkout_key');
     if (existing) return existing;
@@ -204,6 +206,58 @@ export function CheckoutView({
   }
 
   const phoneValid = validatePhone() === null;
+
+  // Mascot reactions observe existing checkout state only.
+  const mascotTimer = useRef<number | null>(null);
+  const clearMascotTimer = () => {
+    if (mascotTimer.current !== null) {
+      window.clearTimeout(mascotTimer.current);
+      mascotTimer.current = null;
+    }
+  };
+  useEffect(() => clearMascotTimer, []);
+
+  // Tip drives visibility directly: No Tip hides Latte, any other tip celebrates.
+  useEffect(() => {
+    if (submitting || error) return;
+    clearMascotTimer();
+    setMascotState(tipOption !== 'none' ? 'celebrating' : null);
+  }, [tipOption, submitting, error]);
+
+  // Processing, success and error follow the real order outcome.
+  useEffect(() => {
+    if (submitting) {
+      clearMascotTimer();
+      setMascotState('working');
+    } else if (error) {
+      clearMascotTimer();
+      setMascotState('error');
+    }
+  }, [submitting, error]);
+
+  // Leaving a field (touching anywhere else) hides a field-level listening reaction.
+  useEffect(() => {
+    function onPointerDown() {
+      setMascotState((prev) => (prev === 'listening' ? null : prev));
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, []);
+
+  function showListening() {
+    if (submitting || error) return;
+    clearMascotTimer();
+    setMascotState('listening');
+  }
+
+  function handleLocationConfirmed() {
+    setConfirmedLocation(trimmedLocation || null);
+    if (tipOption === 'none' && !submitting) {
+      clearMascotTimer();
+      setMascotState('celebrating');
+      mascotTimer.current = window.setTimeout(() => setMascotState(null), 2200);
+    }
+  }
 
   const filteredCountries = COUNTRIES.filter((c) => {
     const q = countrySearch.trim().toLowerCase();
@@ -401,6 +455,7 @@ export function CheckoutView({
                       setServiceLocation(e.target.value);
                       setConfirmedLocation(null);
                     }}
+                    onFocus={showListening}
                     placeholder={serviceType === 'room' ? 'e.g. 512B' : 'e.g. A12'}
                     className={cn(
                       'w-full rounded-xl border-0 px-4 py-3 text-sm shadow-soft ring-1 ring-inset transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500',
@@ -410,7 +465,7 @@ export function CheckoutView({
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setConfirmedLocation(trimmedLocation || null)}
+                      onClick={handleLocationConfirmed}
                       disabled={!trimmedLocation || serviceLocationInvalid}
                       aria-pressed={locationConfirmed}
                       className={cn(
@@ -609,6 +664,7 @@ export function CheckoutView({
                   setNationalNumber(e.target.value);
                   setPhoneError(null);
                 }}
+                onFocus={showListening}
                 placeholder="Enter your number"
                 className="flex-1 rounded-xl border-0 bg-cream-50 px-4 py-3 text-sm text-ink shadow-soft ring-1 ring-inset ring-cream-300 transition-all duration-200 placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-olive-500"
                 autoComplete="tel-national"
@@ -682,6 +738,8 @@ export function CheckoutView({
           </p>
         </div>
       </div>
+
+      <CheckoutMascot state={mascotState} />
 
       {showTerms ? <TermsPage onClose={() => setShowTerms(false)} /> : null}
     </div>
