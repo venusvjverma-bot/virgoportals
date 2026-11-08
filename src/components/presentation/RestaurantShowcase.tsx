@@ -294,6 +294,39 @@ class ModelErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
   }
 }
 
+/**
+ * Wraps the Canvas itself. WebGL renderer creation can throw on some Android devices
+ * even when a probe canvas succeeds — and an error thrown while the Canvas mounts would
+ * otherwise escape every boundary inside it and unmount the entire page. This boundary
+ * catches it and keeps the page (and this container's layout) intact.
+ */
+class CanvasBoundary extends Component<{ children: ReactNode; onFail?: () => void }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.error('3D viewer failed:', error);
+    this.props.onFail?.();
+  }
+  render() {
+    if (this.state.failed) {
+      return <ViewerUnavailable />;
+    }
+    return this.props.children;
+  }
+}
+
+function ViewerUnavailable() {
+  return (
+    <div className="flex h-full w-full items-center justify-center">
+      <p className="max-w-xs px-6 text-center text-sm text-ink-soft">
+        This device cannot display the 3D restaurant right now. Everything else on this page works as usual.
+      </p>
+    </div>
+  );
+}
+
 function Scene({ focus, controls, onPick }: { focus: FocusArea; controls: React.MutableRefObject<any>; onPick: (a: FocusArea) => void }) {
   return (
     <>
@@ -355,18 +388,20 @@ function Scene({ focus, controls, onPick }: { focus: FocusArea; controls: React.
 export function RestaurantShowcase() {
   const [focus, setFocus] = useState<FocusArea>('overview');
   const controls = useRef<any>(null);
-  const [webglOk, setWebglOk] = useState<boolean | null>(null);
+  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
+  // WebGL support is checked defensively; the CanvasBoundary above also catches the case
+  // where the probe succeeds but the real renderer still fails to create (common on Android).
+  const webglOk = useMemo(() => {
     try {
       const c = document.createElement('canvas');
-      setWebglOk(!!(c.getContext('webgl') || c.getContext('experimental-webgl')));
+      return !!(c.getContext('webgl') || c.getContext('experimental-webgl'));
     } catch {
-      setWebglOk(false);
+      return false;
     }
   }, []);
 
-  if (webglOk === false) {
+  if (!webglOk || failed) {
     return (
       <div className="flex h-[420px] w-full items-center justify-center rounded-3xl bg-white shadow-soft ring-1 ring-cream-200 sm:h-[520px]">
         <p className="max-w-xs px-6 text-center text-sm text-ink-soft">
@@ -378,14 +413,24 @@ export function RestaurantShowcase() {
 
   return (
     <div className="relative h-[420px] w-full overflow-hidden rounded-3xl bg-cream-100 shadow-lift ring-1 ring-cream-200 sm:h-[520px]">
-      {webglOk === null ? null : (
+      <CanvasBoundary onFail={() => setFailed(true)}>
         <Canvas
           shadows
-          dpr={[1, 1.75]}
+          dpr={[1, 1.5]}
           camera={{ position: [4.6, 3.8, 4.8], fov: 42, near: 0.1, far: 80 }}
-          gl={{ antialias: true, alpha: false }}
+          gl={{
+            antialias: true,
+            alpha: false,
+            powerPreference: 'default',
+            failIfMajorPerformanceCaveat: false,
+          }}
           onCreated={({ gl }) => {
             gl.setClearColor('#F5EFE3');
+            // Recover instead of crashing if Android Chrome drops the GL context.
+            gl.domElement.addEventListener('webglcontextlost', (e) => {
+              e.preventDefault();
+              setFailed(true);
+            });
           }}
         >
           <ModelErrorBoundary>
@@ -394,9 +439,9 @@ export function RestaurantShowcase() {
             </Suspense>
           </ModelErrorBoundary>
         </Canvas>
-      )}
+      </CanvasBoundary>
 
-      <LoadingOverlayWithProgress />
+      {!failed && <LoadingOverlayWithProgress />}
 
       {/* instruction hint */}
       <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-white/85 px-4 py-1.5 text-xs font-medium text-ink-soft shadow-soft ring-1 ring-cream-200 backdrop-blur-sm">

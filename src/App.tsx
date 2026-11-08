@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, lazy, Suspense } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense, Component, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AdminDashboard } from '@/components/admin/AdminDashboard';
 import { HostDashboard } from '@/components/host/HostDashboard';
@@ -25,6 +25,39 @@ import { readPortalIdFromUrl, readVisitorParamsFromUrl } from '@/lib/links';
 import type { Session } from '@/types';
 
 type RecoveryState = 'recovery' | 'error' | null;
+
+/**
+ * App-level safety net: a render error inside any screen (e.g. the 3D viewer on a
+ * device with flaky WebGL) must degrade to a message, never unmount the whole app
+ * into a blank page.
+ */
+class AppErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.error('Screen failed to render:', error);
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-cream-100 px-6 text-center">
+          <p className="max-w-sm text-sm text-ink-soft">
+            Something went wrong while showing this page. Please go back and try again.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-full bg-olive-700 px-5 py-2 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-olive-800"
+          >
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -171,84 +204,66 @@ function App() {
     leaveRecovery('Your password was updated. Sign in with your new password.');
   }
 
-  if (resourceParams) {
-    return <VisitorPage resourceId={resourceParams.resourceId} resourceType={resourceParams.resourceType} />;
-  }
-
-  if (portalId) {
-    return <VisitorPage portalId={portalId} />;
-  }
-
-  if (recovery) {
-    return (
-      <ResetPasswordPage
-        expired={recovery === 'error'}
-        onDone={finishRecovery}
-        onCancel={() => leaveRecovery(null)}
-      />
-    );
-  }
-
-  if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-cream-100">
-        <div className="flex items-center gap-3 text-sm text-ink-muted">
-          <Loader2 className="h-5 w-5 animate-spin text-olive-600" />
-          Loading…
+  return (
+    <AppErrorBoundary>
+      {resourceParams ? (
+        <VisitorPage resourceId={resourceParams.resourceId} resourceType={resourceParams.resourceType} />
+      ) : portalId ? (
+        <VisitorPage portalId={portalId} />
+      ) : recovery ? (
+        <ResetPasswordPage
+          expired={recovery === 'error'}
+          onDone={finishRecovery}
+          onCancel={() => leaveRecovery(null)}
+        />
+      ) : !ready ? (
+        <div className="flex min-h-screen items-center justify-center bg-cream-100">
+          <div className="flex items-center gap-3 text-sm text-ink-muted">
+            <Loader2 className="h-5 w-5 animate-spin text-olive-600" />
+            Loading…
+          </div>
         </div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    if (showPresentation) {
-      return (
-        <Suspense
-          fallback={
-            <div className="flex min-h-screen items-center justify-center bg-cream-100">
-              <div className="flex items-center gap-3 text-sm text-ink-muted">
-                <Loader2 className="h-5 w-5 animate-spin text-olive-600" />
-                Loading…
+      ) : !session ? (
+        showPresentation ? (
+          <Suspense
+            fallback={
+              <div className="flex min-h-screen items-center justify-center bg-cream-100">
+                <div className="flex items-center gap-3 text-sm text-ink-muted">
+                  <Loader2 className="h-5 w-5 animate-spin text-olive-600" />
+                  Loading…
+                </div>
               </div>
-            </div>
-          }
-        >
-          <PresentationPage onBack={backFromPresentation} onBecomeHost={goToSignup} />
-        </Suspense>
-      );
-    }
-    if (showSignup) {
-      return <HostSignupPage onBack={backToLogin} />;
-    }
-    if (showForgot) {
-      return <ForgotPasswordPage onBack={backToLogin} />;
-    }
-
-    return (
-      <LoginPage
-        onSubmit={handleLogin}
-        error={loginError}
-        notice={loginNotice}
-        clearError={() => {
-          setLoginError(null);
-          setLoginNotice(null);
-        }}
-        onForgotPassword={goToForgot}
-        onBecomeHost={goToSignup}
-        onOpenPresentation={goToPresentation}
-      />
-    );
-  }
-
-  if (session.role === 'admin') {
-    return <AdminDashboard onLogout={handleLogout} />;
-  }
-
-  if (session.role === 'host') {
-    return <HostDashboard onLogout={handleLogout} />;
-  }
-
-  return <HostHome email={session.email} onLogout={handleLogout} />;
+            }
+          >
+            <PresentationPage onBack={backFromPresentation} onBecomeHost={goToSignup} />
+          </Suspense>
+        ) : showSignup ? (
+          <HostSignupPage onBack={backToLogin} />
+        ) : showForgot ? (
+          <ForgotPasswordPage onBack={backToLogin} />
+        ) : (
+          <LoginPage
+            onSubmit={handleLogin}
+            error={loginError}
+            notice={loginNotice}
+            clearError={() => {
+              setLoginError(null);
+              setLoginNotice(null);
+            }}
+            onForgotPassword={goToForgot}
+            onBecomeHost={goToSignup}
+            onOpenPresentation={goToPresentation}
+          />
+        )
+      ) : session.role === 'admin' ? (
+        <AdminDashboard onLogout={handleLogout} />
+      ) : session.role === 'host' ? (
+        <HostDashboard onLogout={handleLogout} />
+      ) : (
+        <HostHome email={session.email} onLogout={handleLogout} />
+      )}
+    </AppErrorBoundary>
+  );
 }
 
 export default App;
