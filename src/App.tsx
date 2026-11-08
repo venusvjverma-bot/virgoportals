@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AdminDashboard } from '@/components/admin/AdminDashboard';
 import { HostDashboard } from '@/components/host/HostDashboard';
@@ -8,6 +8,10 @@ import { HostSignupPage } from '@/components/HostSignupPage';
 import { LoginPage } from '@/components/LoginPage';
 import { ResetPasswordPage } from '@/components/ResetPasswordPage';
 import { VisitorPage } from '@/components/VisitorPage';
+
+const PresentationPage = lazy(() =>
+  import('@/components/presentation/PresentationPage').then((m) => ({ default: m.PresentationPage })),
+);
 import {
   clearRecoveryHash,
   onAuthChange,
@@ -31,6 +35,9 @@ function App() {
   );
   const [showSignup, setShowSignup] = useState(
     () => (window.history.state as { screen?: string } | null)?.screen === 'signup',
+  );
+  const [showPresentation, setShowPresentation] = useState(
+    () => (window.history.state as { screen?: string } | null)?.screen === 'presentation',
   );
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginNotice, setLoginNotice] = useState<string | null>(null);
@@ -72,6 +79,7 @@ function App() {
       const screen = (event.state as { screen?: string } | null)?.screen;
       setShowSignup(screen === 'signup');
       setShowForgot(screen === 'forgot');
+      setShowPresentation(screen === 'presentation');
     }
     window.addEventListener('popstate', handlePopState);
 
@@ -90,6 +98,17 @@ function App() {
       window.history.replaceState({ screen: 'authed' }, '');
     }
   }, [session]);
+
+  function goToPresentation() {
+    window.history.pushState({ screen: 'presentation' }, '');
+    setShowPresentation(true);
+    setLoginError(null);
+    setLoginNotice(null);
+  }
+
+  function backFromPresentation() {
+    window.history.back();
+  }
 
   function goToSignup() {
     window.history.pushState({ screen: 'signup' }, '');
@@ -182,6 +201,22 @@ function App() {
   }
 
   if (!session) {
+    if (showPresentation) {
+      return (
+        <Suspense
+          fallback={
+            <div className="flex min-h-screen items-center justify-center bg-cream-100">
+              <div className="flex items-center gap-3 text-sm text-ink-muted">
+                <Loader2 className="h-5 w-5 animate-spin text-olive-600" />
+                Loading…
+              </div>
+            </div>
+          }
+        >
+          <PresentationPage onBack={backFromPresentation} onBecomeHost={goToSignup} />
+        </Suspense>
+      );
+    }
     if (showSignup) {
       return <HostSignupPage onBack={backToLogin} />;
     }
@@ -200,6 +235,7 @@ function App() {
         }}
         onForgotPassword={goToForgot}
         onBecomeHost={goToSignup}
+        onOpenPresentation={goToPresentation}
       />
     );
   }

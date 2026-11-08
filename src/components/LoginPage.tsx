@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Lock, Mail, PlayCircle } from 'lucide-react';
 import { AuthShell } from '@/components/AuthShell';
-import { FeatureShowcase } from '@/components/FeatureShowcase';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -16,6 +15,7 @@ interface LoginPageProps {
   clearError: () => void;
   onForgotPassword: () => void;
   onBecomeHost: () => void;
+  onOpenPresentation: () => void;
 }
 
 export function LoginPage({
@@ -25,6 +25,7 @@ export function LoginPage({
   clearError,
   onForgotPassword,
   onBecomeHost,
+  onOpenPresentation,
 }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -107,7 +108,24 @@ export function LoginPage({
         </div>
       </div>
 
-      <FeatureShowcase />
+      <button
+        type="button"
+        onClick={onOpenPresentation}
+        className="group mx-auto mt-12 flex w-full max-w-md items-center gap-4 rounded-3xl bg-white p-5 text-left shadow-soft ring-1 ring-cream-200/80 transition hover:-translate-y-0.5 hover:shadow-lift"
+      >
+        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-olive-700 text-cream-50 transition group-hover:bg-olive-800">
+          <PlayCircle className="h-6 w-6" />
+        </span>
+        <span className="min-w-0">
+          <span className="block font-display text-lg font-semibold tracking-tight text-ink">
+            How Virgo Portals works
+          </span>
+          <span className="mt-0.5 block text-sm leading-relaxed text-ink-muted">
+            Take the two-minute tour — from your menu to your guests' orders.
+          </span>
+        </span>
+        <ArrowRight className="ml-auto h-5 w-5 shrink-0 text-olive-600 transition-transform group-hover:translate-x-1" />
+      </button>
 
       <div className="mx-auto mt-12 w-full max-w-md rounded-3xl bg-white/70 p-5 text-center ring-1 ring-cream-200/80 backdrop-blur">
         <p className="text-sm font-medium text-ink">Run a restaurant?</p>
