@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { useGLTF, useAnimations, ContactShadows } from '@react-three/drei';
 import { motion } from 'motion/react';
 import type { Group, AnimationClip } from 'three';
 import { LoopRepeat } from 'three';
+import { SkeletonUtils } from 'three-stdlib';
 
 export type MascotPose = 'enter' | 'idle' | 'waving' | 'pointing' | 'presenting' | 'celebrating';
 
@@ -47,7 +48,7 @@ export function Mascot({ pose = 'idle', say, className, bubbleSide = 'right' }: 
         <Canvas
           shadows
           dpr={[1, 1.5]}
-          frameloop="demand"
+          frameloop="always"
           camera={{ position: [0, 1.2, 3.2], fov: 40 }}
           gl={{ antialias: true, alpha: true, powerPreference: 'low-power' }}
         >
@@ -64,11 +65,12 @@ export function Mascot({ pose = 'idle', say, className, bubbleSide = 'right' }: 
 
 function CharacterMesh({ pose }: { pose: MascotPose }) {
   const charRef = useRef<Group>(null);
-  const group = useRef<Group>(null);
-  const [entered, setEntered] = useState(false);
 
   const charScene = useGLTF('/models/char.gltf') as unknown as { scene: Group };
   const animsGltf = useGLTF('/models/anims.glb') as unknown as { animations: AnimationClip[] };
+
+  // Skinned meshes must be cloned with SkeletonUtils or the clone loses its skeleton.
+  const clone = useMemo(() => SkeletonUtils.clone(charScene.scene) as Group, [charScene.scene]);
 
   // Retarget the animation clips onto the character rig via useAnimations.
   const { actions, mixer } = useAnimations(animsGltf.animations, charRef);
@@ -95,24 +97,14 @@ function CharacterMesh({ pose }: { pose: MascotPose }) {
     };
   }, [actions, clipName]);
 
-  // Entrance: walk in from the left, then settle to the pose.
-  useEffect(() => {
-    if (pose === 'enter' && !entered && group.current) {
-      group.current.position.x = -1.6;
-      setEntered(true);
-    }
-  }, [pose, entered]);
-
   return (
-    <group ref={group}>
-      <group ref={charRef}>
-        <primitive
-          object={charScene.scene.clone()}
-          scale={1.15}
-          position={[0, 0, 0]}
-          rotation={[0, pose === 'pointing' ? -0.4 : 0.2, 0]}
-        />
-      </group>
+    <group ref={charRef}>
+      <primitive
+        object={clone}
+        scale={1.15}
+        position={[0, 0, 0]}
+        rotation={[0, pose === 'pointing' ? -0.4 : 0.2, 0]}
+      />
     </group>
   );
 }
