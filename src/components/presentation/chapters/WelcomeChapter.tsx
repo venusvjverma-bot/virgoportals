@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { ChapterShell } from '../ChapterShell';
-import { EASE } from '../visuals';
+import { EASE, Reveal } from '../visuals';
 
 /** Shared phone mock used by other chapters (Chat, Customer). */
 export function PhoneMock({ children }: { children: React.ReactNode }) {
@@ -51,7 +51,7 @@ export function MenuLines() {
 const TABS = [
   {
     id: 'setup',
-    tab: '01 — Set up',
+    tab: 'Set up',
     title: 'Set up your restaurant',
     description:
       'Create your Host account and configure your restaurant environment, including restaurant details, currency, welcome message and service type.',
@@ -60,7 +60,7 @@ const TABS = [
   },
   {
     id: 'menu',
-    tab: '02 — Build your menu',
+    tab: 'Build your menu',
     title: 'Build your digital menu',
     description:
       'Add dishes, images, prices, serving sizes, variants and add-ons. You can also extract dishes from a PDF menu using AI assistance, then review and correct the results before publishing.',
@@ -69,7 +69,7 @@ const TABS = [
   },
   {
     id: 'guests',
-    tab: '03 — Welcome guests',
+    tab: 'Welcome guests',
     title: 'Welcome your guests',
     description:
       "Guests scan your restaurant's QR code, select their language, explore your digital menu and use the visitor chat to discover suitable dishes.",
@@ -78,7 +78,7 @@ const TABS = [
   },
   {
     id: 'orders',
-    tab: '04 — Manage orders',
+    tab: 'Manage orders',
     title: 'Receive and manage orders',
     description:
       'Orders arrive in your Host Dashboard, where your team can manage order statuses and prepare orders for collection.',
@@ -104,55 +104,70 @@ export function WelcomeChapter() {
       }
     >
       <div className="w-full">
-        <p className="max-w-2xl text-base leading-relaxed text-ink-soft sm:text-lg">
-          Manage your restaurant, publish your digital menu, welcome guests and receive orders — all through
-          Virgo Portals.
-        </p>
+        <Reveal>
+          <p className="max-w-2xl border-l-2 border-olive-300 pl-4 text-base leading-[1.7] text-ink-soft sm:pl-5 sm:text-lg">
+            Manage your restaurant, publish your digital menu, welcome guests and receive orders — all through
+            Virgo Portals.
+          </p>
+        </Reveal>
 
         {/* Four interactive workflow tabs — the journey from setup to orders */}
-        <div className="mt-10">
-          <h3 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-            How your restaurant works with Virgo Portals
-          </h3>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft sm:text-base">
-            Four connected steps take your restaurant from setup to incoming orders.
-          </p>
+        <div className="mt-12">
+          <Reveal>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-olive-600">The workflow</p>
+            <h3 className="mt-2 max-w-2xl font-display text-2xl font-semibold leading-[1.2] tracking-tight text-ink sm:text-3xl">
+              How your restaurant works with Virgo Portals
+            </h3>
+            <p className="mt-3 max-w-2xl text-sm leading-[1.7] text-ink-soft sm:text-base">
+              Four connected steps take your restaurant from setup to incoming orders.
+            </p>
+          </Reveal>
 
           {/* Tab grid — two columns on phones, four across from tablets up */}
           <div
             role="tablist"
             aria-label="Workflow steps"
-            className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4"
+            className="mt-8 grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3"
           >
-              {TABS.map((t, i) => {
-                const selected = i === active;
-                return (
-                  <button
-                    key={t.id}
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => setActive(i)}
-                    className={`w-full rounded-2xl px-3 py-3 text-left text-sm font-semibold leading-snug ring-1 transition-all duration-300 sm:px-4 ${
-                      selected
-                        ? 'bg-olive-700 text-white shadow-lift ring-olive-700'
-                        : 'bg-white text-ink-soft ring-cream-200 hover:bg-olive-50 hover:text-ink'
+            {TABS.map((t, i) => {
+              const selected = i === active;
+              return (
+                <motion.button
+                  key={t.id}
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setActive(i)}
+                  initial={reduce ? false : { opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-40px' }}
+                  transition={{ delay: i * 0.07, duration: 0.5, ease: EASE }}
+                  className={`group relative w-full overflow-hidden rounded-2xl px-3.5 py-3.5 text-left text-sm font-semibold leading-snug ring-1 transition-all duration-300 sm:px-4 ${
+                    selected
+                      ? 'bg-olive-700 text-white shadow-lift ring-olive-700'
+                      : 'bg-white text-ink-soft ring-cream-200 hover:bg-olive-50 hover:text-ink hover:ring-olive-200'
+                  }`}
+                >
+                  <span
+                    className={`block text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                      selected ? 'text-olive-100' : 'text-olive-600'
                     }`}
                   >
-                    <span
-                      className={`block text-[11px] font-medium uppercase tracking-wider ${
-                        selected ? 'text-olive-100' : 'text-olive-600'
-                      }`}
-                    >
-                      {t.tab}
-                    </span>
-                    <span className="mt-0.5 block">{t.title}</span>
-                  </button>
-                );
-              })}
+                    {t.tab}
+                  </span>
+                  <span className="mt-1 block">{t.title}</span>
+                  <span
+                    aria-hidden
+                    className={`absolute inset-x-0 bottom-0 h-0.5 bg-olive-400 transition-transform duration-300 ${
+                      selected ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-50'
+                    }`}
+                  />
+                </motion.button>
+              );
+            })}
           </div>
 
           {/* Active tab panel — text beside its image on wide screens, stacked on phones */}
-          <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-soft ring-1 ring-cream-200/80">
+          <div className="mt-6 overflow-hidden rounded-3xl bg-white shadow-soft ring-1 ring-cream-200/80">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={tab.id}
@@ -162,11 +177,14 @@ export function WelcomeChapter() {
                 transition={{ duration: 0.35, ease: EASE }}
                 className="grid gap-0 md:grid-cols-5"
               >
-                <div className="flex flex-col justify-center gap-3 p-6 sm:p-8 md:col-span-2">
-                  <h4 className="font-display text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+                <div className="flex flex-col justify-center gap-4 p-6 sm:p-10 md:col-span-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-olive-600">
+                    Step {String(active + 1).padStart(2, '0')} of 04
+                  </p>
+                  <h4 className="font-display text-xl font-semibold leading-[1.25] tracking-tight text-ink sm:text-2xl">
                     {tab.title}
                   </h4>
-                  <p className="text-sm leading-relaxed text-ink-soft sm:text-base">{tab.description}</p>
+                  <p className="text-sm leading-[1.7] text-ink-soft sm:text-base">{tab.description}</p>
                 </div>
                 <div className="relative min-h-[220px] md:col-span-3 md:min-h-[320px]">
                   <img
@@ -175,6 +193,7 @@ export function WelcomeChapter() {
                     loading="lazy"
                     className="absolute inset-0 h-full w-full object-cover"
                   />
+                  <div className="pointer-events-none absolute inset-0 hidden bg-gradient-to-r from-white via-transparent to-transparent md:block" />
                 </div>
               </motion.div>
             </AnimatePresence>
