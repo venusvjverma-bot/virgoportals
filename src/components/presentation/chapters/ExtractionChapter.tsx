@@ -86,14 +86,14 @@ export function ExtractionChapter() {
         </div>
       </ChapterText>
 
-      <div className="relative flex h-[440px] items-center justify-center gap-4 sm:h-[500px] sm:gap-8">
+      <div className="relative flex h-[440px] flex-col items-center justify-center gap-6 px-2 sm:h-[500px] sm:flex-row sm:gap-8 sm:px-0">
         {/* PDF document */}
         <motion.div
           initial={reduce ? false : { opacity: 0, y: -50, rotate: -6 }}
           whileInView={{ opacity: 1, y: 0, rotate: -3 }}
           viewport={{ once: true, margin: '-40px' }}
           transition={{ duration: 0.7, ease: EASE }}
-          className="relative w-40 rounded-xl bg-white p-3 shadow-lift ring-1 ring-cream-200 sm:w-48"
+          className="relative w-40 max-w-[45%] rounded-xl bg-white p-3 shadow-lift ring-1 ring-cream-200 sm:w-48"
         >
           <div className="mb-2 flex items-center justify-between">
             <div className="h-2 w-10 rounded bg-error-300" />
@@ -133,7 +133,7 @@ export function ExtractionChapter() {
         </svg>
 
         {/* digital dishes form */}
-        <div className="flex w-44 flex-col gap-2.5 sm:w-52">
+        <div className="flex w-44 max-w-[45%] flex-col gap-2.5 sm:w-52">
           <ExtractedDish name="Tagliatelle" price="14.50" delay={1.8} />
           <ExtractedDish name="Ribeye — Large" price="26.00" delay={2.0} />
           <ExtractedDish name="House Red 25cl" price="6.50" delay={2.2} />

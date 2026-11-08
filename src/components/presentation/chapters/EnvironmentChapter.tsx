@@ -60,7 +60,7 @@ export function EnvironmentChapter() {
           whileInView={{ opacity: 1, y: 0, scaleY: 1 }}
           viewport={{ once: true, margin: '-40px' }}
           transition={{ duration: 0.8, ease: EASE }}
-          className="absolute bottom-6 h-24 w-72 rounded-[2rem] bg-white shadow-lift ring-1 ring-cream-200 sm:w-96"
+          className="absolute bottom-6 h-24 w-full max-w-[272px] rounded-[2rem] bg-white shadow-lift ring-1 ring-cream-200 sm:w-96"
         />
         <p className="absolute bottom-10 text-xs font-medium uppercase tracking-widest text-ink-faint">
           Shared platform infrastructure
