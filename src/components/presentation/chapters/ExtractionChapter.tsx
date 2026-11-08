@@ -121,12 +121,22 @@ export function ExtractionChapter() {
           </motion.div>
         </motion.div>
 
-        {/* extraction beam — flows downward on phones, sideways from tablets up */}
+        {/* extraction beam — vertical footprint on phones, rotated sideways from tablets up */}
         <svg
-          viewBox="0 0 60 100"
+          viewBox="0 0 100 100"
           preserveAspectRatio="none"
-          className="h-12 w-40 -rotate-90 sm:h-80 sm:w-12 sm:rotate-0"
+          className="h-16 w-10 sm:hidden"
+          aria-hidden="true"
         >
+          <motion.path
+            d="M20 8 C 40 30, 60 45, 55 92"
+            stroke="#657554" strokeWidth="2.5" fill="none" strokeDasharray="5 5"
+            initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
+            whileInView={{ pathLength: 1 }} viewport={{ once: true }}
+            transition={{ delay: 1.6, duration: 1.0, ease: EASE }}
+          />
+        </svg>
+        <svg viewBox="0 0 60 100" preserveAspectRatio="none" className="hidden h-80 w-12 sm:block">
           <motion.path
             d="M8 20 C 26 40, 34 60, 52 80"
             stroke="#657554" strokeWidth="2.5" fill="none" strokeDasharray="5 5"

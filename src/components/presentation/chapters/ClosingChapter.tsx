@@ -18,7 +18,12 @@ export function ClosingChapter({ onBecomeHost, onBackToLogin }: ClosingChapterPr
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         className="max-w-full sm:scale-125"
       >
-        <Mascot pose="celebrating" say="Your table is ready!" bubbleSide="left" />
+        <Mascot
+          pose="celebrating"
+          say="Your table is ready!"
+          bubbleSide="left"
+          className="max-w-full flex-col items-center gap-2 sm:flex-row sm:items-start sm:gap-3"
+        />
       </motion.div>
       <motion.h2
         initial={reduceMotion ? false : { opacity: 0, y: 24 }}

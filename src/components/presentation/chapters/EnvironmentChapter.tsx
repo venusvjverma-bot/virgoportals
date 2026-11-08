@@ -80,7 +80,7 @@ export function EnvironmentChapter() {
             viewport={{ once: true }}
             transition={{ delay: 1.0 + i * 0.15, duration: 0.5, ease: EASE }}
             style={{ left: `${left}%` }}
-            className="absolute top-[26%] h-32 w-24 -translate-x-1/2 rounded-3xl border-2 border-dashed border-olive-300"
+            className="absolute top-[26%] h-32 w-24 max-w-[28%] -translate-x-1/2 rounded-3xl border-2 border-dashed border-olive-300"
           />
         ))}
         {/* floating profile card = your settings stay yours */}

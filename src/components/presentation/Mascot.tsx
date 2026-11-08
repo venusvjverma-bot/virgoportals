@@ -213,7 +213,7 @@ function SpeechBubble({ text }: { text: string }) {
       whileInView={{ opacity: 1, scale: 1, y: 0 }}
       viewport={{ once: true, margin: '-40px' }}
       transition={{ delay: 0.5, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="relative max-w-[240px] rounded-2xl rounded-bl-sm bg-white px-4 py-3 text-sm font-medium leading-relaxed text-ink shadow-lift ring-1 ring-cream-200"
+      className="relative max-w-[min(240px,100%)] rounded-2xl rounded-bl-sm bg-white px-4 py-3 text-sm font-medium leading-relaxed text-ink shadow-lift ring-1 ring-cream-200"
     >
       {text}
     </motion.div>
