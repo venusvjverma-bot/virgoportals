@@ -58,11 +58,15 @@ export interface RestaurantPortal {
   currency: string;
 }
 
+export type ServingUnit = 'cl' | 'ml' | 'oz';
+
 export interface DishServingOption {
   id: string;
   dishId: string;
   label: string;
   price: string;
+  quantity: number | null;
+  unit: ServingUnit | null;
   sortOrder: number;
   isActive: boolean;
 }

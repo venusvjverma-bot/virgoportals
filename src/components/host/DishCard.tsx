@@ -19,9 +19,28 @@ import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Notice } from '@/components/ui/Notice';
 import { cn } from '@/lib/cn';
 import { formatPriceInput, normalizeCurrency, parsePriceToMinor } from '@/lib/currency';
-import type { Dish } from '@/types';
+import type { Dish, ServingUnit } from '@/types';
 
-export type ServingOptionInput = { id?: string; label: string; price: string; sortOrder: number };
+const SERVING_UNITS: ServingUnit[] = ['cl', 'ml', 'oz'];
+
+export type ServingOptionInput = { id?: string; label: string; price: string; quantity?: number | null; unit?: ServingUnit | null; sortOrder: number };
+
+type ServingOptionDraft = { id?: string; quantity: string; unit: ServingUnit; price: string };
+
+function draftFromOption(o: { id?: string; label: string; price: string; quantity?: number | null; unit?: string | null }): ServingOptionDraft {
+  if (o.quantity !== null && o.quantity !== undefined && (o.unit === 'cl' || o.unit === 'ml' || o.unit === 'oz')) {
+    return { id: o.id, quantity: String(o.quantity), unit: o.unit, price: o.price };
+  }
+  // Legacy free-text label: surface it in the quantity field only when it is a
+  // plain number; otherwise leave it empty so the host re-enters it. The price
+  // and row are always preserved.
+  const bare = o.label.trim().match(/^(\d+(?:[.,]\d+)?)$/);
+  return { id: o.id, quantity: bare ? bare[1].replace(',', '.') : '', unit: 'cl', price: o.price };
+}
+
+function composeServingLabel(quantity: string, unit: ServingUnit): string {
+  return `${quantity.trim()} ${unit}`;
+}
 export type RemovableIngredientInput = { id?: string; label: string; sortOrder: number };
 export type VariantInput = { id?: string; name: string; additionalPrice: string; sortOrder: number };
 type VariantDraft = { id?: string; name: string; additionalPrice: string };
@@ -97,7 +116,7 @@ export function DishCard({
   const [imageError, setImageError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [servingOpts, setServingOpts] = useState<{ id?: string; label: string; price: string }[]>([]);
+  const [servingOpts, setServingOpts] = useState<ServingOptionDraft[]>([]);
   const [removableIngs, setRemovableIngs] = useState<{ id?: string; label: string }[]>([]);
   const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([]);
   const [newIngredient, setNewIngredient] = useState('');
@@ -116,7 +135,7 @@ export function DishCard({
     setServing(dish.serving);
     setAbv(dish.abv);
     setAvailable(dish.available);
-    setServingOpts(dish.servingOptions?.map((o) => ({ id: o.id, label: o.label, price: o.price })) ?? []);
+    setServingOpts(dish.servingOptions?.map(draftFromOption) ?? []);
     setRemovableIngs(dish.removableIngredients?.map((i) => ({ id: i.id, label: i.label })) ?? []);
     setVariantDrafts(dish.variants.map((v) => ({ id: v.id, name: v.name, additionalPrice: v.additionalPrice })));
     setNewIngredient('');
@@ -125,7 +144,7 @@ export function DishCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dishId]);
 
-  const savedServingOpts = dish?.servingOptions?.map((o) => ({ id: o.id, label: o.label, price: o.price })) ?? [];
+  const savedServingOpts = dish?.servingOptions?.map(draftFromOption) ?? [];
   const savedRemovableIngs = dish?.removableIngredients?.map((i) => ({ id: i.id, label: i.label })) ?? [];
   const savedVariants = dish?.variants.map((v) => ({ id: v.id, name: v.name, additionalPrice: v.additionalPrice })) ?? [];
 
@@ -146,7 +165,8 @@ export function DishCard({
 
   const servingOptsDirty = servingOpts.length !== savedServingOpts.length ||
     servingOpts.some((o, i) =>
-      o.label !== (savedServingOpts[i]?.label ?? '') ||
+      o.quantity !== (savedServingOpts[i]?.quantity ?? '') ||
+      o.unit !== (savedServingOpts[i]?.unit ?? 'cl') ||
       o.price !== (savedServingOpts[i]?.price ?? '') ||
       (o.id ?? undefined) !== (savedServingOpts[i]?.id ?? undefined)
     );
@@ -205,7 +225,7 @@ export function DishCard({
     setServing(savedValues.serving);
     setAbv(savedValues.abv);
     setAvailable(savedValues.available);
-    setServingOpts(savedServingOpts.map((o) => ({ id: o.id, label: o.label, price: o.price })));
+    setServingOpts(savedServingOpts.map((o) => ({ ...o })));
     setRemovableIngs(savedRemovableIngs.map((i) => ({ id: i.id, label: i.label })));
     setVariantDrafts(savedVariants.map((v) => ({ ...v })));
     setNewIngredient('');
@@ -243,18 +263,23 @@ export function DishCard({
 
     // Validate serving options for drinks
     if (isDrinkSection(section)) {
-      const filled = servingOpts.filter((o) => o.label.trim() || o.price.trim());
+      const filled = servingOpts.filter((o) => o.quantity.trim() || o.price.trim());
       if (filled.length === 0) {
         setError('Add at least one serving size with a price for this drink.');
         return;
       }
       for (const opt of filled) {
-        if (!opt.label.trim()) {
-          setError('Every serving size needs a label (e.g. "2 cl", "Pint").');
+        const qty = Number(opt.quantity.replace(',', '.'));
+        if (!opt.quantity.trim() || !Number.isFinite(qty) || qty <= 0) {
+          setError('Every serving size needs a positive quantity (e.g. 25 or 0.5).');
+          return;
+        }
+        if (!SERVING_UNITS.includes(opt.unit)) {
+          setError('Choose a measurement unit (cl, ml or oz) for every serving size.');
           return;
         }
         if (!opt.price.trim()) {
-          setError(`Enter a price for the serving size "${opt.label.trim()}".`);
+          setError(`Enter a price for the serving size "${composeServingLabel(opt.quantity, opt.unit)}".`);
           return;
         }
       }
@@ -262,8 +287,15 @@ export function DishCard({
 
     const cleanedOptions = isDrinkSection(section)
       ? servingOpts
-          .filter((o) => o.label.trim() && o.price.trim())
-          .map((o, i) => ({ id: o.id, label: o.label.trim(), price: o.price.trim(), sortOrder: i }))
+          .filter((o) => o.quantity.trim() && o.price.trim())
+          .map((o, i) => ({
+            id: o.id,
+            label: composeServingLabel(o.quantity, o.unit),
+            price: o.price.trim(),
+            quantity: Number(o.quantity.replace(',', '.')),
+            unit: o.unit,
+            sortOrder: i,
+          }))
       : undefined;
 
     const cleanedIngredients = removableIngs
@@ -508,22 +540,38 @@ export function DishCard({
 
               {isDrinkSection(section) ? (
                 <div className="mt-4 rounded-xl bg-cream-50 p-4 ring-1 ring-cream-200">
-                  <div className="grid grid-cols-[1fr_1fr_2.5rem] gap-2">
-                    <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">Serving size</span>
+                  <div className="grid grid-cols-[1fr_5rem_1fr_2.5rem] gap-2">
+                    <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">Quantity</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">Unit</span>
                     <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">Price</span>
                     <span />
                   </div>
                   <div className="mt-2 space-y-2">
                     {servingOpts.map((opt, idx) => (
-                      <div key={idx} className="grid grid-cols-[1fr_1fr_2.5rem] gap-2">
+                      <div key={idx} className="grid grid-cols-[1fr_5rem_1fr_2.5rem] gap-2">
                         <Input
-                          value={opt.label}
-                          placeholder="e.g. 2 cl"
+                          value={opt.quantity}
+                          placeholder="e.g. 25"
+                          inputMode="decimal"
+                          aria-label="Serving quantity"
                           onChange={(e) => {
-                            setServingOpts((prev) => prev.map((o, i) => i === idx ? { ...o, label: e.target.value } : o));
+                            const digits = e.target.value.replace(/[^\d.,]/g, '');
+                            setServingOpts((prev) => prev.map((o, i) => i === idx ? { ...o, quantity: digits } : o));
                             setSaveState('idle');
                           }}
                         />
+                        <Select
+                          value={opt.unit}
+                          aria-label="Serving unit"
+                          onChange={(e) => {
+                            setServingOpts((prev) => prev.map((o, i) => i === idx ? { ...o, unit: e.target.value as ServingUnit } : o));
+                            setSaveState('idle');
+                          }}
+                        >
+                          {SERVING_UNITS.map((u) => (
+                            <option key={u} value={u}>{u}</option>
+                          ))}
+                        </Select>
                         <Input
                           value={opt.price}
                           placeholder="0"
@@ -550,7 +598,7 @@ export function DishCard({
                   <button
                     type="button"
                     onClick={() => {
-                      setServingOpts((prev) => [...prev, { label: '', price: '' }]);
+                      setServingOpts((prev) => [...prev, { quantity: '', unit: 'cl', price: '' }]);
                       setSaveState('idle');
                     }}
                     className="mt-3 flex items-center gap-1.5 text-sm font-medium text-olive-700 hover:text-olive-800"

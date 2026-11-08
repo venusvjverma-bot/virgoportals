@@ -100,6 +100,24 @@ interface VariantOption {
   price: string;
 }
 
+interface ServingMeasurement {
+  quantity: number;
+  unit: 'cl' | 'ml' | 'oz';
+}
+
+/**
+ * Parses a printed serving size into a structured measurement. Only cl, ml and
+ * oz are supported; anything else (missing text, "Pint", "0.5 L") is left
+ * unstructured rather than guessed.
+ */
+function parseServingMeasurement(serving: string): ServingMeasurement | null {
+  const match = serving.trim().match(/^(\d+(?:[.,]\d+)?)\s*(cl|ml|oz)\s*\.?$/i);
+  if (!match) return null;
+  const quantity = Number(match[1].replace(',', '.'));
+  if (!Number.isFinite(quantity) || quantity <= 0) return null;
+  return { quantity, unit: match[2].toLowerCase() as 'cl' | 'ml' | 'oz' };
+}
+
 interface VariantChoice {
   name: string;
   additionalPrice: string;
@@ -699,7 +717,14 @@ Deno.serve(async (req: Request) => {
         ? [
             { label: dish.serving.trim(), price: dish.price },
             ...group.variants.map((variant) => ({ label: variant.serving, price: variant.price })),
-          ]
+          ].map((option) => {
+            const measurement = parseServingMeasurement(option.label);
+            return {
+              ...option,
+              quantity: measurement ? String(measurement.quantity) : '',
+              unit: measurement ? measurement.unit : '',
+            };
+          })
         : [];
       return {
         name: dish.name,

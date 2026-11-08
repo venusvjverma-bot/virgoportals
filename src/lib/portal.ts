@@ -350,13 +350,15 @@ export async function deleteDish(dishId: string): Promise<void> {
 
 // ─── Serving option helpers ───
 
-const SERVING_OPTION_COLUMNS = 'id, dish_id, label, price, sort_order, is_active';
+const SERVING_OPTION_COLUMNS = 'id, dish_id, label, price, quantity, unit, sort_order, is_active';
 
 interface ServingOptionRow {
   id: string;
   dish_id: string;
   label: string;
   price: string;
+  quantity: number | null;
+  unit: string | null;
   sort_order: number;
   is_active: boolean;
 }
@@ -367,6 +369,8 @@ function mapServingOption(row: ServingOptionRow): DishServingOption {
     dishId: row.dish_id,
     label: row.label,
     price: row.price,
+    quantity: row.quantity,
+    unit: (row.unit === 'cl' || row.unit === 'ml' || row.unit === 'oz') ? row.unit : null,
     sortOrder: row.sort_order,
     isActive: row.is_active,
   };
@@ -414,7 +418,7 @@ export async function listServingOptions(dishId: string): Promise<DishServingOpt
 
 export async function replaceServingOptions(
   dishId: string,
-  options: { id?: string; label: string; price: string; sortOrder: number }[]
+  options: { id?: string; label: string; price: string; quantity?: number | null; unit?: string | null; sortOrder: number }[]
 ): Promise<DishServingOption[]> {
   const existing = await listServingOptions(dishId);
   const existingIds = new Set(existing.map((o) => o.id));
@@ -437,6 +441,8 @@ export async function replaceServingOptions(
         .update({
           label: opt.label,
           price: opt.price,
+          quantity: opt.quantity ?? null,
+          unit: opt.unit ?? null,
           sort_order: opt.sortOrder,
           updated_at: new Date().toISOString(),
         })
@@ -452,6 +458,8 @@ export async function replaceServingOptions(
           dish_id: dishId,
           label: opt.label,
           price: opt.price,
+          quantity: opt.quantity ?? null,
+          unit: opt.unit ?? null,
           sort_order: opt.sortOrder,
         })
         .select(SERVING_OPTION_COLUMNS)
