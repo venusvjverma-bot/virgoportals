@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowRight, Eye, EyeOff, Lock, Mail, PlayCircle } from 'lucide-react';
 import { AuthShell } from '@/components/AuthShell';
+import { FeatureShowcase } from '@/components/FeatureShowcase';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -108,6 +109,8 @@ export function LoginPage({
         </div>
       </div>
 
+      <FeatureShowcase />
+
       <button
         type="button"
         onClick={onOpenPresentation}
@@ -118,10 +121,10 @@ export function LoginPage({
         </span>
         <span className="min-w-0">
           <span className="block font-display text-lg font-semibold tracking-tight text-ink">
-            How Virgo Portals works
+            Take the interactive tour
           </span>
           <span className="mt-0.5 block text-sm leading-relaxed text-ink-muted">
-            Take the two-minute tour — from your menu to your guests' orders.
+            See the full Host and guest journey, chapter by chapter.
           </span>
         </span>
         <ArrowRight className="ml-auto h-5 w-5 shrink-0 text-olive-600 transition-transform group-hover:translate-x-1" />
