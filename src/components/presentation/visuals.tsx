@@ -1,8 +1,56 @@
 import type { ReactNode } from 'react';
-import { motion, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
+import { motion, useReducedMotion, useScroll, useTransform, useInView, type MotionValue } from 'motion/react';
 import { useRef } from 'react';
 
 export const EASE = [0.22, 1, 0.36, 1] as const;
+
+/**
+ * Word-by-word text reveal. Words rise out of an overflow-hidden clip as the
+ * element enters the viewport, and the animation replays on every re-entry
+ * (driven by scroll position, not mounts or re-renders).
+ */
+export function TextReveal({
+  text,
+  delay = 0,
+  stagger = 0.04,
+  className,
+}: {
+  text: string;
+  delay?: number;
+  stagger?: number;
+  className?: string;
+}) {
+  const reduce = useReducedMotion();
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { amount: 0.4 });
+
+  if (reduce) {
+    return (
+      <span ref={ref} className={className}>
+        {text}
+      </span>
+    );
+  }
+
+  const words = text.split(' ');
+  return (
+    <span ref={ref} className={className} aria-label={text}>
+      {words.map((word, i) => (
+        <span key={`${word}-${i}`} aria-hidden className="inline-block overflow-hidden align-bottom pb-[0.12em] -mb-[0.12em]">
+          <motion.span
+            className="inline-block will-change-transform"
+            initial={{ y: '110%' }}
+            animate={inView ? { y: '0%' } : { y: '110%' }}
+            transition={{ duration: 0.5, delay: delay + i * stagger, ease: EASE }}
+          >
+            {word}
+          </motion.span>
+          {i < words.length - 1 ? ' ' : ''}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 /** Fades/slides children in when they enter the viewport. */
 export function Reveal({

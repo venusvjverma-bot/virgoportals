@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { ChapterShell } from '../ChapterShell';
-import { EASE, Reveal } from '../visuals';
+import { EASE, Reveal, TextReveal } from '../visuals';
 
 /** Shared phone mock used by other chapters (Chat, Customer). */
 export function PhoneMock({ children }: { children: React.ReactNode }) {
@@ -139,7 +139,7 @@ export function WelcomeChapter() {
                   onClick={() => setActive(i)}
                   initial={reduce ? false : { opacity: 0, y: 16 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-40px' }}
+                  viewport={{ margin: '-40px' }}
                   transition={{ delay: i * 0.07, duration: 0.5, ease: EASE }}
                   className={`group relative w-full overflow-hidden rounded-2xl px-3.5 py-3.5 text-left text-sm font-semibold leading-snug ring-1 transition-all duration-300 sm:px-4 ${
                     selected
@@ -152,9 +152,11 @@ export function WelcomeChapter() {
                       selected ? 'text-olive-100' : 'text-olive-600'
                     }`}
                   >
-                    {t.tab}
+                    <TextReveal text={t.tab} stagger={0.03} />
                   </span>
-                  <span className="mt-1 block">{t.title}</span>
+                  <span className="mt-1 block">
+                    <TextReveal text={t.title} delay={0.12} stagger={0.05} />
+                  </span>
                   <span
                     aria-hidden
                     className={`absolute inset-x-0 bottom-0 h-0.5 bg-olive-400 transition-transform duration-300 ${
@@ -179,12 +181,14 @@ export function WelcomeChapter() {
               >
                 <div className="flex flex-col justify-center gap-4 p-6 sm:p-10 md:col-span-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-olive-600">
-                    Step {String(active + 1).padStart(2, '0')} of 04
+                    <TextReveal text={`Step ${String(active + 1).padStart(2, '0')} of 04`} stagger={0.03} />
                   </p>
                   <h4 className="font-display text-xl font-semibold leading-[1.25] tracking-tight text-ink sm:text-2xl">
-                    {tab.title}
+                    <TextReveal key={`title-${tab.id}`} text={tab.title} delay={0.1} stagger={0.05} />
                   </h4>
-                  <p className="text-sm leading-[1.7] text-ink-soft sm:text-base">{tab.description}</p>
+                  <p className="text-sm leading-[1.7] text-ink-soft sm:text-base">
+                    <TextReveal key={`desc-${tab.id}`} text={tab.description} delay={0.25} stagger={0.025} />
+                  </p>
                 </div>
                 <div className="relative min-h-[220px] md:col-span-3 md:min-h-[320px]">
                   <img
