@@ -16,9 +16,9 @@ export function ClosingChapter({ onBecomeHost, onBackToLogin }: ClosingChapterPr
         whileInView={{ opacity: 1, scale: 1 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="scale-125"
+        className="max-w-full sm:scale-125"
       >
-        <Mascot pose="celebrating" say="Your table is ready!" />
+        <Mascot pose="celebrating" say="Your table is ready!" bubbleSide="left" />
       </motion.div>
       <motion.h2
         initial={reduceMotion ? false : { opacity: 0, y: 24 }}

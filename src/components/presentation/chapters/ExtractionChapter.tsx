@@ -121,8 +121,12 @@ export function ExtractionChapter() {
           </motion.div>
         </motion.div>
 
-        {/* extraction beam */}
-        <svg viewBox="0 0 60 100" preserveAspectRatio="none" className="h-64 w-12 sm:h-80">
+        {/* extraction beam — flows downward on phones, sideways from tablets up */}
+        <svg
+          viewBox="0 0 60 100"
+          preserveAspectRatio="none"
+          className="h-12 w-40 -rotate-90 sm:h-80 sm:w-12 sm:rotate-0"
+        >
           <motion.path
             d="M8 20 C 26 40, 34 60, 52 80"
             stroke="#657554" strokeWidth="2.5" fill="none" strokeDasharray="5 5"

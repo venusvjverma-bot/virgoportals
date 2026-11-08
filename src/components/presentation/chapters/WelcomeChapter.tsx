@@ -118,13 +118,12 @@ export function WelcomeChapter() {
             Four connected steps take your restaurant from setup to incoming orders.
           </p>
 
-          {/* Tab row — horizontally scrollable on phones, four columns on desktop */}
-          <div className="mt-6 -mx-5 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div
-              role="tablist"
-              aria-label="Workflow steps"
-              className="flex min-w-max gap-2 sm:min-w-0 sm:grid sm:grid-cols-4"
-            >
+          {/* Tab grid — two columns on phones, four across from tablets up */}
+          <div
+            role="tablist"
+            aria-label="Workflow steps"
+            className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4"
+          >
               {TABS.map((t, i) => {
                 const selected = i === active;
                 return (
@@ -133,7 +132,7 @@ export function WelcomeChapter() {
                     role="tab"
                     aria-selected={selected}
                     onClick={() => setActive(i)}
-                    className={`rounded-2xl px-4 py-3 text-left text-sm font-semibold ring-1 transition-all duration-300 ${
+                    className={`w-full rounded-2xl px-3 py-3 text-left text-sm font-semibold leading-snug ring-1 transition-all duration-300 sm:px-4 ${
                       selected
                         ? 'bg-olive-700 text-white shadow-lift ring-olive-700'
                         : 'bg-white text-ink-soft ring-cream-200 hover:bg-olive-50 hover:text-ink'
@@ -150,7 +149,6 @@ export function WelcomeChapter() {
                   </button>
                 );
               })}
-            </div>
           </div>
 
           {/* Active tab panel — text beside its image on wide screens, stacked on phones */}

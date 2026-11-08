@@ -58,7 +58,7 @@ export function PresentationPage({ onBack, onBecomeHost }: PresentationPageProps
   }
 
   return (
-    <div className="overflow-x-hidden bg-cream-100">
+    <div className="bg-cream-100">
       <header className="sticky top-0 z-50 flex items-center justify-between bg-cream-100/90 px-5 py-4 backdrop-blur sm:px-8">
         <button
           type="button"
