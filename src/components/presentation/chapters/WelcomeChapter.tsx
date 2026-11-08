@@ -51,8 +51,8 @@ export function MenuLines() {
 const TABS = [
   {
     id: 'setup',
-    tab: 'Set up',
-    title: 'Set up your restaurant',
+    tab: 'Restaurant setup',
+    title: 'Configure your restaurant',
     description:
       'Create your Host account and configure your restaurant environment, including restaurant details, currency, welcome message and service type.',
     image: '/welcome-setup.webp',
@@ -60,8 +60,8 @@ const TABS = [
   },
   {
     id: 'menu',
-    tab: 'Build your menu',
-    title: 'Build your digital menu',
+    tab: 'Menu management',
+    title: 'Create and organise your menu',
     description:
       'Add dishes, images, prices, serving sizes, variants and add-ons. You can also extract dishes from a PDF menu using AI assistance, then review and correct the results before publishing.',
     image: '/welcome-menu.webp',
@@ -69,8 +69,8 @@ const TABS = [
   },
   {
     id: 'guests',
-    tab: 'Welcome guests',
-    title: 'Welcome your guests',
+    tab: 'Customer experience',
+    title: "Your guests' ordering experience",
     description:
       "Guests scan your restaurant's QR code, select their language, explore your digital menu and use the visitor chat to discover suitable dishes.",
     image: '/welcome-guests.webp',
@@ -78,8 +78,8 @@ const TABS = [
   },
   {
     id: 'orders',
-    tab: 'Manage orders',
-    title: 'Receive and manage orders',
+    tab: 'Order management',
+    title: 'Manage incoming orders',
     description:
       'Orders arrive in your Host Dashboard, where your team can manage order statuses and prepare orders for collection.',
     image: '/welcome-orders.webp',
