@@ -32,22 +32,31 @@ export function TextReveal({
     );
   }
 
-  const words = text.split(' ');
+  const words = text.split(/(\s+)/);
   return (
     <span ref={ref} className={className} aria-label={text}>
-      {words.map((word, i) => (
-        <span key={`${word}-${i}`} aria-hidden className="inline-block overflow-hidden align-bottom pb-[0.12em] -mb-[0.12em]">
-          <motion.span
-            className="inline-block will-change-transform"
-            initial={{ y: '110%' }}
-            animate={inView ? { y: '0%' } : { y: '110%' }}
-            transition={{ duration: 0.5, delay: delay + i * stagger, ease: EASE }}
+      {words.map((part, i) =>
+        part === '' ? null : /^\s+$/.test(part) ? (
+          <span key={`s-${i}`} aria-hidden className="inline-block whitespace-pre">
+            {' '}
+          </span>
+        ) : (
+          <span
+            key={`w-${i}`}
+            aria-hidden
+            className="inline-block overflow-hidden align-bottom pb-[0.12em] -mb-[0.12em]"
           >
-            {word}
-          </motion.span>
-          {i < words.length - 1 ? ' ' : ''}
-        </span>
-      ))}
+            <motion.span
+              className="inline-block will-change-transform"
+              initial={{ y: '110%' }}
+              animate={inView ? { y: '0%' } : { y: '110%' }}
+              transition={{ duration: 0.5, delay: delay + words.slice(0, i).filter((p) => !/^\s+$/.test(p)).length * stagger, ease: EASE }}
+            >
+              {part}
+            </motion.span>
+          </span>
+        ),
+      )}
     </span>
   );
 }
