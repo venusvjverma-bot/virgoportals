@@ -726,6 +726,13 @@ Deno.serve(async (req: Request) => {
             };
           })
         : [];
+      // One serving type per drink: if every parsed option has a supported
+      // measurement it is Measured mode; otherwise fall back to Named Size,
+      // keeping each original label intact rather than guessing values.
+      const allMeasured = options.length > 0 && options.every((o) => o.quantity !== '');
+      const typedOptions = allMeasured
+        ? options
+        : options.map((o) => ({ ...o, quantity: '', unit: '' }));
       return {
         name: dish.name,
         section: dish.section,
@@ -740,7 +747,7 @@ Deno.serve(async (req: Request) => {
         // serving text is cleared to avoid a misleading duplicate.
         serving: hasVariants ? '' : dish.serving,
         abv: dish.abv,
-        options,
+        options: typedOptions,
       };
     });
 

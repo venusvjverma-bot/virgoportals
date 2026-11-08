@@ -19,27 +19,33 @@ import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Notice } from '@/components/ui/Notice';
 import { cn } from '@/lib/cn';
 import { formatPriceInput, normalizeCurrency, parsePriceToMinor } from '@/lib/currency';
-import type { Dish, ServingUnit } from '@/types';
+import type { Dish, DishServingOption, ServingUnit } from '@/types';
 
 const SERVING_UNITS: ServingUnit[] = ['cl', 'ml', 'oz'];
 
 export type ServingOptionInput = { id?: string; label: string; price: string; quantity?: number | null; unit?: ServingUnit | null; sortOrder: number };
 
-type ServingOptionDraft = { id?: string; quantity: string; unit: ServingUnit; price: string };
+type ServingOptionDraft = { id?: string; quantity: string; unit: ServingUnit; price: string; name: string; mode: ServingMode };
+
+type ServingMode = 'measured' | 'named';
+
+function servingModeFor(options: DishServingOption[]): ServingMode {
+  return options.some((o) => o.unit !== null) ? 'measured' : 'named';
+}
 
 function draftFromOption(o: { id?: string; label: string; price: string; quantity?: number | null; unit?: string | null }): ServingOptionDraft {
   if (o.quantity !== null && o.quantity !== undefined && (o.unit === 'cl' || o.unit === 'ml' || o.unit === 'oz')) {
-    return { id: o.id, quantity: String(o.quantity), unit: o.unit, price: o.price };
+    return { id: o.id, quantity: String(o.quantity), unit: o.unit, price: o.price, name: '', mode: 'measured' };
   }
-  // Legacy free-text label: surface it in the quantity field only when it is a
-  // plain number; otherwise leave it empty so the host re-enters it. The price
-  // and row are always preserved.
-  const bare = o.label.trim().match(/^(\d+(?:[.,]\d+)?)$/);
-  return { id: o.id, quantity: bare ? bare[1].replace(',', '.') : '', unit: 'cl', price: o.price };
+  return { id: o.id, quantity: '', unit: 'cl', price: o.price, name: o.label, mode: 'named' };
 }
 
 function composeServingLabel(quantity: string, unit: ServingUnit): string {
   return `${quantity.trim()} ${unit}`;
+}
+
+function composeNamedLabel(name: string): string {
+  return name.replace(/\s+/g, ' ').trim();
 }
 export type RemovableIngredientInput = { id?: string; label: string; sortOrder: number };
 export type VariantInput = { id?: string; name: string; additionalPrice: string; sortOrder: number };
@@ -117,6 +123,7 @@ export function DishCard({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [servingOpts, setServingOpts] = useState<ServingOptionDraft[]>([]);
+  const [servingMode, setServingMode] = useState<ServingMode>('measured');
   const [removableIngs, setRemovableIngs] = useState<{ id?: string; label: string }[]>([]);
   const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([]);
   const [newIngredient, setNewIngredient] = useState('');
@@ -136,6 +143,7 @@ export function DishCard({
     setAbv(dish.abv);
     setAvailable(dish.available);
     setServingOpts(dish.servingOptions?.map(draftFromOption) ?? []);
+    setServingMode(servingModeFor(dish.servingOptions ?? []));
     setRemovableIngs(dish.removableIngredients?.map((i) => ({ id: i.id, label: i.label })) ?? []);
     setVariantDrafts(dish.variants.map((v) => ({ id: v.id, name: v.name, additionalPrice: v.additionalPrice })));
     setNewIngredient('');
@@ -145,6 +153,7 @@ export function DishCard({
   }, [dishId]);
 
   const savedServingOpts = dish?.servingOptions?.map(draftFromOption) ?? [];
+  const savedServingMode = dish ? servingModeFor(dish.servingOptions ?? []) : 'measured';
   const savedRemovableIngs = dish?.removableIngredients?.map((i) => ({ id: i.id, label: i.label })) ?? [];
   const savedVariants = dish?.variants.map((v) => ({ id: v.id, name: v.name, additionalPrice: v.additionalPrice })) ?? [];
 
@@ -163,7 +172,8 @@ export function DishCard({
       }
     : EMPTY_DRAFT;
 
-  const servingOptsDirty = servingOpts.length !== savedServingOpts.length ||
+  const servingOptsDirty = servingMode !== savedServingMode ||
+    servingOpts.length !== savedServingOpts.length ||
     servingOpts.some((o, i) =>
       o.quantity !== (savedServingOpts[i]?.quantity ?? '') ||
       o.unit !== (savedServingOpts[i]?.unit ?? 'cl') ||
@@ -226,6 +236,7 @@ export function DishCard({
     setAbv(savedValues.abv);
     setAvailable(savedValues.available);
     setServingOpts(savedServingOpts.map((o) => ({ ...o })));
+    setServingMode(savedServingMode);
     setRemovableIngs(savedRemovableIngs.map((i) => ({ id: i.id, label: i.label })));
     setVariantDrafts(savedVariants.map((v) => ({ ...v })));
     setNewIngredient('');
@@ -263,39 +274,65 @@ export function DishCard({
 
     // Validate serving options for drinks
     if (isDrinkSection(section)) {
-      const filled = servingOpts.filter((o) => o.quantity.trim() || o.price.trim());
+      const filled = servingMode === 'measured'
+        ? servingOpts.filter((o) => o.quantity.trim() || o.price.trim())
+        : servingOpts.filter((o) => o.name.trim() || o.price.trim());
       if (filled.length === 0) {
         setError('Add at least one serving size with a price for this drink.');
         return;
       }
-      for (const opt of filled) {
-        const qty = Number(opt.quantity.replace(',', '.'));
-        if (!opt.quantity.trim() || !Number.isFinite(qty) || qty <= 0) {
-          setError('Every serving size needs a positive quantity (e.g. 25 or 0.5).');
-          return;
+      if (servingMode === 'measured') {
+        for (const opt of filled) {
+          const qty = Number(opt.quantity.replace(',', '.'));
+          if (!opt.quantity.trim() || !Number.isFinite(qty) || qty <= 0) {
+            setError('Every serving size needs a positive quantity (e.g. 25 or 0.5).');
+            return;
+          }
+          if (!SERVING_UNITS.includes(opt.unit)) {
+            setError('Choose a measurement unit (cl, ml or oz) for every serving size.');
+            return;
+          }
+          if (!opt.price.trim()) {
+            setError(`Enter a price for the serving size "${composeServingLabel(opt.quantity, opt.unit)}".`);
+            return;
+          }
         }
-        if (!SERVING_UNITS.includes(opt.unit)) {
-          setError('Choose a measurement unit (cl, ml or oz) for every serving size.');
-          return;
-        }
-        if (!opt.price.trim()) {
-          setError(`Enter a price for the serving size "${composeServingLabel(opt.quantity, opt.unit)}".`);
-          return;
+      } else {
+        for (const opt of filled) {
+          if (!opt.name.trim()) {
+            setError('Every serving size needs a name (e.g. "Small", "Large").');
+            return;
+          }
+          if (!opt.price.trim()) {
+            setError(`Enter a price for the serving size "${opt.name.trim()}".`);
+            return;
+          }
         }
       }
     }
 
     const cleanedOptions = isDrinkSection(section)
-      ? servingOpts
-          .filter((o) => o.quantity.trim() && o.price.trim())
-          .map((o, i) => ({
-            id: o.id,
-            label: composeServingLabel(o.quantity, o.unit),
-            price: o.price.trim(),
-            quantity: Number(o.quantity.replace(',', '.')),
-            unit: o.unit,
-            sortOrder: i,
-          }))
+      ? servingMode === 'measured'
+        ? servingOpts
+            .filter((o) => o.quantity.trim() && o.price.trim())
+            .map((o, i) => ({
+              id: o.id,
+              label: composeServingLabel(o.quantity, o.unit),
+              price: o.price.trim(),
+              quantity: Number(o.quantity.replace(',', '.')),
+              unit: o.unit,
+              sortOrder: i,
+            }))
+        : servingOpts
+            .filter((o) => o.name.trim() && o.price.trim())
+            .map((o, i) => ({
+              id: o.id,
+              label: composeNamedLabel(o.name),
+              price: o.price.trim(),
+              quantity: null,
+              unit: null,
+              sortOrder: i,
+            }))
       : undefined;
 
     const cleanedIngredients = removableIngs
@@ -540,7 +577,32 @@ export function DishCard({
 
               {isDrinkSection(section) ? (
                 <div className="mt-4 rounded-xl bg-cream-50 p-4 ring-1 ring-cream-200">
-                  <div className="grid grid-cols-[1fr_5rem_1fr_2.5rem] gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Serving sizes</p>
+                    <div className="flex rounded-lg bg-cream-100 p-0.5 ring-1 ring-cream-200">
+                      {([['measured', 'Measured'], ['named', 'Named size']] as const).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => {
+                            setServingMode(value);
+                            setSaveState('idle');
+                          }}
+                          className={cn(
+                            'rounded-md px-3 py-1 text-xs font-semibold transition',
+                            servingMode === value
+                              ? 'bg-white text-ink shadow-soft'
+                              : 'text-ink-muted hover:text-ink'
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {servingMode === 'measured' ? (
+                    <>
+                  <div className="mt-3 grid grid-cols-[1fr_5rem_1fr_2.5rem] gap-2">
                     <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">Quantity</span>
                     <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">Unit</span>
                     <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">Price</span>
@@ -595,10 +657,55 @@ export function DishCard({
                       </div>
                     ))}
                   </div>
+                    </>
+                  ) : (
+                    <>
+                  <div className="mt-3 grid grid-cols-[1fr_1fr_2.5rem] gap-2">
+                    <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">Serving name</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-ink-muted">Price</span>
+                    <span />
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {servingOpts.map((opt, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_1fr_2.5rem] gap-2">
+                        <Input
+                          value={opt.name}
+                          placeholder="e.g. Small, Family Size"
+                          aria-label="Serving name"
+                          onChange={(e) => {
+                            setServingOpts((prev) => prev.map((o, i) => i === idx ? { ...o, name: e.target.value } : o));
+                            setSaveState('idle');
+                          }}
+                        />
+                        <Input
+                          value={opt.price}
+                          placeholder="0"
+                          inputMode="decimal"
+                          onChange={(e) => {
+                            setServingOpts((prev) => prev.map((o, i) => i === idx ? { ...o, price: e.target.value } : o));
+                            setSaveState('idle');
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setServingOpts((prev) => prev.filter((_, i) => i !== idx));
+                            setSaveState('idle');
+                          }}
+                          className="flex h-[42px] w-10 items-center justify-center rounded-lg text-error-500 ring-1 ring-cream-200 transition hover:bg-error-50"
+                          aria-label="Remove serving size"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                    </>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
-                      setServingOpts((prev) => [...prev, { quantity: '', unit: 'cl', price: '' }]);
+                      setServingOpts((prev) => [...prev, servingMode === 'measured' ? { quantity: '', unit: 'cl', price: '', name: '', mode: 'measured' } : { quantity: '', unit: 'cl', price: '', name: '', mode: 'named' }]);
                       setSaveState('idle');
                     }}
                     className="mt-3 flex items-center gap-1.5 text-sm font-medium text-olive-700 hover:text-olive-800"
