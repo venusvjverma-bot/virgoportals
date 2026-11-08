@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { ChapterShell } from '../ChapterShell';
-import { RestaurantShowcase } from '../RestaurantShowcase';
 import { EASE } from '../visuals';
 
 /** Shared phone mock used by other chapters (Chat, Customer). */
@@ -104,74 +103,84 @@ export function WelcomeChapter() {
         </>
       }
     >
-      <div className="lg:col-span-2">
+      <div className="w-full">
         <p className="max-w-2xl text-base leading-relaxed text-ink-soft sm:text-lg">
           Manage your restaurant, publish your digital menu, welcome guests and receive orders — all through
           Virgo Portals.
         </p>
-      </div>
 
-      {/* Interactive 3D restaurant — the visual centrepiece */}
-      <div className="lg:col-span-2">
-        <RestaurantShowcase />
-      </div>
+        {/* Four interactive workflow tabs — the journey from setup to orders */}
+        <div className="mt-10">
+          <h3 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+            How your restaurant works with Virgo Portals
+          </h3>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft sm:text-base">
+            Four connected steps take your restaurant from setup to incoming orders.
+          </p>
 
-      {/* Four interactive workflow tabs */}
-      <div className="mt-6 w-full lg:col-span-2">
-        <h3 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-          How your restaurant works with Virgo Portals
-        </h3>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft sm:text-base">
-          Four connected steps take your restaurant from setup to incoming orders.
-        </p>
-
-        {/* Tab row — horizontally scrollable on phones */}
-        <div className="mt-6 -mx-5 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <div role="tablist" aria-label="Workflow steps" className="flex min-w-max gap-2 sm:min-w-0 sm:grid sm:grid-cols-4">
-            {TABS.map((t, i) => {
-              const selected = i === active;
-              return (
-                <button
-                  key={t.id}
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => setActive(i)}
-                  className={`rounded-2xl px-4 py-3 text-left text-sm font-semibold ring-1 transition-all duration-300 ${
-                    selected
-                      ? 'bg-olive-700 text-white shadow-lift ring-olive-700'
-                      : 'bg-white text-ink-soft ring-cream-200 hover:bg-olive-50 hover:text-ink'
-                  }`}
-                >
-                  <span className={`block text-[11px] font-medium uppercase tracking-wider ${selected ? 'text-olive-100' : 'text-olive-600'}`}>
-                    {t.tab}
-                  </span>
-                  <span className="mt-0.5 block">{t.title}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Active tab panel */}
-        <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-soft ring-1 ring-cream-200/80">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={tab.id}
-              initial={reduce ? false : { opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.35, ease: EASE }}
-              className="grid gap-0 md:grid-cols-2"
+          {/* Tab row — horizontally scrollable on phones, four columns on desktop */}
+          <div className="mt-6 -mx-5 overflow-x-auto px-5 pb-1 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div
+              role="tablist"
+              aria-label="Workflow steps"
+              className="flex min-w-max gap-2 sm:min-w-0 sm:grid sm:grid-cols-4"
             >
-              <div className="flex flex-col justify-center gap-3 p-6 sm:p-8">
-                <h4 className="font-display text-xl font-semibold tracking-tight text-ink sm:text-2xl">{tab.title}</h4>
-                <p className="text-sm leading-relaxed text-ink-soft sm:text-base">{tab.description}</p>
-              </div>
-              <div className="relative min-h-[220px] md:min-h-[300px]">
-                <img src={tab.image} alt={tab.alt} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
-              </div>
-            </motion.div>
-          </AnimatePresence>
+              {TABS.map((t, i) => {
+                const selected = i === active;
+                return (
+                  <button
+                    key={t.id}
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setActive(i)}
+                    className={`rounded-2xl px-4 py-3 text-left text-sm font-semibold ring-1 transition-all duration-300 ${
+                      selected
+                        ? 'bg-olive-700 text-white shadow-lift ring-olive-700'
+                        : 'bg-white text-ink-soft ring-cream-200 hover:bg-olive-50 hover:text-ink'
+                    }`}
+                  >
+                    <span
+                      className={`block text-[11px] font-medium uppercase tracking-wider ${
+                        selected ? 'text-olive-100' : 'text-olive-600'
+                      }`}
+                    >
+                      {t.tab}
+                    </span>
+                    <span className="mt-0.5 block">{t.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Active tab panel — text beside its image on wide screens, stacked on phones */}
+          <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-soft ring-1 ring-cream-200/80">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={tab.id}
+                initial={reduce ? false : { opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.35, ease: EASE }}
+                className="grid gap-0 md:grid-cols-5"
+              >
+                <div className="flex flex-col justify-center gap-3 p-6 sm:p-8 md:col-span-2">
+                  <h4 className="font-display text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+                    {tab.title}
+                  </h4>
+                  <p className="text-sm leading-relaxed text-ink-soft sm:text-base">{tab.description}</p>
+                </div>
+                <div className="relative min-h-[220px] md:col-span-3 md:min-h-[320px]">
+                  <img
+                    src={tab.image}
+                    alt={tab.alt}
+                    loading="lazy"
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     </ChapterShell>
