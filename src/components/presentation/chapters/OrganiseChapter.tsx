@@ -1,4 +1,5 @@
-import { motion, useReducedMotion } from 'motion/react';
+import { useRef } from 'react';
+import { motion, useInView, useReducedMotion } from 'motion/react';
 import { Store } from 'lucide-react';
 import { ChapterShell, ChapterText } from '../ChapterShell';
 import { Mascot } from '../Mascot';
@@ -39,6 +40,10 @@ const ORGANISATION_CARDS = [
 
 export function OrganiseChapter() {
   const reduce = useReducedMotion();
+  const cardsRef = useRef<HTMLDivElement>(null);
+  const cardsInView = useInView(cardsRef, { amount: 0.25 });
+  const closingRef = useRef<HTMLParagraphElement>(null);
+  const closingInView = useInView(closingRef, { amount: 0.5 });
   return (
     <ChapterShell
       id="chapter-organise"
@@ -48,13 +53,12 @@ export function OrganiseChapter() {
       flip
     >
       <ChapterText>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div ref={cardsRef} className="grid gap-4 sm:grid-cols-2">
           {ORGANISATION_CARDS.map(({ title, image, alt, text }, i) => (
             <motion.div
               key={title}
               initial={reduce ? false : { opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-60px' }}
+              animate={reduce || cardsInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
               transition={{ delay: reduce ? 0 : i * 0.15, duration: 0.6, ease: EASE }}
               className="overflow-hidden rounded-2xl bg-white shadow-soft ring-1 ring-cream-200/80"
             >
@@ -72,9 +76,9 @@ export function OrganiseChapter() {
           ))}
         </div>
         <motion.p
+          ref={closingRef}
           initial={reduce ? false : { opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-60px' }}
+          animate={reduce || closingInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ delay: reduce ? 0 : 0.35, duration: 0.6, ease: EASE }}
         >
           Now let's look at your menu. You can keep food and drinks in separate sections, then organise dishes into
