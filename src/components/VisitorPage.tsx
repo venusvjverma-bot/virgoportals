@@ -50,6 +50,7 @@ interface ChatMessage {
 interface LoadedView {
   restaurantId: string;
   name: string;
+  restaurantName?: string;
   city: string;
   currency: string;
   resourceId?: string;
@@ -147,6 +148,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           loaded = {
             restaurantId: resource.restaurantId,
             name: resource.resourceName || resource.restaurantName,
+            restaurantName: resource.restaurantName,
             city: resource.city,
             currency: resource.currency || 'SEK',
             resourceId,
@@ -1131,7 +1133,18 @@ function MessageBubble({
               : 'bg-white text-ink ring-1 ring-cream-200'
           )}
         >
-          {isVisitor ? message.text : <AssistantMarkdown text={message.text} />}
+          {isVisitor ? message.text : (
+            <AssistantMarkdown
+              text={message.text}
+              highlightNames={
+                view && view.restaurantName && view.restaurantName !== view.name
+                  ? [view.name, view.restaurantName]
+                  : view
+                    ? [view.name]
+                    : []
+              }
+            />
+          )}
         </div>
         {groups.length > 0 ? (
           <div className="space-y-3">

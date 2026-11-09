@@ -8,6 +8,11 @@ type Block =
 const SAFE_LINK = /^(https?:\/\/|mailto:)/i;
 const INLINE_PATTERN = /(\*\*[^*\n]+\*\*|\*[^*\s\n][^*\n]*\*|\[[^\]\n]+\]\([^)\s]+\))/;
 
+interface NameMatcher {
+  pattern: RegExp;
+  names: Set<string>;
+}
+
 function parseBlocks(text: string): Block[] {
   const blocks: Block[] = [];
   let paragraph: string[] | null = null;
@@ -46,6 +51,18 @@ function parseBlocks(text: string): Block[] {
   return blocks;
 }
 
+function buildNameMatcher(names: string[]): NameMatcher | null {
+  const valid = names
+    .filter((n) => n.trim().length > 1)
+    .sort((a, b) => b.length - a.length)
+    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (valid.length === 0) return null;
+  return {
+    pattern: new RegExp(`(${valid.join('|')})`),
+    names: new Set(names.filter((n) => n.trim().length > 1)),
+  };
+}
+
 function renderInline(text: string): ReactNode[] {
   return text.split(INLINE_PATTERN).map((part, index) => {
     if (!part) return null;
@@ -73,8 +90,24 @@ function renderInline(text: string): ReactNode[] {
   });
 }
 
-export function AssistantMarkdown({ text }: { text: string }) {
+function renderTextWithNames(text: string, keyPrefix: string, matcher: NameMatcher | null): ReactNode[] {
+  if (!matcher) return [<span key={`${keyPrefix}-0`}>{text}</span>];
+  return text.split(matcher.pattern).map((part, index) => {
+    if (!part) return null;
+    if (matcher.names.has(part)) {
+      return (
+        <strong key={`${keyPrefix}-${index}`} className="font-semibold text-olive-700">
+          {part}
+        </strong>
+      );
+    }
+    return <span key={`${keyPrefix}-${index}`}>{part}</span>;
+  });
+}
+
+export function AssistantMarkdown({ text, highlightNames = [] }: { text: string; highlightNames?: string[] }) {
   const blocks = parseBlocks(text);
+  const matcher = buildNameMatcher(highlightNames);
   return (
     <div className="space-y-3">
       {blocks.map((block, index) => {
@@ -84,14 +117,20 @@ export function AssistantMarkdown({ text }: { text: string }) {
             : 'font-semibold text-ink';
           return (
             <p key={index} className={`${headingClass} pt-1 leading-snug`}>
-              {renderInline(block.text)}
+              {renderTextWithNames(block.text, `h-${index}`, matcher)}
             </p>
           );
         }
         if (block.type === 'paragraph') {
           return (
             <p key={index} className="whitespace-pre-line break-words">
-              {renderInline(block.lines.join('\n'))}
+              {renderInline(block.lines.join('\n')).map((node, nodeIndex) => {
+                if (!node || typeof node !== 'object' || !('props' in node)) return node;
+                const child = (node as { props: { children?: ReactNode } }).props.children;
+                return typeof child === 'string'
+                  ? renderTextWithNames(child, `p-${index}-${nodeIndex}`, matcher)
+                  : child;
+              }).filter(Boolean)}
             </p>
           );
         }
@@ -103,7 +142,7 @@ export function AssistantMarkdown({ text }: { text: string }) {
           >
             {block.items.map((item, itemIndex) => (
               <li key={itemIndex} className="pl-1">
-                {renderInline(item)}
+                {renderTextWithNames(item, `li-${index}-${itemIndex}`, matcher)}
               </li>
             ))}
           </ListTag>
