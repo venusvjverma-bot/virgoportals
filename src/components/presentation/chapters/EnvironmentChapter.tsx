@@ -35,21 +35,21 @@ export function EnvironmentChapter() {
       id="chapter-environment"
       chapterNumber={3}
       kicker="Your Restaurant Environment"
-      title="Every restaurant gets its own sealed environment."
+      title="Your restaurant. Your own space."
     >
       <ChapterText>
+        <p>Everything you manage in Virgo Portals belongs to your restaurant.</p>
         <p>
-          When you become a Host, Virgo Portals creates a restaurant environment that belongs entirely to you —
-          with your restaurant's name, city and currency, your welcome message, and how you charge for table or
-          room service.
+          When you join Virgo Portals, we create a dedicated space for your restaurant. You can add your restaurant
+          name, choose your city and currency, set a welcome message and decide how table or room service should work.
         </p>
         <p>
-          Your environment is yours alone. Menus, orders and settings from other restaurants on the platform
-          never mix with yours — the platform is built so every Host only ever sees their own restaurant.
+          Your restaurant has its own menu, orders, departments and settings. Everything stays separate from other
+          restaurants using Virgo Portals. You only see and manage your own restaurant's information.
         </p>
         <p className="text-sm text-ink-muted">
-          One Host, one restaurant: the platform enforces that link, so your digital presence is always exactly
-          your business.
+          One restaurant, one dedicated Host account. Your restaurant's information stays organised in one place,
+          ready for you to manage.
         </p>
       </ChapterText>
 
