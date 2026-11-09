@@ -177,9 +177,10 @@
 
 .food-wall-image {
   width: 100%;
-  height: 220px;
-  object-fit: cover;
-  margin-bottom: 24px;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  margin-bottom: 5px;
   opacity: 0.5;
   flex-shrink: 0;
 }
