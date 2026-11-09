@@ -1133,18 +1133,7 @@ function MessageBubble({
               : 'bg-white text-ink ring-1 ring-cream-200'
           )}
         >
-          {isVisitor ? message.text : (
-            <AssistantMarkdown
-              text={message.text}
-              highlightNames={
-                view
-                  ? [view.name, view.restaurantName].filter(
-                      (n): n is string => typeof n === 'string' && n.trim().length > 1 && n !== view.name
-                    )
-                  : []
-              }
-            />
-          )}
+          {isVisitor ? message.text : <AssistantMarkdown text={message.text} />}
         </div>
         {groups.length > 0 ? (
           <div className="space-y-3">
