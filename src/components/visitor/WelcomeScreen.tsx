@@ -21,7 +21,6 @@ export function WelcomeScreen({
 
   const displayImages = useMemo(() => {
     if (images.length === 0) return [];
-    if (images.length >= 6) return images.slice(0, 8);
     return [...images, ...images];
   }, [images]);
 
@@ -45,17 +44,16 @@ export function WelcomeScreen({
     >
       {showBackground ? (
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-          <div className="food-wall-track">
+          <div
+            className="food-wall-track"
+            style={{ animationDuration: `${Math.max(images.length, 1) * 6}s` }}
+          >
             {displayImages.map((src, index) => (
               <img
                 key={`${src}-${index}`}
                 src={src}
                 alt=""
                 className="food-wall-image"
-                style={{
-                  animationDelay: `${(index % 4) * -8}s`,
-                  animationDuration: `${28 + (index % 3) * 6}s`,
-                }}
                 onLoad={() => setLoadedCount((prev) => prev + 1)}
                 onError={() => setImagesFailed(true)}
               />
