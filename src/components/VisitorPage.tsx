@@ -65,10 +65,13 @@ interface LoadedView {
 
 type VisitorOverlay = null | 'basket' | 'checkout' | 'confirmation' | 'combos';
 
-const CREDIT_EXHAUSTION_MESSAGE = 'This restaurant has no LLM credits remaining. Please ask the Virgo team to add credits.';
+const FRIENDLY_POPUP_ERROR_MESSAGES = [
+  'This restaurant has no LLM credits remaining. Please ask the Virgo team to add credits.',
+  'Too many questions in a short time. Please wait a moment and try again.',
+];
 
-function isCreditExhaustionError(err: unknown): boolean {
-  return err instanceof Error && err.message === CREDIT_EXHAUSTION_MESSAGE;
+function showsFriendlyPopup(err: unknown): boolean {
+  return err instanceof Error && FRIENDLY_POPUP_ERROR_MESSAGES.includes(err.message);
 }
 
 function toHistory(messages: ChatMessage[]): { role: 'user' | 'assistant'; content: string }[] {
@@ -440,7 +443,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
       setMessages(newMessages);
       setSuggestions(Array.isArray(result.suggestions) ? result.suggestions.slice(0, 2) : []);
     } catch (err) {
-      if (isCreditExhaustionError(err)) {
+      if (showsFriendlyPopup(err)) {
         setCreditRetry(() => sendGreeting(lang));
       } else {
         setSendError(err instanceof Error ? err.message : 'The assistant could not reply.');
@@ -509,7 +512,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
       transcriptRef.current = transcriptRef.current.filter((item) => item.id !== visitorMessage.id);
       setMessages(transcriptRef.current);
       setInput(text);
-      if (isCreditExhaustionError(err)) {
+      if (showsFriendlyPopup(err)) {
         setCreditRetry(() => send(text));
       } else {
         setSendError(err instanceof Error ? err.message : 'The assistant could not reply.');
