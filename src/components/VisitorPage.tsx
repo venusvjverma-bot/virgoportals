@@ -1137,11 +1137,11 @@ function MessageBubble({
             <AssistantMarkdown
               text={message.text}
               highlightNames={
-                view && view.restaurantName && view.restaurantName !== view.name
-                  ? [view.name, view.restaurantName]
-                  : view
-                    ? [view.name]
-                    : []
+                view
+                  ? [view.name, view.restaurantName].filter(
+                      (n): n is string => typeof n === 'string' && n.trim().length > 1 && n !== view.name
+                    )
+                  : []
               }
             />
           )}
