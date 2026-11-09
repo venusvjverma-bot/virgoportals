@@ -155,3 +155,45 @@
     opacity: 1;
   }
 }
+
+/*
+ * Welcome screen food-wall background: images move continuously upward
+ * in a single track. GPU-accelerated via transform. Pauses animation
+ * for users who prefer reduced motion.
+ */
+.food-wall-track {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 200%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.food-wall-image {
+  width: 100%;
+  height: 50%;
+  object-fit: cover;
+  opacity: 0.5;
+  flex-shrink: 0;
+  animation-name: food-wall-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+@keyframes food-wall-scroll {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .food-wall-image {
+    animation: none;
+  }
+}

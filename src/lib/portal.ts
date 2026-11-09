@@ -715,3 +715,22 @@ export async function uploadMenuFile(
   if (error) throw error;
   return { objectPath };
 }
+
+/**
+ * Visitor-facing dish image lookup for a department or event.
+ * Returns up to 12 image URLs for available dishes in the specified resource,
+ * via the public `get_public_dish_images` RPC. Used by the welcome screen.
+ */
+export async function getPublicDishImages(
+  resourceId: string,
+  resourceType: ResourceType
+): Promise<string[]> {
+  const { data, error } = await supabase.rpc('get_public_dish_images', {
+    p_resource_id: resourceId,
+    p_resource_type: resourceType,
+  });
+  if (error) throw error;
+  return ((data ?? []) as { image_url: string | null }[])
+    .map((row) => row.image_url)
+    .filter((url): url is string => typeof url === 'string' && url.length > 0);
+}

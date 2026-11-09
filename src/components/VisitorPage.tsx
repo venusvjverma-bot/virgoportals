@@ -5,6 +5,7 @@ import { ItemDetailPanel, type DishSelection } from '@/components/visitor/ItemDe
 import { ComboDetailPanel, type ComboSubmission } from '@/components/visitor/ComboDetailPanel';
 import { ComboListPanel } from '@/components/visitor/ComboListPanel';
 import { LanguageSelector } from '@/components/visitor/LanguageSelector';
+import { WelcomeScreen } from '@/components/visitor/WelcomeScreen';
 import { BasketPanel } from '@/components/visitor/BasketPanel';
 import { AssistantMarkdown } from '@/components/visitor/AssistantMarkdown';
 import { ChatCardButton } from '@/components/visitor/ChatCardButton';
@@ -12,7 +13,7 @@ import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/Checkout
 import { OrderConfirmation } from '@/components/visitor/OrderConfirmation';
 import { basketLineKey, unitPriceWithExtras } from '@/lib/basketLine';
 import { callFunction } from '@/lib/functions';
-import { getPublicPortal, getPublicResource, listPublicAddOns, listServingOptionsByDish, type PublicPortal } from '@/lib/portal';
+import { getPublicPortal, getPublicResource, getPublicDishImages, listPublicAddOns, listServingOptionsByDish, type PublicPortal } from '@/lib/portal';
 import { themeAssetUrl, mascotUrl } from '@/lib/themeAssets';
 import {
   loadChatHistory,
@@ -107,6 +108,8 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   const [selected, setSelected] = useState<Dish | null>(null);
   const [language, setLanguage] = useState<string | null>(null);
   const [showSelector, setShowSelector] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [welcomeImages, setWelcomeImages] = useState<string[]>([]);
   const [backgroundFailed, setBackgroundFailed] = useState(false);
   const [basket, setBasket] = useState<BasketItem[]>([]);
   const [basketServingOptions, setBasketServingOptions] = useState<Record<string, DishServingOption[]>>({});
@@ -179,15 +182,25 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
             setBasket(savedBasket);
           }
 
+          // Fetch dish images for the welcome screen background (department/event only)
+          if (loaded.resourceId && loaded.resourceType && (loaded.resourceType === 'department' || loaded.resourceType === 'event')) {
+            getPublicDishImages(loaded.resourceId, loaded.resourceType)
+              .then((urls) => { if (active) setWelcomeImages(urls); })
+              .catch(() => { /* welcome screen handles empty images gracefully */ });
+            setShowWelcome(true);
+          }
+
           // Restore chat history from localStorage (language is NOT restored)
           const savedChat = loadChatHistory(scope);
           if (savedChat && savedChat.length > 0) {
             transcriptRef.current = savedChat;
             setMessages(savedChat);
             setChatRestored(true);
-            // Language selector still shows on every reload
-            setShowSelector(true);
-          } else {
+          }
+
+          // For portal-level QR (no department/event), skip the welcome screen
+          // and show the language selector immediately as before.
+          if (!loaded.resourceId || (loaded.resourceType !== 'department' && loaded.resourceType !== 'event')) {
             setShowSelector(true);
           }
 
@@ -899,6 +912,19 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
       </div>
 
       {/* Overlays */}
+      {showWelcome && view?.resourceType && (view.resourceType === 'department' || view.resourceType === 'event') ? (
+        <WelcomeScreen
+          resourceType={view.resourceType}
+          resourceName={view.name}
+          introduction=""
+          images={welcomeImages}
+          onContinue={() => {
+            setShowWelcome(false);
+            setShowSelector(true);
+          }}
+        />
+      ) : null}
+
       {showSelector ? <LanguageSelector onSelect={handleLanguageSelect} /> : null}
 
       {overlay === 'combos' ? (
