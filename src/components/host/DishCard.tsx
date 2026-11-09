@@ -533,8 +533,9 @@ export function DishCard({
                         id={`${fieldIdPrefix}-abv`}
                         value={abv}
                         placeholder="e.g. 4.5%"
+                        inputMode="decimal"
                         onChange={(event) => {
-                          setAbv(event.target.value);
+                          setAbv(event.target.value.replace(/[^\d.,]/g, ''));
                           setSaveState('idle');
                         }}
                       />
@@ -565,8 +566,9 @@ export function DishCard({
                         id={`${fieldIdPrefix}-abv`}
                         value={abv}
                         placeholder="e.g. 4.5%"
+                        inputMode="decimal"
                         onChange={(event) => {
-                          setAbv(event.target.value);
+                          setAbv(event.target.value.replace(/[^\d.,]/g, ''));
                           setSaveState('idle');
                         }}
                       />
