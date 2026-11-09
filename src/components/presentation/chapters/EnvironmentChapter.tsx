@@ -1,6 +1,7 @@
-import { motion, useReducedMotion } from 'motion/react';
+import { useRef } from 'react';
+import { motion, useReducedMotion, useInView } from 'motion/react';
 import { Building2 } from 'lucide-react';
-import { ChapterShell, ChapterText } from '../ChapterShell';
+import { ChapterShell } from '../ChapterShell';
 import { Floating, EASE } from '../visuals';
 
 function MiniRestaurant({ hue, name, delay }: { hue: string; name: string; delay: number }) {
@@ -30,6 +31,8 @@ function MiniRestaurant({ hue, name, delay }: { hue: string; name: string; delay
 
 export function EnvironmentChapter() {
   const reduce = useReducedMotion();
+  const textRef = useRef<HTMLDivElement>(null);
+  const textInView = useInView(textRef, { amount: 0.3 });
   return (
     <ChapterShell
       id="chapter-environment"
@@ -37,7 +40,13 @@ export function EnvironmentChapter() {
       kicker="Your Restaurant Environment"
       title="Your restaurant. Your own space."
     >
-      <ChapterText>
+      <motion.div
+        ref={textRef}
+        initial={reduce ? false : { opacity: 0, y: 24 }}
+        animate={textInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
+        transition={{ duration: 0.6, ease: EASE }}
+        className="space-y-4 text-base leading-relaxed text-ink-soft sm:text-lg"
+      >
         <p>Everything you manage in Virgo Portals belongs to your restaurant.</p>
         <p>
           When you join Virgo Portals, we create a dedicated space for your restaurant. You can add your restaurant
@@ -51,7 +60,7 @@ export function EnvironmentChapter() {
           One restaurant, one dedicated Host account. Your restaurant's information stays organised in one place,
           ready for you to manage.
         </p>
-      </ChapterText>
+      </motion.div>
 
       <div className="relative flex h-[420px] flex-col items-center justify-center sm:h-[480px]">
         {/* shared platform slab rises */}
