@@ -61,41 +61,9 @@ export function EnvironmentChapter() {
         </p>
       </motion.div>
 
-      <div ref={slabRef} className="relative flex flex-col items-center justify-end pb-6 pt-40 sm:pt-36">
-        {/* slab copy: progressive reveal, replays on re-entry — in normal flow above the cards */}
-        <motion.div
-          initial={reduce ? false : { opacity: 0, y: 16 }}
-          animate={slabInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
-          transition={{ duration: 0.6, ease: EASE }}
-          className="mb-8 w-full max-w-xs px-2 text-center"
-        >
-          <p className="font-display text-base font-semibold text-ink sm:text-lg">
-            Different restaurants. Their own identity.
-          </p>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-muted">
-            Your restaurant has its own name, settings and dedicated space. Set your location, currency, welcome
-            message and service preferences. Your information stays separate from other restaurants, and you manage
-            everything through your own portal.
-          </p>
-        </motion.div>
-        {/* three isolated environments, with their isolation outlines grouped together */}
-        <div className="relative z-10 flex items-end justify-center gap-6 sm:gap-10">
-          {[16, 50, 84].map((left, i) => (
-            <motion.div
-              key={left}
-              initial={reduce ? false : { opacity: 0, scale: 0.9 }}
-              animate={slabInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
-              transition={{ delay: reduce ? 0 : 1.0 + i * 0.15, duration: 0.5, ease: EASE }}
-              style={{ left: `${left}%` }}
-              className="pointer-events-none absolute -top-3 h-32 w-24 max-w-[28%] -translate-x-1/2 rounded-3xl border-2 border-dashed border-olive-300"
-            />
-          ))}
-          <MiniRestaurant image="/trattoria-pasta.webp" name="Trattoria" delay={0.4} />
-          <MiniRestaurant image="/bistro-nord-dish.webp" name="Bistro Nord" delay={0.6} />
-          <MiniRestaurant image="/cafe-lumen-coffee.webp" name="Café Lumen" delay={0.8} />
-        </div>
-        {/* floating profile card = your settings stay yours */}
-        <Floating delay={1.2} className="absolute right-[2%] top-[2%] sm:right-[4%] sm:top-[4%]">
+      <div ref={slabRef} className="relative flex flex-col items-center">
+        {/* illustration: environment card -> branching dashed connectors -> three restaurant cards */}
+        <Floating delay={1.2} className="relative z-10">
           <div className="w-44 rounded-2xl bg-white p-4 shadow-lift ring-1 ring-cream-200">
             <p className="text-xs font-semibold text-ink">Your environment</p>
             <div className="mt-2 space-y-1.5">
@@ -105,6 +73,56 @@ export function EnvironmentChapter() {
             </div>
           </div>
         </Floating>
+        {/* branching dashed connectors: one stem from the card, three paths to the restaurants */}
+        <svg
+          viewBox="0 0 100 44"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+          className="-mt-px h-11 w-full max-w-lg sm:h-14"
+        >
+          {[
+            'M50 0 V14 C50 26 22 20 16.5 44',
+            'M50 0 V44',
+            'M50 0 V14 C50 26 78 20 83.5 44',
+          ].map((d, i) => (
+            <motion.path
+              key={d}
+              d={d}
+              stroke="#a3b899"
+              strokeWidth={1.5}
+              fill="none"
+              strokeLinecap="round"
+              strokeDasharray="4 4"
+              vectorEffect="non-scaling-stroke"
+              initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
+              whileInView={{ pathLength: 1 }}
+              viewport={{ once: true, margin: '-40px' }}
+              transition={{ duration: 1.1, delay: reduce ? 0 : 0.9 + i * 0.2, ease: EASE }}
+            />
+          ))}
+        </svg>
+        {/* three isolated environments */}
+        <div className="relative z-10 -mt-1 flex items-start justify-center gap-6 px-4 sm:gap-10">
+          <MiniRestaurant image="/trattoria-pasta.webp" name="Trattoria" delay={0.4} />
+          <MiniRestaurant image="/bistro-nord-dish.webp" name="Bistro Nord" delay={0.6} />
+          <MiniRestaurant image="/cafe-lumen-coffee.webp" name="Café Lumen" delay={0.8} />
+        </div>
+        {/* slab copy: below the illustration, in normal flow */}
+        <motion.div
+          initial={reduce ? false : { opacity: 0, y: 16 }}
+          animate={slabInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
+          transition={{ duration: 0.6, delay: reduce ? 0 : 1.5, ease: EASE }}
+          className="mt-10 w-full max-w-md px-5 text-center"
+        >
+          <p className="font-display text-base font-semibold text-ink sm:text-lg">
+            Different restaurants. Their own identity.
+          </p>
+          <p className="mx-auto mt-2 text-sm leading-relaxed text-ink-muted">
+            Your restaurant has its own name, settings and dedicated space. Set your location, currency, welcome
+            message and service preferences. Your information stays separate from other restaurants, and you manage
+            everything through your own portal.
+          </p>
+        </motion.div>
       </div>
     </ChapterShell>
   );
