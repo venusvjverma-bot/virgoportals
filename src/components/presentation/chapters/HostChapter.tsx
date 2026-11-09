@@ -107,31 +107,39 @@ export function HostChapter() {
   );
 }
 
-/** Shared closing moment: celebratory Latte mascot beside the wrap-up message,
- * revealed together when scrolled into view and hidden again when it leaves. */
+/** Closing moment: free-standing message with the celebratory Latte mascot
+ * floating beside it, revealed together on scroll and hidden when it leaves. */
 function ClosingMoment() {
   const reduce = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { amount: 0.3 });
   return (
-    <div ref={ref} className="mt-12">
-      <motion.div
+    <div ref={ref} className="relative mx-auto mt-16 max-w-2xl px-4 pb-8">
+      <motion.p
         initial={reduce ? false : { opacity: 0, y: 24 }}
         animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
         transition={{ duration: 0.6, ease: EASE }}
-        className="flex flex-col items-center gap-6 rounded-3xl bg-white p-6 text-center shadow-soft ring-1 ring-cream-200/80 sm:p-8 md:flex-row md:gap-8 md:text-left"
+        className="text-center font-display text-lg font-medium leading-[1.7] text-ink sm:text-xl"
       >
-        <div aria-hidden className="shrink-0" style={{ width: 128, height: 128 }}>
-          <Mascot
-            character={latte}
-            state={inView ? 'celebrating' : 'listening'}
-            style={{ width: 128, height: 128 }}
-          />
-        </div>
-        <p className="max-w-xl text-base font-medium leading-[1.7] text-ink sm:text-lg">
-          And that's it! Your Host account and restaurant dashboard are ready. You're all set to start
-          building your menu and setting up your restaurant.
-        </p>
+        And that's it! Your Host account and restaurant dashboard are ready. You're all set to start
+        building your menu and setting up your restaurant.
+      </motion.p>
+      <motion.div
+        aria-hidden
+        initial={reduce ? { scale: 1, opacity: 1 } : { scale: 0.4, opacity: 0, rotate: -12, y: 24 }}
+        animate={
+          inView
+            ? { scale: 1, opacity: 1, rotate: 0, y: 0 }
+            : { scale: 0.4, opacity: 0, rotate: -12, y: 24 }
+        }
+        transition={{ duration: 0.7, delay: reduce ? 0 : 0.2, ease: EASE }}
+        className="pointer-events-none absolute z-20 h-32 w-32 sm:h-40 sm:w-40 -left-2 -top-24 sm:left-auto sm:-right-20 sm:top-1/2 sm:-translate-y-1/2"
+      >
+        <Mascot
+          character={latte}
+          state={inView ? 'celebrating' : 'listening'}
+          style={{ width: '100%', height: '100%' }}
+        />
       </motion.div>
     </div>
   );
