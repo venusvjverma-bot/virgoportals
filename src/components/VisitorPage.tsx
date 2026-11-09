@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { Layers, Loader2, RotateCcw, Send, ShoppingBag, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { AlertTriangle, Layers, Loader2, RotateCcw, Send, ShoppingBag, Sparkles, UtensilsCrossed } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
 import { ItemDetailPanel, type DishSelection } from '@/components/visitor/ItemDetailPanel';
 import { ComboDetailPanel, type ComboSubmission } from '@/components/visitor/ComboDetailPanel';
@@ -8,6 +8,7 @@ import { LanguageSelector } from '@/components/visitor/LanguageSelector';
 import { WelcomeScreen } from '@/components/visitor/WelcomeScreen';
 import { BasketPanel } from '@/components/visitor/BasketPanel';
 import { AssistantMarkdown } from '@/components/visitor/AssistantMarkdown';
+import { Button } from '@/components/ui/Button';
 import { ChatCardButton } from '@/components/visitor/ChatCardButton';
 import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/CheckoutView';
 import { OrderConfirmation } from '@/components/visitor/OrderConfirmation';
@@ -64,6 +65,12 @@ interface LoadedView {
 
 type VisitorOverlay = null | 'basket' | 'checkout' | 'confirmation' | 'combos';
 
+const CREDIT_EXHAUSTION_MESSAGE = 'This restaurant has no LLM credits remaining. Please ask the Virgo team to add credits.';
+
+function isCreditExhaustionError(err: unknown): boolean {
+  return err instanceof Error && err.message === CREDIT_EXHAUSTION_MESSAGE;
+}
+
 function toHistory(messages: ChatMessage[]): { role: 'user' | 'assistant'; content: string }[] {
   return messages
     .filter((message) => message.text.trim().length > 0)
@@ -106,6 +113,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [creditRetry, setCreditRetry] = useState<(() => void) | null>(null);
   const [selected, setSelected] = useState<Dish | null>(null);
   const [language, setLanguage] = useState<string | null>(null);
   const [showSelector, setShowSelector] = useState(false);
@@ -393,6 +401,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     if (!view || sendingRef.current) return;
     sendingRef.current = true;
     setSendError(null);
+    setCreditRetry(null);
     setSending(true);
     try {
       const result = await callFunction<{ reply: string; dishes: Dish[]; combos?: VisitorCombo[]; followUp: string; suggestions?: string[]; sectionHeadings?: Record<string, string> | null }>('visitor-chat', {
@@ -431,7 +440,11 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
       setMessages(newMessages);
       setSuggestions(Array.isArray(result.suggestions) ? result.suggestions.slice(0, 2) : []);
     } catch (err) {
-      setSendError(err instanceof Error ? err.message : 'The assistant could not reply.');
+      if (isCreditExhaustionError(err)) {
+        setCreditRetry(() => sendGreeting(lang));
+      } else {
+        setSendError(err instanceof Error ? err.message : 'The assistant could not reply.');
+      }
     } finally {
       sendingRef.current = false;
       setSending(false);
@@ -443,6 +456,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     if (!text || sendingRef.current || !view) return;
     sendingRef.current = true;
     setSendError(null);
+    setCreditRetry(null);
     setInput('');
     setSuggestions([]);
     const history = toHistory(transcriptRef.current);
@@ -495,7 +509,11 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
       transcriptRef.current = transcriptRef.current.filter((item) => item.id !== visitorMessage.id);
       setMessages(transcriptRef.current);
       setInput(text);
-      setSendError(err instanceof Error ? err.message : 'The assistant could not reply.');
+      if (isCreditExhaustionError(err)) {
+        setCreditRetry(() => send(text));
+      } else {
+        setSendError(err instanceof Error ? err.message : 'The assistant could not reply.');
+      }
     } finally {
       sendingRef.current = false;
       setSending(false);
@@ -853,6 +871,47 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
             <Notice tone="error" className="mb-3">
               {sendError}
             </Notice>
+          ) : null}
+          {creditRetry ? (
+            <div
+              className="fixed inset-0 z-50 flex items-end justify-center sm:items-center animate-fade-in"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Something went wrong"
+            >
+              <div className="absolute inset-0 cursor-default bg-ink/45 backdrop-blur-[2px]" />
+              <div className="relative flex w-full flex-col gap-4 rounded-t-3xl bg-cream-50 p-6 shadow-lift sm:max-w-sm sm:rounded-3xl">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-error-50 text-error-600">
+                    <AlertTriangle className="h-5 w-5" />
+                  </span>
+                  <h2 className="font-display text-lg font-semibold tracking-tight text-ink">
+                    Oops! Something went wrong.
+                  </h2>
+                </div>
+                <p className="text-sm leading-relaxed text-ink-soft">
+                  Our AI assistant is temporarily unavailable. We&apos;ll be back soon!
+                </p>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    const retry = creditRetry;
+                    setCreditRetry(null);
+                    retry();
+                  }}
+                  disabled={sending}
+                >
+                  {sending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Trying…
+                    </>
+                  ) : (
+                    'Try Again'
+                  )}
+                </Button>
+              </div>
+            </div>
           ) : null}
           {suggestions.length > 0 && !sending ? (
             <div className="mb-3 flex flex-wrap gap-2">
