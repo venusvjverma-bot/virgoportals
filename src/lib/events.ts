@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { getBotText } from '@/lib/config';
 import type { EventItem } from '@/types';
 
 const COLUMNS = 'id, restaurant_id, name, start_date, end_date, start_time, end_time, system_prompt, status, chat_background_asset_id, table_service_enabled, table_service_charge, room_service_enabled, room_service_charge, created_at';
@@ -60,6 +61,7 @@ export async function createEvent(
   restaurantId: string,
   data: { name: string; startDate: string; endDate: string; startTime: string | null; endTime: string | null }
 ): Promise<EventItem> {
+  const systemPrompt = await getBotText();
   const { data: row, error } = await supabase
     .from('events')
     .insert({
@@ -69,6 +71,7 @@ export async function createEvent(
       end_date: data.endDate,
       start_time: data.startTime,
       end_time: data.endTime,
+      system_prompt: systemPrompt,
     })
     .select(COLUMNS)
     .single();

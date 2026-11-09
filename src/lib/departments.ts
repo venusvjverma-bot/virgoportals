@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { getBotText } from '@/lib/config';
 import type { Department } from '@/types';
 
 const COLUMNS = 'id, restaurant_id, name, is_default, open_time, close_time, system_prompt, is_active, archived, chat_background_asset_id, printer_enabled, printer_name, printer_connection, printer_ip, printer_port, table_service_enabled, table_service_charge, room_service_enabled, room_service_charge, created_at';
@@ -67,9 +68,10 @@ export async function createDepartment(
   restaurantId: string,
   name: string
 ): Promise<Department> {
+  const systemPrompt = await getBotText();
   const { data, error } = await supabase
     .from('departments')
-    .insert({ restaurant_id: restaurantId, name })
+    .insert({ restaurant_id: restaurantId, name, system_prompt: systemPrompt })
     .select(COLUMNS)
     .single();
   if (error) throw error;
