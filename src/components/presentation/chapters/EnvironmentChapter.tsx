@@ -61,32 +61,25 @@ export function EnvironmentChapter() {
         </p>
       </motion.div>
 
-      <div ref={slabRef} className="relative flex h-[460px] flex-col items-center justify-center sm:h-[520px]">
-        {/* shared platform slab rises */}
-        <motion.div
-          initial={reduce ? false : { opacity: 0, y: 60, scaleY: 0.4 }}
-          animate={slabInView ? { opacity: 1, y: 0, scaleY: 1 } : { opacity: 0, y: 60, scaleY: 0.4 }}
-          transition={{ duration: 0.8, ease: EASE }}
-          className="absolute bottom-6 h-40 w-full max-w-[272px] rounded-[2rem] bg-white shadow-lift ring-1 ring-cream-200 sm:w-96"
-        />
-        {/* slab copy: progressive reveal, replays on re-entry */}
+      <div ref={slabRef} className="relative flex flex-col items-center justify-end pb-6 pt-36 sm:pt-32">
+        {/* slab copy: progressive reveal, replays on re-entry — in normal flow above the cards */}
         <motion.div
           initial={reduce ? false : { opacity: 0, y: 16 }}
           animate={slabInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
-          transition={{ duration: 0.6, delay: reduce ? 0 : 0.25, ease: EASE }}
-          className="absolute bottom-9 z-20 w-full max-w-[272px] px-5 text-center sm:max-w-80 sm:px-0"
+          transition={{ duration: 0.6, ease: EASE }}
+          className="mb-8 w-full max-w-xs px-2 text-center"
         >
-          <p className="font-display text-sm font-semibold text-ink sm:text-base">
+          <p className="font-display text-base font-semibold text-ink sm:text-lg">
             Different restaurants. Their own identity.
           </p>
-          <p className="mx-auto mt-2 max-w-72 text-xs leading-relaxed text-ink-muted sm:max-w-72">
+          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-muted">
             Your restaurant has its own name, settings and dedicated space. Set your location, currency, welcome
             message and service preferences. Your information stays separate from other restaurants, and you manage
             everything through your own portal.
           </p>
         </motion.div>
         {/* three isolated environments */}
-        <div className="relative z-10 flex items-end gap-6 sm:gap-10">
+        <div className="relative z-10 flex items-end justify-center gap-6 sm:gap-10">
           <MiniRestaurant image="/trattoria-pasta.webp" name="Trattoria" delay={0.4} />
           <MiniRestaurant image="/bistro-nord-dish.webp" name="Bistro Nord" delay={0.6} />
           <MiniRestaurant image="/cafe-lumen-coffee.webp" name="Café Lumen" delay={0.8} />
@@ -99,11 +92,11 @@ export function EnvironmentChapter() {
             animate={slabInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
             transition={{ delay: reduce ? 0 : 1.0 + i * 0.15, duration: 0.5, ease: EASE }}
             style={{ left: `${left}%` }}
-            className="absolute top-[26%] h-32 w-24 max-w-[28%] -translate-x-1/2 rounded-3xl border-2 border-dashed border-olive-300"
+            className="pointer-events-none absolute top-[38%] h-32 w-24 max-w-[28%] -translate-x-1/2 rounded-3xl border-2 border-dashed border-olive-300"
           />
         ))}
         {/* floating profile card = your settings stay yours */}
-        <Floating delay={1.2} className="absolute right-[4%] top-[4%]">
+        <Floating delay={1.2} className="absolute right-[2%] top-[2%] sm:right-[4%] sm:top-[4%]">
           <div className="w-44 rounded-2xl bg-white p-4 shadow-lift ring-1 ring-cream-200">
             <p className="text-xs font-semibold text-ink">Your environment</p>
             <div className="mt-2 space-y-1.5">
