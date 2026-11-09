@@ -98,14 +98,15 @@ export function WelcomeScreen({
           </h1>
 
           <p
-            className="font-sans leading-relaxed"
+            className="animate-fade-in font-sans leading-relaxed"
             style={{
               fontSize: 'clamp(15px, 2.4vw, 17px)',
               color: 'rgba(255,255,255,0.88)',
               textShadow: '0 1px 8px rgba(0,0,0,0.3)',
+              animationDelay: '0.25s',
             }}
           >
-            {introduction || `Welcome to ${resourceName}. Explore our menu with the help of your AI assistant — ask about dishes, ingredients, and allergens, or let us recommend something for you.`}
+            {introduction || `Welcome to ${resourceName}! Discover something you'll love. Explore the menu, find your favourites, and let our AI assistant help you choose.`}
           </p>
 
           <button
