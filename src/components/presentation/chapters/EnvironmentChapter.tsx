@@ -74,7 +74,7 @@ export function EnvironmentChapter() {
           initial={reduce ? false : { opacity: 0, y: 16 }}
           animate={slabInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
           transition={{ duration: 0.6, delay: reduce ? 0 : 0.25, ease: EASE }}
-          className="absolute bottom-9 w-full max-w-[272px] px-5 text-center sm:max-w-80 sm:px-0"
+          className="absolute bottom-9 z-20 w-full max-w-[272px] px-5 text-center sm:max-w-80 sm:px-0"
         >
           <p className="font-display text-sm font-semibold text-ink sm:text-base">
             Different restaurants. Their own identity.
