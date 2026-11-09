@@ -92,10 +92,11 @@ export function EnvironmentChapter() {
               strokeWidth={1.5}
               fill="none"
               strokeLinecap="round"
+              pathLength={100}
               strokeDasharray="4 4"
               vectorEffect="non-scaling-stroke"
-              initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
-              whileInView={{ pathLength: 1 }}
+              initial={reduce ? { strokeDashoffset: 0 } : { strokeDashoffset: 100 }}
+              whileInView={{ strokeDashoffset: 0 }}
               viewport={{ once: true, margin: '-40px' }}
               transition={{ duration: 1.1, delay: reduce ? 0 : 0.9 + i * 0.2, ease: EASE }}
             />
