@@ -111,7 +111,7 @@ export function WelcomeScreen({
           <button
             type="button"
             onClick={onContinue}
-            className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full px-8 py-4 text-base font-semibold text-white shadow-lg transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/40"
+            className="mx-auto mt-4 inline-flex animate-bubble-pulse items-center gap-2 rounded-full px-8 py-4 text-base font-semibold text-white shadow-lg transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/40"
             style={{
               backgroundColor: '#EB7C10',
               boxShadow: '0 8px 24px rgba(235, 124, 16, 0.35)',
