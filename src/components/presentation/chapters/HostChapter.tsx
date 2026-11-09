@@ -1,4 +1,7 @@
-import { motion, useReducedMotion } from 'motion/react';
+import { useRef } from 'react';
+import { motion, useReducedMotion, useInView } from 'motion/react';
+import { Mascot } from 'wobnimo/react';
+import { latte } from 'wobnimo/characters/latte';
 import { ChapterShell, ChapterText } from '../ChapterShell';
 import { EASE } from '../visuals';
 
@@ -97,10 +100,39 @@ export function HostChapter() {
             </motion.div>
           ))}
         </div>
-        <p className="absolute bottom-2 w-full text-center text-xs font-medium text-ink-muted">
-          Your account and your restaurant — created together.
-        </p>
       </div>
+
+      <ClosingMoment />
     </ChapterShell>
+  );
+}
+
+/** Shared closing moment: celebratory Latte mascot beside the wrap-up message,
+ * revealed together when scrolled into view and hidden again when it leaves. */
+function ClosingMoment() {
+  const reduce = useReducedMotion();
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { amount: 0.3 });
+  return (
+    <div ref={ref} className="mt-12">
+      <motion.div
+        initial={reduce ? false : { opacity: 0, y: 24 }}
+        animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
+        transition={{ duration: 0.6, ease: EASE }}
+        className="flex flex-col items-center gap-6 rounded-3xl bg-white p-6 text-center shadow-soft ring-1 ring-cream-200/80 sm:p-8 md:flex-row md:gap-8 md:text-left"
+      >
+        <div aria-hidden className="shrink-0" style={{ width: 128, height: 128 }}>
+          <Mascot
+            character={latte}
+            state={inView ? 'celebrating' : 'listening'}
+            style={{ width: 128, height: 128 }}
+          />
+        </div>
+        <p className="max-w-xl text-base font-medium leading-[1.7] text-ink sm:text-lg">
+          And that's it! Your Host account and restaurant dashboard are ready. You're all set to start
+          building your menu and setting up your restaurant.
+        </p>
+      </motion.div>
+    </div>
   );
 }
