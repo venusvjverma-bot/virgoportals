@@ -10,7 +10,9 @@ import {
   setAutoRenew,
   testCheckout,
   testRenewal,
+  testTopUp,
   type HostSubscription,
+  type PaymentRecord,
   type SubscriptionOverview,
 } from '@/lib/subscriptions';
 import { generateSubscriptionInvoiceBlob, isTestPayment, type SubscriptionInvoiceData } from '@/lib/subscriptionInvoice';
@@ -31,6 +33,17 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
+const PAYMENT_TYPE_LABELS: Record<PaymentRecord['type'], string> = {
+  subscription: 'Subscription',
+  renewal: 'Renewal',
+  topup: 'Top-up',
+};
+
+function paymentItem(p: PaymentRecord): string {
+  if (p.type === 'topup') return `${Math.round(p.credits ?? 0)} credits`;
+  return p.description ?? '—';
+}
+
 interface SubscriptionViewProps {
   portal: RestaurantPortal;
 }
@@ -47,6 +60,7 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [topupSecret, setTopupSecret] = useState('');
 
   const refresh = useCallback(async () => {
     const result = await getSubscriptionOverview();
@@ -94,23 +108,33 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
 
   if (!overview) return null;
 
-  const { subscription, packages, balance, payments } = overview;
+  const { subscription, packages, topupPackages, canPurchaseTopup, balance, payments } = overview;
   const sub = subscription;
   const currentCode = sub?.packageCode ?? '';
   const scheduledCode = sub?.cancelAtPeriodEnd ? null : sub?.scheduledPackageCode ?? null;
   const scheduledPackage = packages.find((p) => p.code === scheduledCode);
   const currentPackage = packages.find((p) => p.code === currentCode);
 
-  function downloadInvoice(p: SubscriptionPayment) {
+  function downloadInvoice(p: PaymentRecord) {
+    const isTopup = p.type === 'topup';
     const inv: SubscriptionInvoiceData = {
-      subscriptionRef: sub ? `sub-${currentCode}-${p.cycleNumber}` : null,
+      title: isTopup ? 'Credit Top-up Invoice' : 'Subscription Invoice',
+      footerNote: isTopup
+        ? 'All top-up prices are in USD. Payment processed by Virgo Portals.'
+        : 'All subscription prices are in USD. Payment processed by Virgo Portals.',
+      subscriptionRef: isTopup
+        ? null
+        : sub
+          ? `sub-${currentCode}-${p.cycleNumber ?? ''}`
+          : null,
       paymentRef: p.paymentRef,
       restaurantName: portal.name,
       ownerEmail: portal.ownerEmail ?? '',
-      packageName: p.packageName ?? currentPackage?.name ?? 'Subscription',
+      lineDescription: isTopup
+        ? `Credit top-up — ${Math.round(p.credits ?? 0)} credits`
+        : `${p.description ?? currentPackage?.name ?? 'Subscription'} plan — monthly (cycle ${p.cycleNumber ?? ''})`,
       amountCents: p.amountCents,
       currency: 'USD',
-      cycleNumber: p.cycleNumber,
       periodStart: sub?.periodStart ?? null,
       periodEnd: sub?.periodEnd ?? null,
       paidAt: p.paidAt ?? p.createdAt,
@@ -119,7 +143,9 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
     const url = URL.createObjectURL(generateSubscriptionInvoiceBlob(inv));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `subscription-invoice-cycle-${p.cycleNumber}${inv.isTest ? '-TEST' : ''}.pdf`;
+    a.download = isTopup
+      ? `topup-invoice-${p.paidAt ?? p.createdAt}${inv.isTest ? '-TEST' : ''}.pdf`
+      : `subscription-invoice-cycle-${p.cycleNumber ?? ''}${inv.isTest ? '-TEST' : ''}.pdf`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -284,6 +310,73 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
         ) : null}
       </section>
 
+      {/* ── Credit top-up ── */}
+      <section className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F4', border: '1px solid #E5DED3' }}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 className="font-display text-lg font-semibold tracking-tight text-ink">Top up credits</h3>
+            <p className="mt-1 text-sm text-ink-muted">
+              Purchase additional credits for your wallet. 1 credit = {TOKENS_PER_CREDIT.toLocaleString()} tokens.
+            </p>
+          </div>
+        </div>
+
+        {!canPurchaseTopup ? (
+          <p className="mt-4 rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-700 ring-1 ring-warning-200">
+            An active subscription is required to purchase top-up credits.
+          </p>
+        ) : (
+          <p className="mt-4 rounded-xl bg-cream-50 px-4 py-3 text-xs leading-relaxed text-ink-muted ring-1 ring-cream-200">
+            Top-up purchases are currently available through the test-payment flow. Enter the test mode secret to simulate a
+            payment — no real money is charged.
+          </p>
+        )}
+
+        {canPurchaseTopup ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              type="password"
+              value={topupSecret}
+              onChange={(e) => setTopupSecret(e.target.value)}
+              placeholder="Test mode secret"
+              className="w-56 rounded-xl border border-cream-300 bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-olive-500"
+            />
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {topupPackages.map((pkg) => (
+            <div
+              key={pkg.code}
+              className="flex flex-col rounded-2xl p-5"
+              style={{ backgroundColor: '#FFFFFF', border: '1px solid #E5DED3' }}
+            >
+              <p className="font-display text-lg font-semibold text-ink">{pkg.name}</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-ink">{Math.round(pkg.credits).toLocaleString()}</p>
+              <p className="text-xs text-ink-faint">credits</p>
+              <p className="mt-3 text-lg font-semibold tabular-nums text-ink">{formatUsd(pkg.priceCents)}</p>
+              <div className="mt-4">
+                <Button
+                  size="sm"
+                  disabled={busy !== null || !canPurchaseTopup || topupSecret.length === 0}
+                  onClick={() =>
+                    run(`topup-${pkg.code}`, async () => {
+                      const result = await testTopUp(pkg.code, topupSecret);
+                      if (!result.ok) {
+                        throw new Error(result.message ?? 'Top-up purchase was not completed.');
+                      }
+                    })
+                  }
+                >
+                  {busy === `topup-${pkg.code}` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Buy
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* ── Controls ── */}
       {sub ? (
         <section className="rounded-2xl p-6" style={{ backgroundColor: '#FAF8F4', border: '1px solid #E5DED3' }}>
@@ -331,7 +424,8 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
               <thead className="bg-cream-50 text-xs uppercase tracking-wide text-ink-faint">
                 <tr>
                   <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Package</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Item</th>
                   <th className="px-4 py-3 font-medium">Amount</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Reference</th>
@@ -340,9 +434,10 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
               </thead>
               <tbody className="divide-y divide-cream-200 bg-white">
                 {payments.map((p, i) => (
-                  <tr key={`${p.cycleNumber}-${i}`}>
+                  <tr key={`${p.type}-${p.createdAt}-${i}`}>
                     <td className="px-4 py-3 text-ink">{formatDate(p.paidAt ?? p.createdAt)}</td>
-                    <td className="px-4 py-3 text-ink">{p.packageName ?? '—'}</td>
+                    <td className="px-4 py-3 text-ink">{PAYMENT_TYPE_LABELS[p.type]}</td>
+                    <td className="px-4 py-3 text-ink">{paymentItem(p)}</td>
                     <td className="px-4 py-3 tabular-nums text-ink">{formatUsd(p.amountCents)}</td>
                     <td className="px-4 py-3">
                       <span

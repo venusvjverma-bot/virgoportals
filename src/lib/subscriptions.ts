@@ -9,16 +9,32 @@ export interface SubscriptionPackage {
   sortOrder: number;
 }
 
-export interface SubscriptionPayment {
-  cycleNumber: number;
+export interface TopupPackage {
+  id: string;
+  code: string;
+  name: string;
+  credits: number;
+  priceCents: number;
+  sortOrder: number;
+}
+
+/** Unified payment record: subscription cycle or credit top-up. */
+export interface PaymentRecord {
+  type: 'subscription' | 'renewal' | 'topup';
+  description: string | null;
+  credits: number | null;
+  cycleNumber: number | null;
   amountCents: number;
   status: 'pending' | 'succeeded' | 'failed';
-  packageName?: string | null;
   paymentRef: string | null;
   invoiceUrl: string | null;
   paidAt: string | null;
   createdAt: string;
 }
+
+// Backward-compatible alias for the subscription payments previously used by
+// callers that only dealt with subscription cycle rows.
+export type SubscriptionPayment = PaymentRecord;
 
 export interface HostSubscription {
   status: 'incomplete' | 'active' | 'payment_failed' | 'canceled' | 'expired';
@@ -36,9 +52,11 @@ export interface HostSubscription {
 
 export interface SubscriptionOverview {
   packages: SubscriptionPackage[];
+  topupPackages: TopupPackage[];
+  canPurchaseTopup: boolean;
   subscription: HostSubscription | null;
   balance: number;
-  payments: SubscriptionPayment[];
+  payments: PaymentRecord[];
 }
 
 export async function getSubscriptionOverview(): Promise<SubscriptionOverview> {
@@ -73,7 +91,7 @@ export interface AdminSubscriptionRow {
   cancelAtPeriodEnd: boolean;
   nextRenewal: string | null;
   balance: number;
-  payments: SubscriptionPayment[];
+  payments: PaymentRecord[];
 }
 
 export async function adminListSubscriptions(): Promise<AdminSubscriptionRow[]> {
@@ -92,9 +110,11 @@ export interface TestModeResult {
   simulated: string;
   balance?: number;
   cycle?: number;
+  credits?: number;
   periodEnd?: string;
   expiredCount?: number;
   message?: string;
+  testRef?: string;
 }
 
 export async function testCheckout(packageCode: string, testSecret: string, fail = false): Promise<TestModeResult> {
@@ -107,4 +127,8 @@ export async function testRenewal(testSecret: string, opts: { fail?: boolean; fo
 
 export async function testExpireNow(testSecret: string): Promise<TestModeResult> {
   return callFunction<TestModeResult>('subscription-api', { action: 'testExpireNow', testSecret });
+}
+
+export async function testTopUp(packageCode: string, testSecret: string): Promise<TestModeResult> {
+  return callFunction<TestModeResult>('subscription-api', { action: 'testTopUp', packageCode, testSecret });
 }

@@ -1,20 +1,22 @@
 import { jsPDF } from 'jspdf';
 
 /**
- * The single subscription invoice design, shared by real and test payments.
- * The ONLY difference for test payments is the prominent TEST label
- * (`isTest`), driven by the payment's provider/reference.
+ * The single payment invoice design, shared by subscription, renewal, and
+ * credit top-up payments. The ONLY differences are the subtitle/footer text
+ * and the description line; the layout is identical for all payment types.
+ * Test payments additionally render the prominent TEST label (`isTest`).
  */
 
 export interface SubscriptionInvoiceData {
+  title?: string;
+  footerNote?: string;
   subscriptionRef: string | null;
   paymentRef: string | null;
   restaurantName: string;
   ownerEmail: string;
-  packageName: string;
+  lineDescription: string;
   amountCents: number;
   currency: string;
-  cycleNumber: number;
   periodStart: string | null;
   periodEnd: string | null;
   paidAt: string | null;
@@ -42,7 +44,7 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
     doc.line(margin, y, right, y);
   };
 
-  // TEST banner — the only difference from a real invoice
+  // TEST banner — the only visual difference from a real invoice
   if (inv.isTest) {
     doc.setFillColor(250, 246, 232);
     doc.rect(margin, y - 6, pageW - margin * 2, 12, 'F');
@@ -60,7 +62,7 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
   y += 6;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  doc.text('Subscription Invoice', margin, y);
+  doc.text(inv.title ?? 'Subscription Invoice', margin, y);
   y += 10;
   sep();
   y += 8;
@@ -83,7 +85,7 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
   doc.text('Amount', right, y, { align: 'right' });
   y += 6;
   doc.setFont('helvetica', 'normal');
-  doc.text(`${inv.packageName} plan — monthly (cycle ${inv.cycleNumber})`, margin, y);
+  doc.text(inv.lineDescription, margin, y);
   doc.text(usd(inv.amountCents), right, y, { align: 'right' });
   y += 5;
   doc.setFontSize(8.5);
@@ -108,7 +110,7 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text('All subscription prices are in USD. Payment processed by Virgo Portals.', margin, y);
+  doc.text(inv.footerNote ?? 'All subscription prices are in USD. Payment processed by Virgo Portals.', margin, y);
   return y;
 }
 

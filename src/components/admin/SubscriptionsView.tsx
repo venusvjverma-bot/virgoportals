@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
-import { adminListSubscriptions, type AdminSubscriptionRow, type SubscriptionPayment } from '@/lib/subscriptions';
+import { adminListSubscriptions, type AdminSubscriptionRow, type PaymentRecord } from '@/lib/subscriptions';
 import { generateSubscriptionInvoiceBlob, isTestPayment, type SubscriptionInvoiceData } from '@/lib/subscriptionInvoice';
 
 function formatUsd(cents: number | null | undefined): string {
@@ -17,21 +17,38 @@ const STATUS_LABELS: Record<AdminSubscriptionRow['status'], string> = {
   expired: 'Expired',
 };
 
+const PAYMENT_TYPE_LABELS: Record<PaymentRecord['type'], string> = {
+  subscription: 'Subscription',
+  renewal: 'Renewal',
+  topup: 'Top-up',
+};
+
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
-function downloadInvoice(row: AdminSubscriptionRow, p: SubscriptionPayment) {
+function paymentItem(p: PaymentRecord, row: AdminSubscriptionRow): string {
+  if (p.type === 'topup') return `${Math.round(p.credits ?? 0)} credits`;
+  return p.description ?? row.packageName ?? '—';
+}
+
+function downloadInvoice(row: AdminSubscriptionRow, p: PaymentRecord) {
+  const isTopup = p.type === 'topup';
   const inv: SubscriptionInvoiceData = {
-    subscriptionRef: row.packageCode ? `sub-${row.packageCode}-${p.cycleNumber}` : null,
+    title: isTopup ? 'Credit Top-up Invoice' : 'Subscription Invoice',
+    footerNote: isTopup
+      ? 'All top-up prices are in USD. Payment processed by Virgo Portals.'
+      : 'All subscription prices are in USD. Payment processed by Virgo Portals.',
+    subscriptionRef: isTopup ? null : row.packageCode ? `sub-${row.packageCode}-${p.cycleNumber ?? ''}` : null,
     paymentRef: p.paymentRef,
     restaurantName: row.restaurantName,
     ownerEmail: row.ownerEmail,
-    packageName: p.packageName ?? row.packageName ?? 'Subscription',
+    lineDescription: isTopup
+      ? `Credit top-up — ${Math.round(p.credits ?? 0)} credits`
+      : `${p.description ?? row.packageName ?? 'Subscription'} plan — monthly (cycle ${p.cycleNumber ?? ''})`,
     amountCents: p.amountCents,
     currency: 'USD',
-    cycleNumber: p.cycleNumber,
     periodStart: row.periodStart,
     periodEnd: row.periodEnd,
     paidAt: p.paidAt ?? p.createdAt,
@@ -40,7 +57,9 @@ function downloadInvoice(row: AdminSubscriptionRow, p: SubscriptionPayment) {
   const url = URL.createObjectURL(generateSubscriptionInvoiceBlob(inv));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `subscription-invoice-cycle-${p.cycleNumber}${inv.isTest ? '-TEST' : ''}.pdf`;
+  a.download = isTopup
+    ? `topup-invoice-${p.paidAt ?? p.createdAt}${inv.isTest ? '-TEST' : ''}.pdf`
+    : `subscription-invoice-cycle-${p.cycleNumber ?? ''}${inv.isTest ? '-TEST' : ''}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -144,7 +163,8 @@ export function SubscriptionsView() {
                 <thead className="bg-cream-50 text-xs uppercase tracking-wide text-ink-faint">
                   <tr>
                     <th className="px-4 py-2 font-medium">Date</th>
-                    <th className="px-4 py-2 font-medium">Package</th>
+                    <th className="px-4 py-2 font-medium">Type</th>
+                    <th className="px-4 py-2 font-medium">Item</th>
                     <th className="px-4 py-2 font-medium">Amount</th>
                     <th className="px-4 py-2 font-medium">Status</th>
                     <th className="px-4 py-2 font-medium">Reference</th>
@@ -153,9 +173,10 @@ export function SubscriptionsView() {
                 </thead>
                 <tbody className="divide-y divide-cream-200 bg-white">
                   {row.payments.map((p, i) => (
-                    <tr key={`${row.subscriptionId}-${p.cycleNumber}-${i}`}>
+                    <tr key={`${row.subscriptionId}-${p.type}-${p.createdAt}-${i}`}>
                       <td className="px-4 py-2 text-ink">{formatDate(p.paidAt ?? p.createdAt)}</td>
-                      <td className="px-4 py-2 text-ink">{p.packageName ?? '—'}</td>
+                      <td className="px-4 py-2 text-ink">{PAYMENT_TYPE_LABELS[p.type]}</td>
+                      <td className="px-4 py-2 text-ink">{paymentItem(p, row)}</td>
                       <td className="px-4 py-2 tabular-nums text-ink">{formatUsd(p.amountCents)}</td>
                       <td className="px-4 py-2 text-ink">{p.status}</td>
                       <td className="px-4 py-2 font-mono text-xs text-ink-muted">{p.paymentRef ?? '—'}</td>

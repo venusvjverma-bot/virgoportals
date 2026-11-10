@@ -124,6 +124,19 @@ async function getOwnedRestaurant(supabase: Db, userId: string): Promise<string 
   return (data as { id: string } | null)?.id ?? null;
 }
 
+/** Top-ups require an active paid subscription whose period has not yet ended. */
+async function canPurchaseTopup(supabase: Db, restaurantId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('host_subscriptions')
+    .select('status, period_end')
+    .eq('restaurant_id', restaurantId)
+    .maybeSingle();
+  if (error) throw error;
+  const sub = data as { status: string; period_end: string | null } | null;
+  if (!sub || sub.status !== 'active') return false;
+  return !(sub.period_end && sub.period_end <= new Date().toISOString());
+}
+
 async function isAdminUser(supabase: Db, userId: string): Promise<boolean> {
   const { data, error } = await supabase
     .from('admin_users')
@@ -162,6 +175,60 @@ function toPublicPackage(row: PackageRow) {
     priceCents: Number(row.price_cents ?? 0),
     credits: Number(row.credits ?? 0),
     sortOrder: Number(row.sort_order ?? 0),
+  };
+}
+
+interface TopupPackageRow {
+  id: string;
+  code: string;
+  name: string;
+  credits: string | number | null;
+  price_cents: number | null;
+  sort_order?: number;
+}
+
+function toPublicTopupPackage(row: TopupPackageRow) {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    credits: Number(row.credits ?? 0),
+    priceCents: Number(row.price_cents ?? 0),
+    sortOrder: Number(row.sort_order ?? 0),
+  };
+}
+
+/** Unified payment record across subscription cycles and credit top-ups. */
+function subPaymentRecord(p: Record<string, unknown>, pkgName: string | null): Record<string, unknown> {
+  const cycle = Number(p.cycle_number);
+  return {
+    type: cycle === 1 ? 'subscription' : 'renewal',
+    description: pkgName,
+    credits: null,
+    cycleNumber: cycle,
+    amountCents: p.amount_cents,
+    status: p.status,
+    paymentRef: p.provider_payment_ref,
+    invoiceUrl: p.provider_invoice_url,
+    provider: p.provider,
+    paidAt: p.paid_at,
+    createdAt: p.created_at,
+  };
+}
+
+function topupPaymentRecord(t: Record<string, unknown>, pkgName: string | null): Record<string, unknown> {
+  return {
+    type: 'topup',
+    description: pkgName,
+    credits: Number(t.credits),
+    cycleNumber: null,
+    amountCents: t.amount_cents,
+    status: t.status,
+    paymentRef: t.provider_payment_ref,
+    invoiceUrl: t.provider_invoice_url,
+    provider: t.provider,
+    paidAt: t.paid_at,
+    createdAt: t.created_at,
   };
 }
 
@@ -323,6 +390,18 @@ Deno.serve(async (req: Request) => {
         .order('created_at', { ascending: false });
       if (payError) throw payError;
 
+      const { data: topuppayments, error: topupPayError } = await supabase
+        .from('credit_topup_payments')
+        .select('restaurant_id, credits, amount_cents, status, package_id, provider_payment_ref, provider_invoice_url, paid_at, created_at')
+        .order('created_at', { ascending: false });
+      if (topupPayError) throw topupPayError;
+
+      const { data: topupNames, error: topupNameError } = await supabase
+        .from('credit_topup_packages')
+        .select('id, name');
+      if (topupNameError) throw topupNameError;
+      const topupNameMap = new Map(((topupNames ?? []) as Array<{ id: string; name: string }>).map((t) => [t.id, t.name]));
+
       const rows = (subs ?? []) as Array<Record<string, unknown>>;
       const out = rows.map((row) => {
         const restaurant = row.restaurants as { owner_id: string; name: string; owner_email: string };
@@ -344,18 +423,14 @@ Deno.serve(async (req: Request) => {
           cancelAtPeriodEnd: row.cancel_at_period_end,
           nextRenewal: row.status === 'active' && row.auto_renew === true && row.cancel_at_period_end === false ? row.period_end : null,
           balance: balanceMap.get(row.restaurant_id) ?? 0,
-          payments: ((payments ?? []) as Array<Record<string, unknown>>)
-            .filter((p) => p.subscription_id === row.id)
-            .map((p) => ({
-              cycleNumber: p.cycle_number,
-              amountCents: p.amount_cents,
-              status: p.status,
-              packageName: pkgMap.get(p.package_id as string)?.name ?? null,
-              paymentRef: p.provider_payment_ref,
-              invoiceUrl: p.provider_invoice_url,
-              paidAt: p.paid_at,
-              createdAt: p.created_at,
-            })),
+          payments: [
+            ...((payments ?? []) as Array<Record<string, unknown>>)
+              .filter((p) => p.subscription_id === row.id)
+              .map((p) => subPaymentRecord(p, pkgMap.get(p.package_id as string)?.name ?? null)),
+            ...((topuppayments ?? []) as Array<Record<string, unknown>>)
+              .filter((t) => t.restaurant_id === row.restaurant_id)
+              .map((t) => topupPaymentRecord(t, topupNameMap.get(t.package_id as string)?.name ?? null)),
+          ].sort((a, b) => (b.createdAt as string).localeCompare(a.createdAt as string)),
         };
       });
       return json({ subscriptions: out });
@@ -366,7 +441,7 @@ Deno.serve(async (req: Request) => {
     if (!restaurantId) return json({ error: 'This account does not own a restaurant portal.' }, 403);
 
     if (action === 'getSubscription') {
-      const [{ data: packages, error: pkgError }, { data: sub, error: subError }] = await Promise.all([
+      const [{ data: packages, error: pkgError }, { data: sub, error: subError }, { data: topupPkgs, error: topupPkgError }] = await Promise.all([
         supabase.from('subscription_packages').select('id, code, name, price_cents, credits, sort_order').eq('is_active', true).order('sort_order'),
         supabase
           .from('host_subscriptions')
@@ -377,33 +452,64 @@ Deno.serve(async (req: Request) => {
           )
           .eq('restaurant_id', restaurantId)
           .maybeSingle(),
+        supabase.from('credit_topup_packages').select('id, code, name, credits, price_cents, sort_order').eq('is_active', true).order('sort_order'),
       ]);
       if (pkgError) throw pkgError;
       if (subError) throw subError;
+      if (topupPkgError) throw topupPkgError;
 
       const { data: balanceData, error: balanceError } = await supabase.rpc('check_host_credit', {
         p_restaurant_id: restaurantId,
       });
       if (balanceError) throw balanceError;
 
-      let payments: Array<Record<string, unknown>> = [];
-      if (sub) {
-        const { data: payRows, error: payError } = await supabase
-          .from('subscription_payments')
-          .select('cycle_number, amount_cents, status, package_id, provider_payment_ref, provider_invoice_url, paid_at, created_at')
-          .eq('subscription_id', (sub as Record<string, unknown>).id as string)
-          .order('cycle_number', { ascending: false });
-        if (payError) throw payError;
-        const pkgCodeMap = new Map(((packages ?? []) as Array<{ id: string; code: string; name: string }>).map((p) => [p.id, p]));
-        payments = ((payRows ?? []) as Array<Record<string, unknown>>).map((p) => ({
-          ...p,
-          packageName: pkgCodeMap.get(p.package_id as string)?.name ?? null,
-        }));
-      }
+      const topupPackages = ((topupPkgs ?? []) as TopupPackageRow[]).map(toPublicTopupPackage);
+      const canPurchase = await canPurchaseTopup(supabase, restaurantId);
 
       const subRow = (sub ?? null) as Record<string, unknown> | null;
+      const subId = subRow?.id as string | undefined;
+
+      // Unified, chronologically-ordered payment history across subscription
+      // cycles and credit top-ups (top-ups are scoped to restaurant, not cycle).
+      const [subPayRes, topupPayRes, topupPkgNameRes] = await Promise.all([
+        subId
+          ? supabase
+              .from('subscription_payments')
+              .select('cycle_number, amount_cents, status, package_id, provider, provider_payment_ref, provider_invoice_url, paid_at, created_at')
+              .eq('subscription_id', subId)
+          : Promise.resolve({ data: [], error: null }),
+        supabase
+          .from('credit_topup_payments')
+          .select('credits, amount_cents, status, package_id, provider, provider_payment_ref, provider_invoice_url, paid_at, created_at')
+          .eq('restaurant_id', restaurantId),
+        supabase.from('credit_topup_packages').select('id, name'),
+      ]);
+      if (subPayRes.error) throw subPayRes.error;
+      if (topupPayRes.error) throw topupPayRes.error;
+      if (topupPkgNameRes.error) throw topupPkgNameRes.error;
+
+      const pkgCodeMap = new Map(((packages ?? []) as Array<{ id: string; name: string }>).map((p) => [p.id, p]));
+      const topupNameMap = new Map(
+        ((topupPkgNameRes.data ?? []) as Array<{ id: string; name: string }>).map((t) => [t.id, t.name])
+      );
+
+      const payments: Array<Record<string, unknown>> = [
+        ...((subPayRes.data ?? []) as Array<Record<string, unknown>>).map((p) =>
+          subPaymentRecord(p, pkgCodeMap.get(p.package_id as string)?.name ?? null)
+        ),
+        ...((topupPayRes.data ?? []) as Array<Record<string, unknown>>).map((t) =>
+          topupPaymentRecord(t, topupNameMap.get(t.package_id as string)?.name ?? null)
+        ),
+      ].sort((a, b) => {
+        const aTime = (a.createdAt as string) ?? '';
+        const bTime = (b.createdAt as string) ?? '';
+        return bTime.localeCompare(aTime);
+      });
+
       return json({
         packages: ((packages ?? []) as PackageRow[]).map(toPublicPackage),
+        topupPackages,
+        canPurchaseTopup: canPurchase,
         subscription: subRow
           ? {
               status: subRow.status,
@@ -423,16 +529,7 @@ Deno.serve(async (req: Request) => {
             }
           : null,
         balance: Number(balanceData ?? 0),
-        payments: payments.map((p) => ({
-          cycleNumber: p.cycle_number,
-          amountCents: p.amount_cents,
-          status: p.status,
-          packageName: (p as { packageName?: string | null }).packageName ?? null,
-          paymentRef: p.provider_payment_ref,
-          invoiceUrl: p.provider_invoice_url,
-          paidAt: p.paid_at,
-          createdAt: p.created_at,
-        })),
+        payments,
       });
     }
 
@@ -494,7 +591,7 @@ Deno.serve(async (req: Request) => {
     const providedTestSecret = String(body?.testSecret ?? '');
     const testAuthorized = testSecret !== null && providedTestSecret === testSecret;
 
-    if (action === 'testCheckout' || action === 'testRenewal' || action === 'testExpireNow') {
+    if (action === 'testCheckout' || action === 'testRenewal' || action === 'testExpireNow' || action === 'testTopUp') {
       if (!testAuthorized) {
         return json({ error: 'Test mode is not enabled or the test secret is invalid.' }, 503);
       }
@@ -677,6 +774,44 @@ Deno.serve(async (req: Request) => {
       if (allocError) throw allocError;
       const [allocated, newBalance, periodEnd] = alloc as [boolean, string, string];
       return json({ ok: allocated, simulated: 'succeeded', cycle, balance: Number(newBalance), periodEnd });
+    }
+
+    if (action === 'testTopUp') {
+      // Simulated one-off top-up purchase. Reuses the mock test provider and
+      // test_-prefixed refs, and drives the REAL allocate_topup_credits path
+      // (same eligibility + idempotency + wallet integration as production).
+      const packageCode = String(body?.packageCode ?? '');
+
+      const { data: pkg, error: pkgError } = await supabase
+        .from('credit_topup_packages')
+        .select('id, code, credits, price_cents')
+        .eq('code', packageCode)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (pkgError) throw pkgError;
+      if (!pkg) return json({ error: 'That top-up package is not available.' }, 400);
+
+      const ref = `test_topup_${crypto.randomUUID()}`;
+      const { data: alloc, error: allocError } = await supabase.rpc('allocate_topup_credits', {
+        p_restaurant_id: restaurantId,
+        p_package_id: (pkg as { id: string }).id,
+        p_provider: TEST_PROVIDER,
+        p_provider_payment_ref: ref,
+      });
+      if (allocError) {
+        return json({ error: allocError.message }, 400);
+      }
+      const [allocated, newBalance] = alloc as [boolean, string];
+      if (!allocated) {
+        return json({ ok: false, simulated: 'duplicate', message: 'This payment was already processed.' });
+      }
+      return json({
+        ok: true,
+        simulated: 'succeeded',
+        balance: Number(newBalance),
+        credits: Number((pkg as { credits: string }).credits),
+        testRef: ref,
+      });
     }
 
     if (action === 'testExpireNow') {
