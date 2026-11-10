@@ -13,6 +13,7 @@ import {
   type HostSubscription,
   type SubscriptionOverview,
 } from '@/lib/subscriptions';
+import { generateSubscriptionInvoiceBlob, isTestPayment, type SubscriptionInvoiceData } from '@/lib/subscriptionInvoice';
 import type { RestaurantPortal } from '@/types';
 
 const TOKENS_PER_CREDIT = 900000;
@@ -99,6 +100,29 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
   const scheduledCode = sub?.cancelAtPeriodEnd ? null : sub?.scheduledPackageCode ?? null;
   const scheduledPackage = packages.find((p) => p.code === scheduledCode);
   const currentPackage = packages.find((p) => p.code === currentCode);
+
+  function downloadInvoice(p: SubscriptionPayment) {
+    const inv: SubscriptionInvoiceData = {
+      subscriptionRef: sub ? `sub-${currentCode}-${p.cycleNumber}` : null,
+      paymentRef: p.paymentRef,
+      restaurantName: portal.name,
+      ownerEmail: portal.ownerEmail ?? '',
+      packageName: p.packageName ?? currentPackage?.name ?? 'Subscription',
+      amountCents: p.amountCents,
+      currency: 'USD',
+      cycleNumber: p.cycleNumber,
+      periodStart: sub?.periodStart ?? null,
+      periodEnd: sub?.periodEnd ?? null,
+      paidAt: p.paidAt ?? p.createdAt,
+      isTest: isTestPayment(p.paymentRef),
+    };
+    const url = URL.createObjectURL(generateSubscriptionInvoiceBlob(inv));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `subscription-invoice-cycle-${p.cycleNumber}${inv.isTest ? '-TEST' : ''}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="mt-6 space-y-6">
@@ -347,6 +371,15 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
                           <Download className="h-3.5 w-3.5" />
                           Receipt
                         </a>
+                      ) : p.status === 'succeeded' ? (
+                        <button
+                          type="button"
+                          onClick={() => downloadInvoice(p)}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-olive-700 hover:underline"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Invoice
+                        </button>
                       ) : (
                         <span className="text-xs text-ink-faint">—</span>
                       )}

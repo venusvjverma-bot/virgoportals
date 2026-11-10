@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
-import { adminListSubscriptions, type AdminSubscriptionRow } from '@/lib/subscriptions';
+import { adminListSubscriptions, type AdminSubscriptionRow, type SubscriptionPayment } from '@/lib/subscriptions';
+import { generateSubscriptionInvoiceBlob, isTestPayment, type SubscriptionInvoiceData } from '@/lib/subscriptionInvoice';
 
 function formatUsd(cents: number | null | undefined): string {
   if (typeof cents !== 'number' || !Number.isFinite(cents) || cents < 0) return '—';
@@ -19,6 +20,29 @@ const STATUS_LABELS: Record<AdminSubscriptionRow['status'], string> = {
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+function downloadInvoice(row: AdminSubscriptionRow, p: SubscriptionPayment) {
+  const inv: SubscriptionInvoiceData = {
+    subscriptionRef: row.packageCode ? `sub-${row.packageCode}-${p.cycleNumber}` : null,
+    paymentRef: p.paymentRef,
+    restaurantName: row.restaurantName,
+    ownerEmail: row.ownerEmail,
+    packageName: p.packageName ?? row.packageName ?? 'Subscription',
+    amountCents: p.amountCents,
+    currency: 'USD',
+    cycleNumber: p.cycleNumber,
+    periodStart: row.periodStart,
+    periodEnd: row.periodEnd,
+    paidAt: p.paidAt ?? p.createdAt,
+    isTest: isTestPayment(p.paymentRef),
+  };
+  const url = URL.createObjectURL(generateSubscriptionInvoiceBlob(inv));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `subscription-invoice-cycle-${p.cycleNumber}${inv.isTest ? '-TEST' : ''}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function SubscriptionsView() {
@@ -124,6 +148,7 @@ export function SubscriptionsView() {
                     <th className="px-4 py-2 font-medium">Amount</th>
                     <th className="px-4 py-2 font-medium">Status</th>
                     <th className="px-4 py-2 font-medium">Reference</th>
+                    <th className="px-4 py-2 font-medium sr-only">Invoice</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-cream-200 bg-white">
@@ -134,6 +159,28 @@ export function SubscriptionsView() {
                       <td className="px-4 py-2 tabular-nums text-ink">{formatUsd(p.amountCents)}</td>
                       <td className="px-4 py-2 text-ink">{p.status}</td>
                       <td className="px-4 py-2 font-mono text-xs text-ink-muted">{p.paymentRef ?? '—'}</td>
+                      <td className="px-4 py-2">
+                        {p.status === 'succeeded' && p.invoiceUrl ? (
+                          <a
+                            href={p.invoiceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-olive-700 hover:underline"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Receipt
+                          </a>
+                        ) : p.status === 'succeeded' ? (
+                          <button
+                            type="button"
+                            onClick={() => downloadInvoice(row, p)}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-olive-700 hover:underline"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Invoice
+                          </button>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
