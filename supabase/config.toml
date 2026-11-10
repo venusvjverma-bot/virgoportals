@@ -21,3 +21,6 @@ verify_jwt = false
 
 [functions.print-queue]
 verify_jwt = false
+
+[functions.subscription-api]
+verify_jwt = false

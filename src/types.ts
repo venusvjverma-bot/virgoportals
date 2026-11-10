@@ -185,9 +185,10 @@ export interface UsageRow {
   messages: number;
 }
 
-export type AdminView = 'home' | 'hosts' | 'credits' | 'chat' | 'image' | 'bot' | 'usage' | 'theme';
+export type AdminView = 'home' | 'hosts' | 'credits' | 'subscriptions' | 'chat' | 'image' | 'bot' | 'usage' | 'theme';
 export type HostView =
   | 'dashboard'
+  | 'subscription'
   | 'departments'
   | 'events'
   | 'orders'

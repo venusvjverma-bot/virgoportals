@@ -4,6 +4,7 @@ import { Sidebar, Topbar } from '@/components/admin/AdminShell';
 import { HomeView } from '@/components/admin/HomeView';
 import { HostsView } from '@/components/admin/HostsView';
 import { CreditsView } from '@/components/admin/CreditsView';
+import { SubscriptionsView } from '@/components/admin/SubscriptionsView';
 import { ModelConfigView, type TestResult } from '@/components/admin/ModelConfigView';
 import { BotTextView } from '@/components/admin/BotTextView';
 import { UsageView } from '@/components/admin/UsageView';
@@ -32,6 +33,7 @@ const TITLES: Record<AdminView, { title: string; subtitle: string }> = {
   home: { title: 'Home', subtitle: 'A quick read on how every portal is doing.' },
   hosts: { title: 'Hosts', subtitle: 'Every restaurant with a Virgo portal.' },
   credits: { title: 'Credit Controller', subtitle: 'Manage LLM credits for every host.' },
+  subscriptions: { title: 'Subscriptions', subtitle: 'Read-only monitoring of host subscriptions and payments.' },
   chat: { title: 'Chat model', subtitle: 'One model behind every host conversation.' },
   image: { title: 'Image model', subtitle: 'Dish image generation settings.' },
   bot: { title: 'Default bot text', subtitle: 'The prompt new hosts start from.' },
@@ -180,6 +182,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
               />
             ) : null}
             {view === 'credits' ? <CreditsView /> : null}
+            {view === 'subscriptions' ? <SubscriptionsView /> : null}
             {view === 'chat' ? (
               <ModelConfigView
                 kind="chat"

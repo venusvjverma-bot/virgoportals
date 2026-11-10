@@ -4,6 +4,7 @@ import { HostShell } from '@/components/host/HostShell';
 import { RestaurantView } from '@/components/host/RestaurantView';
 import { LlmUsageView } from '@/components/host/LlmUsageView';
 import { CreditWalletView } from '@/components/host/CreditWalletView';
+import { SubscriptionView } from '@/components/host/SubscriptionView';
 import { DepartmentsView } from '@/components/host/DepartmentsView';
 import { EventsView } from '@/components/host/EventsView';
 import { ResourceDetail } from '@/components/host/ResourceDetail';
@@ -136,6 +137,8 @@ export function HostDashboard({ onLogout }: HostDashboardProps) {
           <LlmUsageView portal={portal} />
         </>
       ) : null}
+
+      {view === 'subscription' ? <SubscriptionView portal={portal} /> : null}
 
       {view === 'departments' ? (
         <DepartmentsView

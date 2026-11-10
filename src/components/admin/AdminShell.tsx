@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Coins,
+  CreditCard,
   FileText,
   Home,
   ImageIcon,
@@ -26,6 +27,7 @@ const NAV: NavItem[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'hosts', label: 'Hosts', icon: Users },
   { id: 'credits', label: 'Credit Controller', icon: Coins },
+  { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
   { id: 'chat', label: 'Chat model', icon: Sparkles },
   { id: 'image', label: 'Image model', icon: ImageIcon },
   { id: 'bot', label: 'Default bot text', icon: FileText },
