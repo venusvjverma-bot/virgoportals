@@ -82,3 +82,29 @@ export async function adminListSubscriptions(): Promise<AdminSubscriptionRow[]> 
   });
   return result.subscriptions;
 }
+
+// ── TEST-MODE ONLY (secret-gated; secret is never exposed to the frontend) ──
+// The test secret is prompted from the operator at runtime and sent to the
+// server, which validates it against SUBSCRIPTION_TEST_MODE_SECRET.
+
+export interface TestModeResult {
+  ok: boolean;
+  simulated: string;
+  balance?: number;
+  cycle?: number;
+  periodEnd?: string;
+  expiredCount?: number;
+  message?: string;
+}
+
+export async function testCheckout(packageCode: string, testSecret: string, fail = false): Promise<TestModeResult> {
+  return callFunction<TestModeResult>('subscription-api', { action: 'testCheckout', packageCode, testSecret, fail });
+}
+
+export async function testRenewal(testSecret: string, opts: { fail?: boolean; forceDue?: boolean } = {}): Promise<TestModeResult> {
+  return callFunction<TestModeResult>('subscription-api', { action: 'testRenewal', testSecret, ...opts });
+}
+
+export async function testExpireNow(testSecret: string): Promise<TestModeResult> {
+  return callFunction<TestModeResult>('subscription-api', { action: 'testExpireNow', testSecret });
+}

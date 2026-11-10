@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, CreditCard, Download, Loader2, RefreshCw, Repeat, XCircle } from 'lucide-react';
+import { Beaker, CalendarDays, CreditCard, Download, Loader2, RefreshCw, Repeat, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Notice } from '@/components/ui/Notice';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -8,6 +8,8 @@ import {
   changeScheduledPackage,
   getSubscriptionOverview,
   setAutoRenew,
+  testCheckout,
+  testRenewal,
   type HostSubscription,
   type SubscriptionOverview,
 } from '@/lib/subscriptions';
@@ -372,6 +374,101 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
         {sub?.periodEnd ? ` (${formatDate(sub.periodEnd)})` : ''}. No further payments will be taken, and unused
         credits stay in your wallet.
       </ConfirmDialog>
+
+      {/* ── TEST-MODE ONLY: simulated payments, secret-gated server-side ── */}
+      <TestPanel onDone={refresh} />
     </div>
+  );
+}
+
+function TestPanel({ onDone }: { onDone: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [secret, setSecret] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  async function run(key: string, fn: () => Promise<{ ok: boolean; simulated?: string; balance?: number; cycle?: number; message?: string }>) {
+    setBusy(key);
+    setResult(null);
+    setFailed(false);
+    try {
+      const r = await fn();
+      setFailed(!r.ok);
+      setResult(r.message ?? `Simulated ${r.simulated ?? 'done'}${r.cycle ? ` (cycle ${r.cycle})` : ''}${r.balance !== undefined ? ` — balance ${r.balance}` : ''}`);
+      await onDone();
+    } catch (err) {
+      setFailed(true);
+      setResult(err instanceof Error ? err.message : 'Test action failed.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="mt-2 flex justify-end">
+        <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+          <Beaker className="h-4 w-4" />
+          Test payments
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <section className="rounded-2xl p-6" style={{ backgroundColor: '#FDF6EC', border: '1px dashed #D9A441' }}>
+      <div className="flex items-center justify-between">
+        <h3 className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-ink">
+          <Beaker className="h-4 w-4" />
+          Test payments (no real charge)
+        </h3>
+        <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>Hide</Button>
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-ink-muted">
+        Simulates payment confirmation through the real activation and credit-allocation workflow.
+        Test records are marked with provider “mock-test”. The server only allows this when test mode is enabled.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          type="password"
+          value={secret}
+          onChange={(e) => setSecret(e.target.value)}
+          placeholder="Test mode secret"
+          className="w-56 rounded-xl border border-cream-300 bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-olive-500"
+        />
+        <Button
+          size="sm"
+          disabled={busy !== null || secret.length === 0}
+          onClick={() => run('checkout', () => testCheckout('starter', secret))}
+        >
+          {busy === 'checkout' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Simulate Starter checkout
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={busy !== null || secret.length === 0}
+          onClick={() => run('renew', () => testRenewal(secret, { forceDue: true }))}
+        >
+          {busy === 'renew' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Simulate successful renewal
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={busy !== null || secret.length === 0}
+          onClick={() => run('renew-fail', () => testRenewal(secret, { fail: true, forceDue: true }))}
+        >
+          {busy === 'renew-fail' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Simulate failed renewal
+        </Button>
+      </div>
+      {result ? (
+        <div className="mt-3">
+          <Notice tone={failed ? 'error' : 'success'}>{result}</Notice>
+        </div>
+      ) : null}
+    </section>
   );
 }

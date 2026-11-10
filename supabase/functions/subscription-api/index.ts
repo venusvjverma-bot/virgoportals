@@ -77,6 +77,34 @@ function getAdapter(): PaymentAdapter | null {
   return null;
 }
 
+// ── Test-mode mock adapter ──────────────────────────────────────────────────
+// Never used for real payments. Only active when SUBSCRIPTION_TEST_MODE_SECRET
+// is configured, and every test action additionally requires that secret.
+// All records are marked provider 'mock-test' with 'test_'-prefixed refs.
+
+const TEST_PROVIDER = 'mock-test';
+
+class MockTestAdapter implements PaymentAdapter {
+  readonly providerName = TEST_PROVIDER;
+  async verifyWebhook(): Promise<WebhookEvent | null> {
+    return null; // webhooks are never simulated
+  }
+  async chargeRenewal(args: { cycleNumber: number }): Promise<{ ok: boolean; paymentRef: string | null; invoiceUrl: string | null }> {
+    return { ok: true, paymentRef: `test_pay_${args.cycleNumber}_${crypto.randomUUID()}`, invoiceUrl: null };
+  }
+  async createSubscription(): Promise<{ subscriptionRef: string; checkoutUrl: string | null }> {
+    return { subscriptionRef: `test_sub_${crypto.randomUUID()}`, checkoutUrl: null };
+  }
+}
+
+function testModeSecret(): string | null {
+  return Deno.env.get('SUBSCRIPTION_TEST_MODE_SECRET') ?? null;
+}
+
+function getTestAdapter(): PaymentAdapter | null {
+  return testModeSecret() ? new MockTestAdapter() : null;
+}
+
 async function verifyUser(supabase: Db, req: Request): Promise<string | null> {
   const header = req.headers.get('Authorization') ?? '';
   const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
@@ -455,6 +483,221 @@ Deno.serve(async (req: Request) => {
         .eq('restaurant_id', restaurantId);
       if (error) throw error;
       return json({ ok: true });
+    }
+
+    // ── TEST-MODE ONLY actions ──────────────────────────────────────────────
+    // Every test action requires (a) an authenticated host who owns the
+    // restaurant (checked above) AND (b) the caller to pass the server-side
+    // SUBSCRIPTION_TEST_MODE_SECRET. Without that secret configured on the
+    // server these routes return 503 and do nothing.
+    const testSecret = testModeSecret();
+    const providedTestSecret = String(body?.testSecret ?? '');
+    const testAuthorized = testSecret !== null && providedTestSecret === testSecret;
+
+    if (action === 'testCheckout' || action === 'testRenewal' || action === 'testExpireNow') {
+      if (!testAuthorized) {
+        return json({ error: 'Test mode is not enabled or the test secret is invalid.' }, 503);
+      }
+    }
+
+    if (action === 'testCheckout') {
+      const packageCode = String(body?.packageCode ?? '');
+      const fail = body?.fail === true;
+
+      const { data: pkg, error: pkgError } = await supabase
+        .from('subscription_packages')
+        .select('id, code')
+        .eq('code', packageCode)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (pkgError) throw pkgError;
+      if (!pkg) return json({ error: 'That package is not available.' }, 400);
+
+      const { data: existing, error: existingError } = await supabase
+        .from('host_subscriptions')
+        .select('id, status')
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle();
+      if (existingError) throw existingError;
+      if (existing && (existing as { status: string }).status === 'active') {
+        return json({ error: 'This restaurant already has an active subscription.' }, 409);
+      }
+
+      const adapter = getTestAdapter();
+      if (!adapter) return json({ error: 'Test mode is not enabled.' }, 503);
+      const created = await adapter.createSubscription();
+
+      const packageId = (pkg as { id: string }).id;
+      if (existing) {
+        // Incomplete / expired / canceled row: reset it for the test purchase.
+        const { error: resetError } = await supabase
+          .from('host_subscriptions')
+          .update({
+            status: 'incomplete',
+            package_id: packageId,
+            scheduled_package_id: null,
+            auto_renew: true,
+            cancel_at_period_end: false,
+            canceled_at: null,
+            expired_at: null,
+            provider: TEST_PROVIDER,
+            provider_subscription_ref: created.subscriptionRef,
+            billing_anchor_day: new Date().getUTCDate(),
+            period_start: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', (existing as { id: string }).id);
+        if (resetError) throw resetError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('host_subscriptions')
+          .insert({
+            restaurant_id: restaurantId,
+            package_id: packageId,
+            status: 'incomplete',
+            provider: TEST_PROVIDER,
+            provider_subscription_ref: created.subscriptionRef,
+            billing_anchor_day: new Date().getUTCDate(),
+            period_start: new Date().toISOString(),
+          });
+        if (insertError) throw insertError;
+      }
+
+      if (fail) {
+        // Simulate a failed checkout payment: activate nothing, record nothing
+        // in payment history, mark the subscription payment_failed.
+        const { error: failError } = await supabase
+          .from('host_subscriptions')
+          .update({ status: 'payment_failed', updated_at: new Date().toISOString() })
+          .eq('restaurant_id', restaurantId);
+        if (failError) throw failError;
+        return json({ ok: false, simulated: 'failed', message: 'Test payment failed. No credits were allocated.' });
+      }
+
+      // Successful simulated payment → the REAL activation + allocation path.
+      const { data: sub, error: subError } = await supabase
+        .from('host_subscriptions')
+        .select('id, period_start')
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle();
+      if (subError) throw subError;
+      const { data: alloc, error: allocError } = await supabase.rpc('allocate_subscription_credits', {
+        p_restaurant_id: restaurantId,
+        p_package_id: packageId,
+        p_cycle_number: 1,
+        p_provider_payment_ref: `test_pay_1_${crypto.randomUUID()}`,
+      });
+      if (allocError) throw allocError;
+      const [allocated, newBalance, periodEnd] = alloc as [boolean, string, string];
+      void sub;
+      return json({
+        ok: allocated,
+        simulated: 'succeeded',
+        balance: Number(newBalance),
+        periodEnd,
+        testRef: created.subscriptionRef,
+      });
+    }
+
+    if (action === 'testRenewal') {
+      // Drives the REAL renewal processor: expire due subs, reserve the next
+      // cycle, then "charge" via the mock adapter and allocate on success.
+      // fail: simulate a declined charge. forceDue: shorten this test
+      // subscription's period so it is due now (test subscription only).
+      const fail = body?.fail === true;
+      const forceDue = body?.forceDue === true;
+
+      const { data: sub, error: subError } = await supabase
+        .from('host_subscriptions')
+        .select(SUBSCRIPTION_COLUMNS)
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle();
+      if (subError) throw subError;
+      const subRow = (sub ?? null) as Record<string, unknown> | null;
+      if (!subRow) return json({ error: 'No subscription to renew.' }, 400);
+
+      if (forceDue) {
+        const { error: dueError } = await supabase
+          .from('host_subscriptions')
+          .update({ period_end: new Date(Date.now() - 60_000).toISOString(), updated_at: new Date().toISOString() })
+          .eq('id', String(subRow.id));
+        if (dueError) throw dueError;
+      }
+
+      const { data: expired, error: expiredError } = await supabase.rpc('expire_due_subscriptions');
+      if (expiredError) throw expiredError;
+
+      // Re-read: expire_due_subscriptions may have expired this subscription
+      // if it was not auto-renewing. Only auto-renewing actives are processed.
+      const { data: sub2, error: sub2Error } = await supabase
+        .from('host_subscriptions')
+        .select(SUBSCRIPTION_COLUMNS)
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle();
+      if (sub2Error) throw sub2Error;
+      const current = (sub2 ?? null) as Record<string, unknown> | null;
+      if (!current || current.status !== 'active' || current.auto_renew !== true || current.cancel_at_period_end === true) {
+        return json({ ok: false, simulated: 'not-renewable', expiredCount: expired.data ?? 0,
+          message: 'Subscription is not in a renewable state (expired, auto-renew off, or canceled).' });
+      }
+
+      const reserved = await supabase.rpc('process_subscription_renewal', { p_subscription_id: String(current.id) });
+      if (reserved.error) throw reserved.error;
+      const [ok, cycle] = reserved.data as [boolean, number];
+      if (!ok) return json({ ok: false, simulated: 'duplicate', cycle, message: 'No new cycle was reserved (duplicate or blocked).' });
+
+      const packageId = (current.scheduled_package_id ?? current.package_id) as string;
+      if (fail) {
+        const { error: markError } = await supabase
+          .from('subscription_payments')
+          .update({ status: 'failed', provider_payment_ref: null, provider: TEST_PROVIDER })
+          .eq('subscription_id', String(current.id))
+          .eq('cycle_number', Number(cycle));
+        if (markError) throw markError;
+        const { error: statusError } = await supabase
+          .from('host_subscriptions')
+          .update({ status: 'payment_failed', updated_at: new Date().toISOString() })
+          .eq('id', String(current.id));
+        if (statusError) throw statusError;
+        return json({ ok: false, simulated: 'failed', cycle, message: 'Test renewal payment failed. No credits were allocated.' });
+      }
+
+      const adapter = getTestAdapter();
+      if (!adapter) return json({ error: 'Test mode is not enabled.' }, 503);
+      const charge = await adapter.chargeRenewal({ cycleNumber: Number(cycle) });
+      if (!charge.ok || !charge.paymentRef) {
+        return json({ ok: false, simulated: 'failed', cycle });
+      }
+      const { data: alloc, error: allocError } = await supabase.rpc('allocate_subscription_credits', {
+        p_restaurant_id: restaurantId,
+        p_package_id: packageId,
+        p_cycle_number: Number(cycle),
+        p_provider_payment_ref: charge.paymentRef,
+      });
+      if (allocError) throw allocError;
+      const [allocated, newBalance, periodEnd] = alloc as [boolean, string, string];
+      return json({ ok: allocated, simulated: 'succeeded', cycle, balance: Number(newBalance), periodEnd });
+    }
+
+    if (action === 'testExpireNow') {
+      // Marks the test subscription's paid period as already over, without
+      // touching real billing rules. Combined with expire_due_subscriptions
+      // (called by testRenewal) this exercises expiry + credit preservation.
+      const { data: sub, error: subError } = await supabase
+        .from('host_subscriptions')
+        .select('id')
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle();
+      if (subError) throw subError;
+      if (!sub) return json({ error: 'No subscription.' }, 400);
+      const { error: updError } = await supabase
+        .from('host_subscriptions')
+        .update({ period_end: new Date(Date.now() - 60_000).toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', (sub as { id: string }).id);
+      if (updError) throw updError;
+      const { data: expired, error: expiredError } = await supabase.rpc('expire_due_subscriptions');
+      if (expiredError) throw expiredError;
+      return json({ ok: true, expiredCount: expired.data ?? 0 });
     }
 
     return json({ error: 'Unknown action.' }, 400);
