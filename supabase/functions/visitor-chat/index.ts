@@ -475,19 +475,12 @@ function clientIp(req: Request): string {
   return first || req.headers.get('cf-connecting-ip') || req.headers.get('x-real-ip') || 'unknown';
 }
 
+/**
+ * Pulls the CARDS and FOLLOWUP directive lines out of the reply and strips them
+ * from the prose. Both use the same leading-keyword convention so they work
+ * with every plain-text provider without requiring JSON mode.
+ */
 const MAX_SUGGESTIONS = 2;
-
-function directivePattern(name: string): RegExp {
-  return new RegExp(
-    `^\s*(?:[-*•>]\s*|\d{1,2}[.)]\s*)?(?:["']>\s*)?(?:\*\*)?${name}(?:\*\*)?\s*:\s*(.*)$`,
-    'i'
-  );
-}
-
-/** Strips bold markers and wrapping quote characters from a captured directive value. */
-function cleanDirectiveValue(raw: string): string {
-  return raw.replace(/\*\*/g, '').trim().replace(/^["'`]+|["'`]+$/g, '').trim();
-}
 
 function extractDirectives(text: string): {
   reply: string;
@@ -504,21 +497,21 @@ function extractDirectives(text: string): {
   let combosDirective: string | null = null;
   let headingsDirective: string | null = null;
   for (const line of text.split('\n')) {
-    const cardMatch = line.match(directivePattern('CARDS'));
-    const followMatch = line.match(directivePattern('FOLLOWUP'));
-    const suggestMatch = line.match(directivePattern('SUGGESTIONS'));
-    const comboMatch = line.match(directivePattern('COMBOS'));
-    const headingMatch = line.match(directivePattern('HEADINGS'));
+    const cardMatch = line.match(/^\s*(?:\*\*)?CARDS(?:\*\*)?\s*:\s*(.*)$/i);
+    const followMatch = line.match(/^\s*(?:\*\*)?FOLLOWUP(?:\*\*)?\s*:\s*(.*)$/i);
+    const suggestMatch = line.match(/^\s*(?:\*\*)?SUGGESTIONS(?:\*\*)?\s*:\s*(.*)$/i);
+    const comboMatch = line.match(/^\s*(?:\*\*)?COMBOS(?:\*\*)?\s*:\s*(.*)$/i);
+    const headingMatch = line.match(/^\s*(?:\*\*)?HEADINGS(?:\*\*)?\s*:\s*(.*)$/i);
     if (cardMatch) {
-      cardsDirective = cleanDirectiveValue(cardMatch[1]);
+      cardsDirective = cardMatch[1].replace(/\*\*/g, '').trim();
     } else if (comboMatch) {
-      combosDirective = cleanDirectiveValue(comboMatch[1]);
+      combosDirective = comboMatch[1].replace(/\*\*/g, '').trim();
     } else if (headingMatch) {
-      headingsDirective = cleanDirectiveValue(headingMatch[1]);
+      headingsDirective = headingMatch[1].replace(/\*\*/g, '').trim();
     } else if (followMatch) {
-      followUp = cleanDirectiveValue(followMatch[1]);
+      followUp = followMatch[1].replace(/\*\*/g, '').trim();
     } else if (suggestMatch) {
-      suggestionsDirective = cleanDirectiveValue(suggestMatch[1]);
+      suggestionsDirective = suggestMatch[1].replace(/\*\*/g, '').trim();
     } else {
       kept.push(line);
     }
@@ -586,18 +579,11 @@ function resolveDirective(directive: string, menu: DishRow[], sectionFilter: str
   const value = directive.trim().replace(/^\[|\]$/g, '').trim();
   if (!value || /^(none|no cards|nothing|-)$/i.test(value)) return [];
 
-  const isAllRequest = /^(all|everything|full menu|entire menu|whole menu)$/i.test(value);
-
-  // The section filter only narrows a "show everything" answer to the section(s)
-  // the guest asked about. When the model explicitly names dishes, those names
-  // are authoritative: a cross-section question can put keywords from more than
-  // one section into the visitor message, and filtering named dishes by that
-  // wording would silently drop the exact dish the model chose.
-  const scopedMenu = isAllRequest && sectionFilter && sectionFilter.length > 0
+  const scopedMenu = sectionFilter && sectionFilter.length > 0
     ? menu.filter((d) => sectionFilter.includes((d.section ?? 'food').toLowerCase()))
     : menu;
 
-  if (isAllRequest) {
+  if (/^(all|everything|full menu|entire menu|whole menu)$/i.test(value)) {
     return scopedMenu.slice(0, MAX_CARDS);
   }
 
@@ -670,10 +656,8 @@ const SECTION_SYNONYMS: Record<string, string[]> = {
  * Detects which menu section(s) the visitor is asking about from their message.
  * Returns null when no section is identifiable (no filter applied). Returns
  * ['drinks'], ['food'], or ['food', 'drinks'] when one or both sections are
- * detected. For a "show everything" reply the backend uses this to narrow the
- * returned cards to the matching section(s); dishes the model names explicitly
- * are resolved against the full menu so a cross-section question ("which wine
- * pairs with the salmon?") cannot silently drop the named dish.
+ * detected. The backend uses this to enforce that only items whose saved
+ * section field matches are returned as cards.
  */
 function detectRequestedSections(message: string): string[] | null {
   const lower = message.toLowerCase();
