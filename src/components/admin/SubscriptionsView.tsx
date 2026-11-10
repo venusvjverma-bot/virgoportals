@@ -5,7 +5,7 @@ import { adminListSubscriptions, type AdminSubscriptionRow } from '@/lib/subscri
 
 function formatUsd(cents: number | null | undefined): string {
   if (typeof cents !== 'number' || !Number.isFinite(cents) || cents < 0) return '—';
-  return `${(cents / 100).toFixed(2)}`;
+  return `$${(cents / 100).toFixed(2)}`;
 }
 
 const STATUS_LABELS: Record<AdminSubscriptionRow['status'], string> = {
