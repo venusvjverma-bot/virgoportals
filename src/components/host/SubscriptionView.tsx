@@ -23,10 +23,6 @@ const STATUS_LABELS: Record<HostSubscription['status'], string> = {
   expired: 'Expired',
 };
 
-function formatUsd(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -34,6 +30,12 @@ function formatDate(iso: string | null): string {
 
 interface SubscriptionViewProps {
   portal: RestaurantPortal;
+}
+
+/** Safe USD formatting: never shows NaN, undefined, or a misleading $0 for missing data. */
+function formatUsd(cents: number | null | undefined): string {
+  if (typeof cents !== 'number' || !Number.isFinite(cents) || cents < 0) return '—';
+  return `${(cents / 100).toFixed(2)}`;
 }
 
 export function SubscriptionView({ portal }: SubscriptionViewProps) {

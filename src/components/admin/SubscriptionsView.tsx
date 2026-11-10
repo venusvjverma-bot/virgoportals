@@ -3,6 +3,11 @@ import { Loader2 } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
 import { adminListSubscriptions, type AdminSubscriptionRow } from '@/lib/subscriptions';
 
+function formatUsd(cents: number | null | undefined): string {
+  if (typeof cents !== 'number' || !Number.isFinite(cents) || cents < 0) return '—';
+  return `${(cents / 100).toFixed(2)}`;
+}
+
 const STATUS_LABELS: Record<AdminSubscriptionRow['status'], string> = {
   incomplete: 'Awaiting payment',
   active: 'Active',
@@ -10,10 +15,6 @@ const STATUS_LABELS: Record<AdminSubscriptionRow['status'], string> = {
   canceled: 'Canceled — ends this period',
   expired: 'Expired',
 };
-
-function formatUsd(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';

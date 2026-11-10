@@ -116,6 +116,27 @@ function packageNameMap(packages: Array<{ id: string; code: string; name: string
   return new Map(packages.map((p) => [p.id, p]));
 }
 
+interface PackageRow {
+  id: string;
+  code: string;
+  name: string;
+  price_cents: number | null;
+  credits: string | number | null;
+  sort_order?: number;
+}
+
+/** Database rows → camelCase with numeric coercion, so the client never sees undefined prices. */
+function toPublicPackage(row: PackageRow) {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    priceCents: Number(row.price_cents ?? 0),
+    credits: Number(row.credits ?? 0),
+    sortOrder: Number(row.sort_order ?? 0),
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -354,7 +375,7 @@ Deno.serve(async (req: Request) => {
 
       const subRow = (sub ?? null) as Record<string, unknown> | null;
       return json({
-        packages: (packages ?? []) as Array<{ id: string; code: string; name: string; price_cents: number; credits: string; sort_order: number }>,
+        packages: ((packages ?? []) as PackageRow[]).map(toPublicPackage),
         subscription: subRow
           ? {
               status: subRow.status,

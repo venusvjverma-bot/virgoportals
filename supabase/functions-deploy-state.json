@@ -25,6 +25,10 @@
       "hasChanged": false,
       "hash": "f0d6be01130c5e6d0dba3309a5044ccc7f306beb963122b496111bbcc84f770b"
     },
+    "subscription-api": {
+      "hasChanged": false,
+      "hash": "a6d6a75232be00a7be025fd4556bccb326d517207328f9795a792f2e3cb2d1b8"
+    },
     "visitor-chat": {
       "hasChanged": false,
       "hash": "e0a427573b1ed2d507b66d7400ebf2f188a3cc02217c2447ea985c510ef43cf7"
@@ -32,10 +36,6 @@
     "visitor-orders": {
       "hasChanged": false,
       "hash": "8ecb92850446245958d70e320e1d8178e9c517503d3ab176dba1bb3b106adbb1"
-    },
-    "subscription-api": {
-      "hasChanged": false,
-      "hash": "6ab1423f376ee9f63c5f2e794af277d66532b62e64d9bafe0911ae72bf62aa93"
     }
   }
 }
