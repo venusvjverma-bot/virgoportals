@@ -166,33 +166,110 @@ function splitCombinedDrafts(drafts: DishDraft[]): DishDraft[] {
 }
 
 /**
- * Groups drafts that are the same product in several serving sizes. Drafts are
- * matched on normalized name, section and category only, so differing wording
- * in description or ingredients for one drink does not split its sizes. Names
- * that differ ("Coca-Cola" vs "Coca-Cola Zero") never merge.
+ * Portion phrases menus commonly append to a product name instead of printing
+ * them in a serving column: "Rice Half plate", "Chicken 4 pieces", "Coca-Cola
+ * 330 ml". Used only to split that trailing phrase back out of the name; a word
+ * that is genuinely part of a product name ("Rice Bowl") stays in the name,
+ * because a bare noun is not enough evidence of a portion.
+ */
+const PORTION_ADJECTIVE =
+  'half|full|quarter|third|single|double|small|medium|large|regular|jumbo|king|family|sharing|mini|standard|xl|xxl';
+const PORTION_NOUN =
+  'plate|plates|bowl|bowls|portion|portions|piece|pieces|pcs|pc|serving|servings|glass|glasses|bottle|bottles|cup|cups|can|cans|shot|shots|slice|slices';
+const PORTION_UNIT = 'cl|ml|oz|litre|liter|litres|liters';
+
+const TRAILING_PORTION_PATTERN = new RegExp(
+  `^(.*?)[\\s\\-–—:,]*((?:(?:${PORTION_ADJECTIVE})\\s+(?:${PORTION_NOUN}))|(?:\\d+(?:[.,]\\d+)?\\s*(?:${PORTION_NOUN}|${PORTION_UNIT}))|(?:${PORTION_ADJECTIVE}))[\\s\\-–—:,]*$`,
+  'i'
+);
+
+/**
+ * Splits a trailing portion phrase off a product name: "Rice — Half plate"
+ * becomes base "Rice" and portion "Half plate". Returns null when the name does
+ * not end with a recognizable portion phrase, or when nothing would remain of
+ * the base name.
+ */
+function splitTrailingPortion(rawName: string): { base: string; portion: string } | null {
+  const match = rawName.match(TRAILING_PORTION_PATTERN);
+  if (!match) return null;
+  const base = match[1].trim();
+  const portion = match[2].trim();
+  if (!base || !portion) return null;
+  return { base, portion };
+}
+
+/**
+ * For a draft whose portion wording ended up inside the product name (and whose
+ * serving field is empty), moves that trailing phrase into the serving field so
+ * the draft groups with the plain-named product as a serving option.
+ */
+function normalizePortionInName(draft: DishDraft): DishDraft {
+  if (draft.serving.trim().length > 0) return draft;
+  const split = splitTrailingPortion(draft.name);
+  if (!split) return draft;
+  return { ...draft, name: split.base, serving: split.portion };
+}
+
+/**
+ * The clustering identity of a product name with any trailing portion phrase
+ * removed, so "Rice Half plate" and "Rice" resolve to the same product.
+ */
+function baseProductName(name: string): string {
+  const split = splitTrailingPortion(name);
+  return split ? normalizeName(split.base) : normalizeName(name);
+}
+
+/**
+ * Groups drafts that are the same product in several serving sizes.
  *
- * A draft with no serving size is never merged: there is no size to offer, so it
- * stays a standalone dish with its own price and no size label is invented.
- * The first sized draft becomes the representative dish row, its serving is
+ * Matching happens on two keys: the exact normalized name plus section and
+ * category, and a base key that drops a trailing portion phrase (see
+ * splitTrailingPortion) and compares on name and section only. The base key is
+ * what lets "Rice Half plate" (portion accidentally copied into the name) and
+ * "Rice" resolve to one product even though the names differ.
+ *
+ * An unsized draft whose product already has a group never becomes a second
+ * card: it merges into that group, filling in the headline price when the group
+ * has none. Genuinely different names never merge, and a sized draft whose
+ * serving label the group already carries stays standalone, so a menu that
+ * lists the same size twice keeps both lines.
+ *
+ * The first group member becomes the representative dish row, its serving is
  * cleared (sizes now live in dish_serving_options) and its price is kept as the
  * headline price. Later members contribute their serving and price as options,
  * in document order.
  */
 function groupDraftsByVariant(drafts: DishDraft[]): GroupedDraft[] {
+  const prepared = drafts.map(normalizePortionInName);
   const groups: GroupedDraft[] = [];
-  const keyToIndex = new Map<string, number>();
+  const exactKeys = new Map<string, number>();
+  const baseKeys = new Map<string, number>();
 
-  for (const draft of drafts) {
+  for (const draft of prepared) {
     const serving = draft.serving.trim();
+    const baseKey = `${baseProductName(draft.name)}\u0000${draft.section}`;
+    const identityKey = [normalizeName(draft.name), draft.section, draft.category].join('\u0000');
+
     if (serving.length === 0) {
-      groups.push({ draft, variants: [] });
+      const existingIndex = baseKeys.get(baseKey);
+      if (existingIndex === undefined) {
+        baseKeys.set(baseKey, groups.length);
+        exactKeys.set(identityKey, groups.length);
+        groups.push({ draft, variants: [] });
+        continue;
+      }
+      const group = groups[existingIndex];
+      if (!group.draft.price.trim() && draft.price.trim()) {
+        group.draft = { ...group.draft, price: draft.price.trim() };
+      }
       continue;
     }
 
-    const identityKey = [normalizeName(draft.name), draft.section, draft.category].join('\u0000');
-    const existingIndex = keyToIndex.get(identityKey);
+    let existingIndex = exactKeys.get(identityKey);
+    if (existingIndex === undefined) existingIndex = baseKeys.get(baseKey);
     if (existingIndex === undefined) {
-      keyToIndex.set(identityKey, groups.length);
+      exactKeys.set(identityKey, groups.length);
+      baseKeys.set(baseKey, groups.length);
       groups.push({ draft, variants: [] });
       continue;
     }
@@ -393,7 +470,13 @@ function extractionInstruction(): string {
     '"ingredients", "allergy" and "abv" text, and only "serving" and "price" may differ. ' +
     'Never combine sizes into one object. A line such as "25 cl / 50 cl" priced "SEK 74 / 114" ' +
     'becomes two objects: serving "25 cl" with price "SEK 74", and serving "50 cl" with price "SEK 114". ' +
+    'This applies equally to food portions such as plate sizes, piece counts or small/medium/large: ' +
+    '"Rice" offered as "Half plate" and "Full plate" with different printed prices must become two objects, ' +
+    'both with "name" exactly "Rice", "serving" "Half plate" and "Full plate", and each object\'s own printed full price. ' +
+    'Put the portion wording in "serving" only - never copy it into "name" (the name stays exactly "Rice", not "Rice Half plate"). ' +
+    'Even when the menu prints each portion as its own line or heading, keep the identical "name" on every portion line. ' +
     'If an item has a price but no printed size, use serving "" and keep its own object. ' +
+    'If the same product appears once without a size and again with sizes, return only the sized objects when they carry their own prices, or the single unsized object when no sizes are printed. ' +
     'Never guess a size from the item name.\n\n' +
     'Add-ons: an add-on is an optional extra the guest can add on top of other items, such as a topping, sauce, side or extra portion, usually printed under its own heading or with a plus sign. ' +
     'Return each add-on as its own object with section "add_on". Set category "food_add_ons" when the add-on is a food extra and "drink_add_ons" when it is a drink extra, judging by the add-on itself and the menu context around it. ' +
@@ -404,6 +487,11 @@ function extractionInstruction(): string {
     'set "variant_of" to the parent item name, "variant" to the option name, and "additional_price" to the add-on amount when the menu prints one. An option listed with no extra amount is still a variant: keep variant_of and variant, and leave additional_price "". ' +
     'A full price printed for the option line is not an add-on amount: leave "variant_of", "variant" and "additional_price" as "" and keep the line as its own object. ' +
     'The parent keeps its own object and its own price.\n\n' +
+    'Portion options of one food product are NOT variants: a "Half plate" or "4 pieces" line printed ' +
+    'with its own full price is a serving size of the same product, so follow the Sizes rule above ' +
+    '(same "name", portion in "serving", its own printed full price). Only use variant_of/variant when ' +
+    'the option line adds an amount on top of a base price, or when the option is genuinely not a serving ' +
+    'size of the product (such as a sauce choice or cooking style).\n\n' +
     'Choose Section first, then choose a Category belonging to that Section. Use the original ' +
     'heading and surrounding context as evidence, but classify the item by what it actually is ' +
     'using its name, description, ingredients and preparation details. A Drinks heading may contain ' +
@@ -712,7 +800,7 @@ Deno.serve(async (req: Request) => {
       const dish = group.draft;
       const hasVariants = group.variants.length > 0;
       // The representative's own serving and price become the first size option,
-      // so every size of a grouped drink is preserved.
+      // so every size of a grouped product is preserved.
       const options = hasVariants
         ? [
             { label: dish.serving.trim(), price: dish.price },
@@ -726,7 +814,7 @@ Deno.serve(async (req: Request) => {
             };
           })
         : [];
-      // One serving type per drink: if every parsed option has a supported
+      // One serving type per dish: if every parsed option has a supported
       // measurement it is Measured mode; otherwise fall back to Named Size,
       // keeping each original label intact rather than guessing values.
       const allMeasured = options.length > 0 && options.every((o) => o.quantity !== '');
@@ -741,9 +829,9 @@ Deno.serve(async (req: Request) => {
         ingredients: dish.ingredients,
         allergy: dish.allergy,
         // The headline price stays on the dish row so cards without sizes display
-        // as before. For grouped drinks the visitor UI prefers the size prices.
+        // as before. For grouped products the visitor UI prefers the size prices.
         price: dish.price,
-        // Sizes for grouped drinks live in dish_serving_options, so the row's
+        // Sizes for grouped products live in dish_serving_options, so the row's
         // serving text is cleared to avoid a misleading duplicate.
         serving: hasVariants ? '' : dish.serving,
         abv: dish.abv,

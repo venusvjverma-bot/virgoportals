@@ -213,6 +213,8 @@ export function DishCard({
   const showSavedAbv = dish
     ? isDrinkSection(dish.section) || dish.abv.trim().length > 0
     : false;
+  const hasServingOptionsConfigured = servingOpts.some((o) => o.quantity.trim() || o.name.trim());
+  const hideHeadlinePrice = isDrinkSection(section) || (section !== 'add_on' && hasServingOptionsConfigured);
 
   const currentCategoryOptions = categoriesForSection(section);
 
@@ -272,15 +274,16 @@ export function DishCard({
       return;
     }
 
-    // Validate serving options for drinks
-    if (isDrinkSection(section)) {
-      const filled = servingMode === 'measured'
-        ? servingOpts.filter((o) => o.quantity.trim() || o.price.trim())
-        : servingOpts.filter((o) => o.name.trim() || o.price.trim());
-      if (filled.length === 0) {
-        setError('Add at least one serving size with a price for this drink.');
-        return;
-      }
+    // Serving sizes are mandatory for drinks; for food they are optional and
+    // only rows the host started filling in are validated.
+    const filled = servingMode === 'measured'
+      ? servingOpts.filter((o) => o.quantity.trim() || o.price.trim())
+      : servingOpts.filter((o) => o.name.trim() || o.price.trim());
+    if (isDrinkSection(section) && filled.length === 0) {
+      setError('Add at least one serving size with a price for this drink.');
+      return;
+    }
+    if (section !== 'add_on') {
       if (servingMode === 'measured') {
         for (const opt of filled) {
           const qty = Number(opt.quantity.replace(',', '.'));
@@ -311,7 +314,7 @@ export function DishCard({
       }
     }
 
-    const cleanedOptions = isDrinkSection(section)
+    const cleanedOptions = section !== 'add_on'
       ? servingMode === 'measured'
         ? servingOpts
             .filter((o) => o.quantity.trim() && o.price.trim())
@@ -477,7 +480,7 @@ export function DishCard({
                     }}
                   />
                 </Field>
-                {isDrinkSection(section) ? null : (
+                {hideHeadlinePrice ? null : (
                   <Field label={`Price (${cur})`} htmlFor={`${fieldIdPrefix}-price`}>
                     <Input
                       id={`${fieldIdPrefix}-price`}
@@ -525,7 +528,7 @@ export function DishCard({
                 </Field>
               </div>
 
-              {isDrinkSection(section) ? (
+              {(isDrinkSection(section) || hasServingOptionsConfigured) ? (
                 showAbv ? (
                   <div className="mt-4 grid gap-4 sm:grid-cols-1">
                     <Field label="Alcohol %" htmlFor={`${fieldIdPrefix}-abv`}>
@@ -577,7 +580,7 @@ export function DishCard({
                 </div>
               )}
 
-              {isDrinkSection(section) ? (
+              {section !== 'add_on' ? (
                 <div className="mt-4 rounded-xl bg-cream-50 p-4 ring-1 ring-cream-200">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Serving sizes</p>
@@ -941,7 +944,7 @@ export function DishCard({
                   <h3 className="font-display text-lg font-semibold tracking-tight text-ink">
                     {emptyLabel(dish!.name, 'Untitled dish')}
                   </h3>
-                  {isDrinkSection(dish!.section) && dish!.servingOptions && dish!.servingOptions.length > 0 ? (
+                  {dish!.servingOptions && dish!.servingOptions.length > 0 ? (
                     <p className="mt-1 text-sm font-medium text-olive-700">
                       {dish!.servingOptions.map((o) => `${o.label} ${formatPriceInput(o.price, cur)}`).join(' · ')}
                     </p>
@@ -970,7 +973,9 @@ export function DishCard({
                     )}
                   </div>
                 </div>
-                {isDrinkSection(dish!.section) ? null : <ReadOnlyRow label="Serving size" value={dish!.serving} />}
+                {!isDrinkSection(dish!.section) && !(dish!.servingOptions && dish!.servingOptions.length > 0) ? (
+                  <ReadOnlyRow label="Serving size" value={dish!.serving} />
+                ) : null}
                 {showSavedAbv ? <ReadOnlyRow label="Alcohol" value={dish!.abv} /> : null}
                 <ReadOnlyRow label="Description" value={dish!.description} />
                 <ReadOnlyRow label="Ingredients" value={dish!.ingredients} />
