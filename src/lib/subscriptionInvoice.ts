@@ -17,14 +17,18 @@ export interface SubscriptionInvoiceData {
   lineDescription: string;
   amountCents: number;
   currency: string;
+  /** VAT rate to break out (e.g. 0.25 for Swedish VAT). 0 or omitted = no VAT line. */
+  vatRate?: number;
   periodStart: string | null;
   periodEnd: string | null;
   paidAt: string | null;
   isTest: boolean;
 }
 
-function usd(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+function money(cents: number, currency: string): string {
+  const code = (currency || 'SEK').toUpperCase();
+  if (code === 'USD') return `${(cents / 100).toFixed(2)}`;
+  return `${new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 }).format(cents / 100)} kr`;
 }
 
 function fmtDate(iso: string | null): string {
@@ -79,15 +83,28 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
   sep();
   y += 8;
 
-  // Line item
+  // Line item. Subscription prices are VAT-exclusive, so the VAT amount and
+  // the total payable are shown as separate lines when a rate is supplied.
+  const rate = inv.vatRate ?? 0;
+  const vatCents = rate > 0 ? Math.round(inv.amountCents * rate) : 0;
+  const totalCents = inv.amountCents + vatCents;
+
   doc.setFont('helvetica', 'bold');
   doc.text('Description', margin, y);
   doc.text('Amount', right, y, { align: 'right' });
   y += 6;
   doc.setFont('helvetica', 'normal');
   doc.text(inv.lineDescription, margin, y);
-  doc.text(usd(inv.amountCents), right, y, { align: 'right' });
+  doc.text(money(inv.amountCents, inv.currency), right, y, { align: 'right' });
   y += 5;
+  if (rate > 0) {
+    doc.text('Price excl. VAT', margin, y);
+    doc.text(money(inv.amountCents, inv.currency), right, y, { align: 'right' });
+    y += 5;
+    doc.text(`VAT ${Math.round(rate * 100)}%`, margin, y);
+    doc.text(money(vatCents, inv.currency), right, y, { align: 'right' });
+    y += 5;
+  }
   doc.setFontSize(8.5);
   doc.text(
     inv.periodStart && inv.periodEnd
@@ -103,14 +120,14 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.text('TOTAL', margin, y);
-  doc.text(usd(inv.amountCents), right, y, { align: 'right' });
+  doc.text(money(totalCents, inv.currency), right, y, { align: 'right' });
   y += 8;
   sep();
   y += 7;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text(inv.footerNote ?? 'All subscription prices are in USD. Payment processed by Virgo Portals.', margin, y);
+  doc.text(inv.footerNote ?? 'All subscription prices are in SEK excluding VAT. Payment processed by Virgo Portals.', margin, y);
   return y;
 }
 

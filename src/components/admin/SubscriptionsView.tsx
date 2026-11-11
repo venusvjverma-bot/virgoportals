@@ -3,10 +3,17 @@ import { Download, Loader2 } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
 import { adminListSubscriptions, type AdminSubscriptionRow, type PaymentRecord } from '@/lib/subscriptions';
 import { generateSubscriptionInvoiceBlob, isTestPayment, type SubscriptionInvoiceData } from '@/lib/subscriptionInvoice';
+import { SWEDISH_VAT_RATE, formatSek } from '@/lib/currency';
 
-function formatUsd(cents: number | null | undefined): string {
+/** Safe SEK formatting: never shows NaN, undefined, or a misleading 0 for missing data. */
+function formatSekSafe(cents: number | null | undefined): string {
   if (typeof cents !== 'number' || !Number.isFinite(cents) || cents < 0) return '—';
-  return `$${(cents / 100).toFixed(2)}`;
+  return formatSek(cents);
+}
+
+/** Historical USD rows (pre-SEK migration) keep their original currency. */
+function formatUsdLegacy(cents: number): string {
+  return `${(cents / 100).toFixed(2)}`;
 }
 
 const STATUS_LABELS: Record<AdminSubscriptionRow['status'], string> = {
@@ -39,7 +46,7 @@ function downloadInvoice(row: AdminSubscriptionRow, p: PaymentRecord) {
     title: isTopup ? 'Credit Top-up Invoice' : 'Subscription Invoice',
     footerNote: isTopup
       ? 'All top-up prices are in USD. Payment processed by Virgo Portals.'
-      : 'All subscription prices are in USD. Payment processed by Virgo Portals.',
+      : 'All subscription prices are in SEK excluding VAT. Swedish VAT is added at checkout. Payment processed by Virgo Portals.',
     subscriptionRef: isTopup ? null : row.packageCode ? `sub-${row.packageCode}-${p.cycleNumber ?? ''}` : null,
     paymentRef: p.paymentRef,
     restaurantName: row.restaurantName,
@@ -48,7 +55,8 @@ function downloadInvoice(row: AdminSubscriptionRow, p: PaymentRecord) {
       ? `Credit top-up — ${Math.round(p.credits ?? 0)} credits`
       : `${p.description ?? row.packageName ?? 'Subscription'} plan — monthly (cycle ${p.cycleNumber ?? ''})`,
     amountCents: p.amountCents,
-    currency: 'USD',
+    currency: p.currency || 'SEK',
+    vatRate: isTopup ? 0 : SWEDISH_VAT_RATE,
     periodStart: row.periodStart,
     periodEnd: row.periodEnd,
     paidAt: p.paidAt ?? p.createdAt,
@@ -177,7 +185,7 @@ export function SubscriptionsView() {
                       <td className="px-4 py-2 text-ink">{formatDate(p.paidAt ?? p.createdAt)}</td>
                       <td className="px-4 py-2 text-ink">{PAYMENT_TYPE_LABELS[p.type]}</td>
                       <td className="px-4 py-2 text-ink">{paymentItem(p, row)}</td>
-                      <td className="px-4 py-2 tabular-nums text-ink">{formatUsd(p.amountCents)}</td>
+                      <td className="px-4 py-2 tabular-nums text-ink">{p.currency === 'USD' ? formatUsdLegacy(p.amountCents) : formatSekSafe(p.amountCents)}</td>
                       <td className="px-4 py-2 text-ink">{p.status}</td>
                       <td className="px-4 py-2 font-mono text-xs text-ink-muted">{p.paymentRef ?? '—'}</td>
                       <td className="px-4 py-2">

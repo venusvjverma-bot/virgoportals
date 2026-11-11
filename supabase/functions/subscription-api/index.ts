@@ -58,6 +58,7 @@ export interface PaymentAdapter {
     restaurantId: string;
     packageCode: string;
     amountCents: number;
+    currency: string;
   }): Promise<{ subscriptionRef: string; checkoutUrl: string | null }>;
 }
 
@@ -207,6 +208,7 @@ function subPaymentRecord(p: Record<string, unknown>, pkgName: string | null): R
     credits: null,
     cycleNumber: cycle,
     amountCents: p.amount_cents,
+    currency: (p.currency as string | null) ?? 'SEK',
     status: p.status,
     paymentRef: p.provider_payment_ref,
     invoiceUrl: p.provider_invoice_url,
@@ -223,6 +225,7 @@ function topupPaymentRecord(t: Record<string, unknown>, pkgName: string | null):
     credits: Number(t.credits),
     cycleNumber: null,
     amountCents: t.amount_cents,
+    currency: (t.currency as string | null) ?? 'USD',
     status: t.status,
     paymentRef: t.provider_payment_ref,
     invoiceUrl: t.provider_invoice_url,
@@ -331,7 +334,7 @@ Deno.serve(async (req: Request) => {
         const charge = await adapter.chargeRenewal({
           subscriptionRef: String(sub.provider_subscription_ref ?? ''),
           amountCents: 0,
-          currency: 'USD',
+          currency: 'SEK',
           cycleNumber: Number(cycle),
         });
         if (charge.ok && charge.paymentRef) {
@@ -386,13 +389,13 @@ Deno.serve(async (req: Request) => {
 
       const { data: payments, error: payError } = await supabase
         .from('subscription_payments')
-        .select('subscription_id, cycle_number, amount_cents, status, package_id, provider_payment_ref, provider_invoice_url, paid_at, created_at')
+        .select('subscription_id, cycle_number, amount_cents, currency, status, package_id, provider_payment_ref, provider_invoice_url, paid_at, created_at')
         .order('created_at', { ascending: false });
       if (payError) throw payError;
 
       const { data: topuppayments, error: topupPayError } = await supabase
         .from('credit_topup_payments')
-        .select('restaurant_id, credits, amount_cents, status, package_id, provider_payment_ref, provider_invoice_url, paid_at, created_at')
+        .select('restaurant_id, credits, amount_cents, currency, status, package_id, provider_payment_ref, provider_invoice_url, paid_at, created_at')
         .order('created_at', { ascending: false });
       if (topupPayError) throw topupPayError;
 
@@ -475,12 +478,12 @@ Deno.serve(async (req: Request) => {
         subId
           ? supabase
               .from('subscription_payments')
-              .select('cycle_number, amount_cents, status, package_id, provider, provider_payment_ref, provider_invoice_url, paid_at, created_at')
+              .select('cycle_number, amount_cents, currency, status, package_id, provider, provider_payment_ref, provider_invoice_url, paid_at, created_at')
               .eq('subscription_id', subId)
           : Promise.resolve({ data: [], error: null }),
         supabase
           .from('credit_topup_payments')
-          .select('credits, amount_cents, status, package_id, provider, provider_payment_ref, provider_invoice_url, paid_at, created_at')
+          .select('credits, amount_cents, currency, status, package_id, provider, provider_payment_ref, provider_invoice_url, paid_at, created_at')
           .eq('restaurant_id', restaurantId),
         supabase.from('credit_topup_packages').select('id, name'),
       ]);

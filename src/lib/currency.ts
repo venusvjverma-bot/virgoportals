@@ -53,6 +53,30 @@ export function formatMinor(minor: number, currency = 'SEK'): string {
   }).format(minor / 100);
 }
 
+/** Swedish VAT rate. Subscription prices are quoted excluding VAT. */
+export const SWEDISH_VAT_RATE = 0.25;
+
+/**
+ * Formats a minor-units (hundredths) amount as whole-kronor SEK, e.g.
+ * 50000 -> "500 kr". Subscription prices and their VAT amounts are always
+ * whole kronor, so no decimals are shown.
+ */
+export function formatSek(minor: number): string {
+  return `${new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 }).format(minor / 100)} kr`;
+}
+
+/**
+ * Splits a VAT-exclusive price into net, VAT and gross (all minor units).
+ * 50000 at 25% -> net 50000, VAT 12500, gross 62500 (i.e. 500 + 125 = 625 kr).
+ */
+export function vatBreakdown(
+  netMinor: number,
+  rate: number = SWEDISH_VAT_RATE,
+): { netMinor: number; vatMinor: number; grossMinor: number; rate: number } {
+  const vatMinor = Math.round(netMinor * rate);
+  return { netMinor, vatMinor, grossMinor: netMinor + vatMinor, rate };
+}
+
 /**
  * Formats a raw numeric string (as entered by a host in a price field) for
  * display. Accepts "40", "29.50", "125" etc. Returns the formatted currency

@@ -16,6 +16,7 @@ import {
   type SubscriptionOverview,
 } from '@/lib/subscriptions';
 import { generateSubscriptionInvoiceBlob, isTestPayment, type SubscriptionInvoiceData } from '@/lib/subscriptionInvoice';
+import { SWEDISH_VAT_RATE, formatSek, vatBreakdown } from '@/lib/currency';
 import type { RestaurantPortal } from '@/types';
 
 const TOKENS_PER_CREDIT = 900000;
@@ -48,10 +49,20 @@ interface SubscriptionViewProps {
   portal: RestaurantPortal;
 }
 
-/** Safe USD formatting: never shows NaN, undefined, or a misleading $0 for missing data. */
-function formatUsd(cents: number | null | undefined): string {
+/** Safe SEK formatting: never shows NaN, undefined, or a misleading 0 for missing data. */
+function formatSekSafe(cents: number | null | undefined): string {
   if (typeof cents !== 'number' || !Number.isFinite(cents) || cents < 0) return '—';
-  return '\u0024' + (cents / 100).toFixed(2);
+  return formatSek(cents);
+}
+
+/** Currency of a recorded payment; older rows may still be USD. */
+function paymentCurrency(p: PaymentRecord): string {
+  return p.currency || 'SEK';
+}
+
+/** Historical USD rows (pre-SEK migration) keep their original currency. */
+function formatUsdLegacy(cents: number): string {
+  return `${(cents / 100).toFixed(2)}`;
 }
 
 export function SubscriptionView({ portal }: SubscriptionViewProps) {
@@ -117,11 +128,12 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
 
   function downloadInvoice(p: PaymentRecord) {
     const isTopup = p.type === 'topup';
+    const cur = paymentCurrency(p);
     const inv: SubscriptionInvoiceData = {
       title: isTopup ? 'Credit Top-up Invoice' : 'Subscription Invoice',
       footerNote: isTopup
         ? 'All top-up prices are in USD. Payment processed by Virgo Portals.'
-        : 'All subscription prices are in USD. Payment processed by Virgo Portals.',
+        : 'All subscription prices are in SEK excluding VAT. Swedish VAT is added at checkout. Payment processed by Virgo Portals.',
       subscriptionRef: isTopup
         ? null
         : sub
@@ -134,7 +146,8 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
         ? `Credit top-up — ${Math.round(p.credits ?? 0)} credits`
         : `${p.description ?? currentPackage?.name ?? 'Subscription'} plan — monthly (cycle ${p.cycleNumber ?? ''})`,
       amountCents: p.amountCents,
-      currency: 'USD',
+      currency: cur,
+      vatRate: isTopup ? 0 : SWEDISH_VAT_RATE,
       periodStart: sub?.periodStart ?? null,
       periodEnd: sub?.periodEnd ?? null,
       paidAt: p.paidAt ?? p.createdAt,
@@ -265,8 +278,23 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
                   </span>
                 ) : null}
                 <p className="font-display text-lg font-semibold text-ink">{pkg.name}</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-ink">{formatUsd(pkg.priceCents)}<span className="text-sm font-normal text-ink-muted">/mo</span></p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-ink">{formatSek(pkg.priceCents)}<span className="text-sm font-normal text-ink-muted">/mo</span></p>
+                <p className="text-xs text-ink-muted">excl. VAT</p>
                 <p className="mt-1 text-sm text-ink-soft">{Math.round(pkg.credits).toLocaleString()} credits / month</p>
+                <dl className="mt-3 space-y-0.5 border-t border-cream-200 pt-3 text-xs tabular-nums text-ink-soft">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt>Price excl. VAT</dt>
+                    <dd>{formatSek(pkg.priceCents)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt>VAT 25%</dt>
+                    <dd>{formatSek(vatBreakdown(pkg.priceCents).vatMinor)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 font-semibold text-ink">
+                    <dt>Total payable</dt>
+                    <dd>{formatSek(vatBreakdown(pkg.priceCents).grossMinor)}</dd>
+                  </div>
+                </dl>
                 <div className="mt-4">
                   {isCurrent ? (
                     <Button variant="secondary" size="sm" disabled>
@@ -354,7 +382,7 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
               <p className="font-display text-lg font-semibold text-ink">{pkg.name}</p>
               <p className="mt-1 text-2xl font-bold tabular-nums text-ink">{Math.round(pkg.credits).toLocaleString()}</p>
               <p className="text-xs text-ink-faint">credits</p>
-              <p className="mt-3 text-lg font-semibold tabular-nums text-ink">{formatUsd(pkg.priceCents)}</p>
+              <p className="mt-3 text-lg font-semibold tabular-nums text-ink">{formatSekSafe(pkg.priceCents)}</p>
               <div className="mt-4">
                 <Button
                   size="sm"
@@ -438,7 +466,7 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
                     <td className="px-4 py-3 text-ink">{formatDate(p.paidAt ?? p.createdAt)}</td>
                     <td className="px-4 py-3 text-ink">{PAYMENT_TYPE_LABELS[p.type]}</td>
                     <td className="px-4 py-3 text-ink">{paymentItem(p)}</td>
-                    <td className="px-4 py-3 tabular-nums text-ink">{formatUsd(p.amountCents)}</td>
+                    <td className="px-4 py-3 tabular-nums text-ink">{p.currency === 'USD' ? formatUsdLegacy(p.amountCents) : formatSekSafe(p.amountCents)}</td>
                     <td className="px-4 py-3">
                       <span
                         className={

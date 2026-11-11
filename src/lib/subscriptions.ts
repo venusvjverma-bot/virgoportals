@@ -25,6 +25,8 @@ export interface PaymentRecord {
   credits: number | null;
   cycleNumber: number | null;
   amountCents: number;
+  /** ISO currency of this payment as recorded (e.g. 'SEK'; older rows 'USD'). */
+  currency: string;
   status: 'pending' | 'succeeded' | 'failed';
   paymentRef: string | null;
   invoiceUrl: string | null;
