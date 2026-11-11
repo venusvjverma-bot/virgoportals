@@ -2,7 +2,8 @@ import { supabase } from '@/lib/supabase';
 import type { AddOnOption, Dish, DishServingOption, DishVariant, DishRemovableIngredient, RestaurantPortal, PublicResource, ResourceType } from '@/types';
 import type { DailyUsageRow } from '@/lib/dailyTokenUsage';
 
-const RESTAURANT_COLUMNS = 'id, owner_email, name, city, welcome, system_prompt, status, created_at, timezone, currency';
+const RESTAURANT_COLUMNS =
+  'id, owner_email, name, city, welcome, system_prompt, status, created_at, timezone, currency, business_name, business_address';
 const DISH_COLUMNS =
   'id, restaurant_id, name, description, ingredients, allergy, price, image_url, sort_order, category, section, serving, abv, available, department_id, event_id';
 
@@ -17,6 +18,8 @@ interface RestaurantRow {
   created_at: string;
   timezone: string;
   currency: string;
+  business_name: string | null;
+  business_address: string | null;
 }
 
 interface DishRow {
@@ -50,6 +53,8 @@ function mapRestaurant(row: RestaurantRow): RestaurantPortal {
     createdAt: row.created_at,
     timezone: row.timezone ?? 'Europe/Stockholm',
     currency: row.currency ?? 'SEK',
+    businessName: row.business_name ?? null,
+    businessAddress: row.business_address ?? null,
   };
 }
 
@@ -207,7 +212,12 @@ export async function listPublicAddOns(
 
 export async function updatePortal(
   restaurantId: string,
-  patch: Partial<Pick<RestaurantPortal, 'name' | 'city' | 'welcome' | 'systemPrompt' | 'status' | 'timezone' | 'currency'>>
+  patch: Partial<
+    Pick<
+      RestaurantPortal,
+      'name' | 'city' | 'welcome' | 'systemPrompt' | 'status' | 'timezone' | 'currency' | 'businessName' | 'businessAddress'
+    >
+  >
 ): Promise<void> {
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.name !== undefined) update.name = patch.name;
@@ -217,6 +227,8 @@ export async function updatePortal(
   if (patch.status !== undefined) update.status = patch.status;
   if (patch.timezone !== undefined) update.timezone = patch.timezone;
   if (patch.currency !== undefined) update.currency = patch.currency;
+  if (patch.businessName !== undefined) update.business_name = patch.businessName;
+  if (patch.businessAddress !== undefined) update.business_address = patch.businessAddress;
 
   const { error } = await supabase.from('restaurants').update(update).eq('id', restaurantId);
   if (error) throw error;

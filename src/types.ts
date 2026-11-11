@@ -56,6 +56,9 @@ export interface RestaurantPortal {
   createdAt: string;
   timezone: string;
   currency: string;
+  /** Optional invoicing details. Null until the host provides them. */
+  businessName: string | null;
+  businessAddress: string | null;
 }
 
 export type ServingUnit = 'cl' | 'ml' | 'oz';

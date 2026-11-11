@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { HostShell } from '@/components/host/HostShell';
 import { RestaurantView } from '@/components/host/RestaurantView';
+import { BusinessInfoView } from '@/components/host/BusinessInfoView';
 import { LlmUsageView } from '@/components/host/LlmUsageView';
 import { CreditWalletView } from '@/components/host/CreditWalletView';
 import { SubscriptionView } from '@/components/host/SubscriptionView';
@@ -71,6 +72,12 @@ export function HostDashboard({ onLogout }: HostDashboardProps) {
     setPortal({ ...portal, ...patch });
   }
 
+  async function saveBusinessInfo(patch: Pick<RestaurantPortal, 'businessName' | 'businessAddress'>) {
+    if (!portal) return;
+    await updatePortal(portal.id, patch);
+    setPortal({ ...portal, ...patch });
+  }
+
   async function reloadResources(): Promise<{ departments: Department[]; events: EventItem[] }> {
     if (!portal) return { departments: [], events: [] };
     const [depts, evts] = await Promise.all([
@@ -132,6 +139,7 @@ export function HostDashboard({ onLogout }: HostDashboardProps) {
     >
       {view === 'dashboard' ? (
         <>
+          <BusinessInfoView portal={portal} onSave={saveBusinessInfo} />
           <RestaurantView portal={portal} onSave={saveRestaurant} />
           <CreditWalletView portal={portal} />
           <LlmUsageView portal={portal} />

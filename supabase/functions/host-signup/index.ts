@@ -35,6 +35,8 @@ const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 72;
 const MAX_NAME_LENGTH = 120;
 const MAX_CITY_LENGTH = 120;
+const MAX_BUSINESS_NAME_LENGTH = 120;
+const MAX_BUSINESS_ADDRESS_LENGTH = 240;
 
 type Db = ReturnType<typeof createClient>;
 
@@ -101,6 +103,9 @@ Deno.serve(async (req: Request) => {
     const confirmPassword = typeof body?.confirmPassword === 'string' ? body.confirmPassword : '';
     const restaurantName = readString(body?.restaurantName);
     const city = readString(body?.city);
+    // Both are optional: empty is a valid value and stores NULL.
+    const businessName = readString(body?.businessName);
+    const businessAddress = readString(body?.businessAddress);
 
     if (!email) return json({ error: 'Enter your email address.' }, 400);
     if (!isValidEmail(email)) return json({ error: 'Enter a valid email address.' }, 400);
@@ -130,6 +135,14 @@ Deno.serve(async (req: Request) => {
     if (!city) return json({ error: 'Enter your restaurant location.' }, 400);
     if (city.length > MAX_CITY_LENGTH) {
       return json({ error: 'That location is too long.' }, 400);
+    }
+
+    // Optional fields: only a length guard, never a required check.
+    if (businessName.length > MAX_BUSINESS_NAME_LENGTH) {
+      return json({ error: 'That business name is too long.' }, 400);
+    }
+    if (businessAddress.length > MAX_BUSINESS_ADDRESS_LENGTH) {
+      return json({ error: 'That business address is too long.' }, 400);
     }
 
     // The attempt limit is counted only once the fields themselves are sound, so
@@ -198,6 +211,8 @@ Deno.serve(async (req: Request) => {
         name: restaurantName,
         city,
         system_prompt: defaultPrompt,
+        business_name: businessName || null,
+        business_address: businessAddress || null,
       })
       .select('id')
       .single();

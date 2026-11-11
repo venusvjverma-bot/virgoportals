@@ -9,6 +9,9 @@ export interface HostSignupInput {
   confirmPassword: string;
   restaurantName: string;
   city: string;
+  /** Optional invoicing details. Empty strings are allowed. */
+  businessName: string;
+  businessAddress: string;
 }
 
 /**
@@ -66,6 +69,8 @@ export async function signUpHost(input: HostSignupInput): Promise<{ outcome: Sig
       confirmPassword: input.confirmPassword,
       restaurantName: input.restaurantName.trim(),
       city: input.city.trim(),
+      businessName: input.businessName.trim(),
+      businessAddress: input.businessAddress.trim(),
     }
   );
 

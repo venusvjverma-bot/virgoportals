@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  Building2,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -33,7 +34,12 @@ const FIELDS = [
   { key: 'city', label: 'Location', type: 'text', autoComplete: 'address-level2', placeholder: 'e.g. Stockholm', Icon: MapPin },
 ] as const;
 
-type FieldKey = (typeof FIELDS)[number]['key'];
+const OPTIONAL_FIELDS = [
+  { key: 'businessName', label: 'Business name', autoComplete: 'organization', placeholder: 'e.g. Olive & Thyme AB', Icon: Building2 },
+  { key: 'businessAddress', label: 'Business address', autoComplete: 'street-address', placeholder: 'e.g. Storgatan 12, 114 55 Stockholm', Icon: MapPin },
+] as const;
+
+type FieldKey = (typeof FIELDS)[number]['key'] | (typeof OPTIONAL_FIELDS)[number]['key'];
 
 export function HostSignupPage({ onBack }: HostSignupPageProps) {
   const [values, setValues] = useState<Record<FieldKey, string>>({
@@ -42,6 +48,8 @@ export function HostSignupPage({ onBack }: HostSignupPageProps) {
     confirmPassword: '',
     restaurantName: '',
     city: '',
+    businessName: '',
+    businessAddress: '',
   });
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<DoneState>(null);
@@ -63,6 +71,8 @@ export function HostSignupPage({ onBack }: HostSignupPageProps) {
       confirmPassword: values.confirmPassword,
       restaurantName: values.restaurantName,
       city: values.city,
+      businessName: values.businessName,
+      businessAddress: values.businessAddress,
     };
 
     const invalid = validateSignup(input);
@@ -163,6 +173,29 @@ export function HostSignupPage({ onBack }: HostSignupPageProps) {
             </Field>
             );
           })}
+        </div>
+
+        <p className="mt-8 text-[11px] font-medium uppercase text-ink-muted" style={{ letterSpacing: '0.5px' }}>
+          Business information (optional)
+        </p>
+        <div className="mt-3 space-y-5">
+          {OPTIONAL_FIELDS.map(({ key, label, autoComplete, placeholder, Icon }) => (
+            <Field key={key} label={label} htmlFor={`signup-${key}`}>
+              <div className="relative">
+                <Icon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+                <Input
+                  id={`signup-${key}`}
+                  type="text"
+                  autoComplete={autoComplete}
+                  placeholder={placeholder}
+                  className="pl-10"
+                  value={values[key]}
+                  disabled={submitting}
+                  onChange={(event) => update(key, event.target.value)}
+                />
+              </div>
+            </Field>
+          ))}
         </div>
 
         <p className="mt-4 text-xs leading-relaxed text-ink-muted">
