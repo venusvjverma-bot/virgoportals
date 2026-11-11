@@ -225,7 +225,7 @@ function topupPaymentRecord(t: Record<string, unknown>, pkgName: string | null):
     credits: Number(t.credits),
     cycleNumber: null,
     amountCents: t.amount_cents,
-    currency: (t.currency as string | null) ?? 'USD',
+    currency: (t.currency as string | null) ?? 'SEK',
     status: t.status,
     paymentRef: t.provider_payment_ref,
     invoiceUrl: t.provider_invoice_url,

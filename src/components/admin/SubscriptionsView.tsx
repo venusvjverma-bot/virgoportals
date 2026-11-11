@@ -42,10 +42,13 @@ function paymentItem(p: PaymentRecord, row: AdminSubscriptionRow): string {
 
 function downloadInvoice(row: AdminSubscriptionRow, p: PaymentRecord) {
   const isTopup = p.type === 'topup';
+  const cur = p.currency || 'SEK';
   const inv: SubscriptionInvoiceData = {
     title: isTopup ? 'Credit Top-up Invoice' : 'Subscription Invoice',
     footerNote: isTopup
-      ? 'All top-up prices are in USD. Payment processed by Virgo Portals.'
+      ? cur === 'USD'
+        ? 'All top-up prices are in USD. Payment processed by Virgo Portals.'
+        : 'All top-up prices are in SEK excluding VAT. Swedish VAT is added at checkout. Payment processed by Virgo Portals.'
       : 'All subscription prices are in SEK excluding VAT. Swedish VAT is added at checkout. Payment processed by Virgo Portals.',
     subscriptionRef: isTopup ? null : row.packageCode ? `sub-${row.packageCode}-${p.cycleNumber ?? ''}` : null,
     paymentRef: p.paymentRef,
@@ -55,8 +58,10 @@ function downloadInvoice(row: AdminSubscriptionRow, p: PaymentRecord) {
       ? `Credit top-up — ${Math.round(p.credits ?? 0)} credits`
       : `${p.description ?? row.packageName ?? 'Subscription'} plan — monthly (cycle ${p.cycleNumber ?? ''})`,
     amountCents: p.amountCents,
-    currency: p.currency || 'SEK',
-    vatRate: isTopup ? 0 : SWEDISH_VAT_RATE,
+    currency: cur,
+    // Top-up prices are quoted excluding VAT like subscriptions. Legacy USD
+    // rows keep the old no-VAT layout so historical invoices are unchanged.
+    vatRate: isTopup ? (cur === 'USD' ? 0 : SWEDISH_VAT_RATE) : SWEDISH_VAT_RATE,
     periodStart: row.periodStart,
     periodEnd: row.periodEnd,
     paidAt: p.paidAt ?? p.createdAt,

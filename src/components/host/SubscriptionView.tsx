@@ -132,7 +132,9 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
     const inv: SubscriptionInvoiceData = {
       title: isTopup ? 'Credit Top-up Invoice' : 'Subscription Invoice',
       footerNote: isTopup
-        ? 'All top-up prices are in USD. Payment processed by Virgo Portals.'
+        ? cur === 'USD'
+          ? 'All top-up prices are in USD. Payment processed by Virgo Portals.'
+          : 'All top-up prices are in SEK excluding VAT. Swedish VAT is added at checkout. Payment processed by Virgo Portals.'
         : 'All subscription prices are in SEK excluding VAT. Swedish VAT is added at checkout. Payment processed by Virgo Portals.',
       subscriptionRef: isTopup
         ? null
@@ -147,7 +149,9 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
         : `${p.description ?? currentPackage?.name ?? 'Subscription'} plan — monthly (cycle ${p.cycleNumber ?? ''})`,
       amountCents: p.amountCents,
       currency: cur,
-      vatRate: isTopup ? 0 : SWEDISH_VAT_RATE,
+      // Top-up prices are quoted excluding VAT like subscriptions. Legacy USD
+      // rows keep the old no-VAT layout so historical invoices are unchanged.
+      vatRate: isTopup ? (cur === 'USD' ? 0 : SWEDISH_VAT_RATE) : SWEDISH_VAT_RATE,
       periodStart: sub?.periodStart ?? null,
       periodEnd: sub?.periodEnd ?? null,
       paidAt: p.paidAt ?? p.createdAt,
@@ -383,6 +387,21 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
               <p className="mt-1 text-2xl font-bold tabular-nums text-ink">{Math.round(pkg.credits).toLocaleString()}</p>
               <p className="text-xs text-ink-faint">credits</p>
               <p className="mt-3 text-lg font-semibold tabular-nums text-ink">{formatSekSafe(pkg.priceCents)}</p>
+              <p className="text-xs text-ink-muted">excl. VAT</p>
+              <dl className="mt-3 space-y-0.5 border-t border-cream-200 pt-3 text-xs tabular-nums text-ink-soft">
+                <div className="flex items-center justify-between gap-3">
+                  <dt>Price excl. VAT</dt>
+                  <dd>{formatSekSafe(pkg.priceCents)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt>VAT 25%</dt>
+                  <dd>{formatSekSafe(vatBreakdown(pkg.priceCents).vatMinor)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 font-semibold text-ink">
+                  <dt>Total payable</dt>
+                  <dd>{formatSekSafe(vatBreakdown(pkg.priceCents).grossMinor)}</dd>
+                </div>
+              </dl>
               <div className="mt-4">
                 <Button
                   size="sm"

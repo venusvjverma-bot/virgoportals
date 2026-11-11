@@ -57,12 +57,19 @@ export function formatMinor(minor: number, currency = 'SEK'): string {
 export const SWEDISH_VAT_RATE = 0.25;
 
 /**
- * Formats a minor-units (hundredths) amount as whole-kronor SEK, e.g.
- * 50000 -> "500 kr". Subscription prices and their VAT amounts are always
- * whole kronor, so no decimals are shown.
+ * Formats a minor-units (hundredths) amount as SEK, e.g. 50000 -> "500 kr".
+ * Whole kronor render without decimals; öre appear only when the amount
+ * actually has them (6250 -> "62,50 kr"). This keeps the subscription prices
+ * readable as whole kronor while still showing the 25% VAT on a 50 kr top-up
+ * as 12,50 kr rather than rounding it away.
  */
 export function formatSek(minor: number): string {
-  return `${new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 }).format(minor / 100)} kr`;
+  const hasOre = Math.round(minor) % 100 !== 0;
+  const digits = hasOre ? 2 : 0;
+  return `${new Intl.NumberFormat('sv-SE', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(minor / 100)} kr`;
 }
 
 /**

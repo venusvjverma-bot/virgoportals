@@ -28,7 +28,12 @@ export interface SubscriptionInvoiceData {
 function money(cents: number, currency: string): string {
   const code = (currency || 'SEK').toUpperCase();
   if (code === 'USD') return `${(cents / 100).toFixed(2)}`;
-  return `${new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 }).format(cents / 100)} kr`;
+  const hasOre = Math.round(cents) % 100 !== 0;
+  const digits = hasOre ? 2 : 0;
+  return `${new Intl.NumberFormat('sv-SE', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(cents / 100)} kr`;
 }
 
 function fmtDate(iso: string | null): string {
