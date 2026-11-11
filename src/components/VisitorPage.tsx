@@ -1191,39 +1191,32 @@ function MessageBubble({
           className="relative"
           style={{
             filter:
-              'drop-shadow(0 1px 2px rgba(28, 25, 23, 0.05)) drop-shadow(0 8px 16px rgba(28, 25, 23, 0.10))',
+              'drop-shadow(0 1px 2px rgba(28, 25, 23, 0.05)) drop-shadow(0 10px 18px rgba(28, 25, 23, 0.12))',
           }}
         >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 22 20"
+            className={cn(
+              'pointer-events-none absolute -bottom-[8px] h-[20px] w-[22px]',
+              isVisitor ? 'right-[-2px] scale-x-[-1]' : 'left-[-2px]'
+            )}
+          >
+            <path
+              d="M2 0 L2 14.5 C1.8 16.8 1.2 17.8 0.6 18.4 C4.6 19.5 11.6 12 14.6 12 L2 12 Z"
+              fill={isVisitor ? '#3F4F3A' : '#F6F1EA'}
+            />
+          </svg>
           <div
             className={cn(
-              'rounded-2xl border px-4 py-3 text-sm leading-relaxed',
+              'rounded-[22px] px-4 py-3 text-sm leading-relaxed',
               isVisitor
-                ? 'rounded-br-none border-white/20 bg-[#30472D] text-white'
-                : 'rounded-bl-none border-cream-300 bg-[#FFF9F0] text-[#26231F]'
+                ? 'rounded-br-none bg-[#3F4F3A] text-white'
+                : 'rounded-bl-none bg-[#F6F1EA] text-[#1C1917]'
             )}
           >
             {isVisitor ? message.text : <AssistantMarkdown text={message.text} />}
           </div>
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 16 13"
-            fill="none"
-            className={cn(
-              'pointer-events-none absolute -bottom-[12px] h-[13px] w-4 overflow-visible',
-              isVisitor ? 'right-0' : 'left-0'
-            )}
-            style={isVisitor ? { transform: 'scaleX(-1)' } : undefined}
-          >
-            <path
-              d="M0 0H12C10.5 1.9 8.4 10.2 5.4 10.6C1.9 9.7 0.5 6.4 0 1Z"
-              fill={isVisitor ? '#30472D' : '#FFF9F0'}
-            />
-            <path
-              d="M0 1C0.5 6.4 1.9 9.7 5.4 10.6C8.4 10.2 10.5 1.9 12 1"
-              stroke={isVisitor ? 'rgba(255,255,255,0.2)' : '#E3D8C9'}
-              strokeWidth="1"
-            />
-          </svg>
         </div>
         {groups.length > 0 ? (
           <div className="space-y-3">
