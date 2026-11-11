@@ -1,5 +1,3 @@
-import { Maximize2 } from 'lucide-react';
-
 interface ChatCardButtonProps {
   name: string;
   description: string;
@@ -9,7 +7,7 @@ interface ChatCardButtonProps {
   price: string | null;
   priceOptions: string[];
   ariaLabel: string;
-  /** Shows the "Tap to enlarge" hint under the image. Dish cards only. */
+  /** Shows the "Tap to view" hint under the image. Dish cards only. */
   showImageHint?: boolean;
   onOpen: () => void;
 }
@@ -47,9 +45,8 @@ export function ChatCardButton({
             </div>
           )}
           {showImageHint && imageUrl ? (
-            <span className="mt-1.5 inline-flex items-center justify-center gap-1 rounded-full bg-cream-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-olive-700 ring-1 ring-inset ring-olive-300">
-              <Maximize2 className="h-3 w-3 shrink-0" aria-hidden="true" />
-              Tap to enlarge
+            <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-cream-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-olive-700 ring-1 ring-inset ring-olive-300">
+              Tap to view
             </span>
           ) : null}
           {price ? (
