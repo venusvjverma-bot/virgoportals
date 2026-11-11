@@ -1188,21 +1188,42 @@ function MessageBubble({
     <div className={cn('flex animate-fade-in', isVisitor ? 'justify-end' : 'justify-start')}>
       <div className={cn('max-w-[92%] space-y-3 sm:max-w-[80%]')}>
         <div
-          className={cn(
-            'relative rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-soft',
-            isVisitor
-              ? 'border-white/15 bg-[#30472D] text-white'
-              : 'border-cream-300 bg-[#FFF9F0] text-ink'
-          )}
+          className="relative"
+          style={{
+            filter:
+              'drop-shadow(0 1px 2px rgba(28, 25, 23, 0.05)) drop-shadow(0 8px 16px rgba(28, 25, 23, 0.10))',
+          }}
         >
-          <span
-            aria-hidden="true"
+          <div
             className={cn(
-              'absolute -bottom-[5px] h-3 w-3 rounded-[2px] border-b border-inherit bg-inherit',
-              isVisitor ? 'right-3 rotate-45 border-r' : 'left-3 -rotate-45 border-l'
+              'rounded-2xl border px-4 py-3 text-sm leading-relaxed',
+              isVisitor
+                ? 'rounded-br-none border-white/20 bg-[#30472D] text-white'
+                : 'rounded-bl-none border-cream-300 bg-[#FFF9F0] text-[#26231F]'
             )}
-          />
-          {isVisitor ? message.text : <AssistantMarkdown text={message.text} />}
+          >
+            {isVisitor ? message.text : <AssistantMarkdown text={message.text} />}
+          </div>
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 16 13"
+            fill="none"
+            className={cn(
+              'pointer-events-none absolute -bottom-[12px] h-[13px] w-4 overflow-visible',
+              isVisitor ? 'right-0' : 'left-0'
+            )}
+            style={isVisitor ? { transform: 'scaleX(-1)' } : undefined}
+          >
+            <path
+              d="M0 0H12C10.5 1.9 8.4 10.2 5.4 10.6C1.9 9.7 0.5 6.4 0 1Z"
+              fill={isVisitor ? '#30472D' : '#FFF9F0'}
+            />
+            <path
+              d="M0 1C0.5 6.4 1.9 9.7 5.4 10.6C8.4 10.2 10.5 1.9 12 1"
+              stroke={isVisitor ? 'rgba(255,255,255,0.2)' : '#E3D8C9'}
+              strokeWidth="1"
+            />
+          </svg>
         </div>
         {groups.length > 0 ? (
           <div className="space-y-3">
