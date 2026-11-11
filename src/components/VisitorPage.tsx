@@ -1189,12 +1189,19 @@ function MessageBubble({
       <div className={cn('max-w-[92%] space-y-3 sm:max-w-[80%]')}>
         <div
           className={cn(
-            'rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft',
+            'relative rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-soft',
             isVisitor
-              ? 'bg-olive-700 text-white'
-              : 'bg-white text-ink ring-1 ring-cream-200'
+              ? 'border-white/15 bg-[#30472D] text-white'
+              : 'border-cream-300 bg-[#FFF9F0] text-ink'
           )}
         >
+          <span
+            aria-hidden="true"
+            className={cn(
+              'absolute -bottom-[5px] h-3 w-3 rounded-[2px] border-b border-inherit bg-inherit',
+              isVisitor ? 'right-3 rotate-45 border-r' : 'left-3 -rotate-45 border-l'
+            )}
+          />
           {isVisitor ? message.text : <AssistantMarkdown text={message.text} />}
         </div>
         {groups.length > 0 ? (
