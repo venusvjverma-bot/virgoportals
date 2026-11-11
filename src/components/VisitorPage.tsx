@@ -1242,7 +1242,7 @@ function DishResult({ dish, currency, onOpen }: { dish: Dish; currency: string; 
       allergy={dish.allergy}
       price={dish.price && !hasMultiplePrices ? formatPriceInput(dish.price, cur) : null}
       priceOptions={hasMultiplePrices ? activeOptions.map((o) => formatPriceInput(o.price, cur)) : []}
-      showImageHint
+      showTapHint
       ariaLabel={`View details for ${dish.name || 'this item'}`}
       onOpen={onOpen}
     />

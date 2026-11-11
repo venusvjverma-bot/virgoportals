@@ -7,8 +7,8 @@ interface ChatCardButtonProps {
   price: string | null;
   priceOptions: string[];
   ariaLabel: string;
-  /** Shows the "Tap to view" hint under the image. Dish cards only. */
-  showImageHint?: boolean;
+  /** Shows the "Tap to view" hint on the card. Dish cards only. */
+  showTapHint?: boolean;
   onOpen: () => void;
 }
 
@@ -21,7 +21,7 @@ export function ChatCardButton({
   price,
   priceOptions,
   ariaLabel,
-  showImageHint = false,
+  showTapHint = false,
   onOpen,
 }: ChatCardButtonProps) {
   return (
@@ -44,7 +44,7 @@ export function ChatCardButton({
               No image
             </div>
           )}
-          {showImageHint && imageUrl ? (
+          {showTapHint ? (
             <span className="mt-1.5 inline-flex items-center justify-center rounded-full bg-cream-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-olive-700 ring-1 ring-inset ring-olive-300">
               Tap to view
             </span>
