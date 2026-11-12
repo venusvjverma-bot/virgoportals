@@ -660,12 +660,31 @@ function extractionInstruction(): string {
     'When you cannot tell with confidence, use category "add_ons" so the restaurant can review it. Never guess. Keep each add-on own name, description and printed price. ' +
     'Do not attach add-ons as variants, do not set "variant_of", and do not put add-on prices in "additional_price". ' +
     'Several add-ons may exist, and each is a separate object.\n\n' +
-    'Variants: when a menu lists a named option of an item as its own line, ' +
-    'set "variant_of" to the parent item name, "variant" to the option name, and "additional_price" to the add-on amount when the menu prints one. An option listed with no extra amount is still a variant: keep variant_of and variant, and leave additional_price "". ' +
-    'Options the menu names as choices of an item inside that item\'s description or details are also variants: return each explicitly named option as its own variant line with variant_of set to that item\'s name. ' +
-    'Only choices the menu explicitly offers for that item are variants: an ordinary ingredient the dish always contains is NOT a variant, and you must never invent an option or price the menu does not state. ' +
-    'A full price printed for the option line is not an add-on amount: leave "variant_of", "variant" and "additional_price" as "" and keep the line as its own object. ' +
-    'The parent keeps its own object and its own price.\n\n' +
+    /*
+     * TEMPORARY TEST PROMPT (variant-instruction experiment). The previous
+     * Variants paragraph is preserved verbatim below for rollback:
+     *
+     * Variants: when a menu lists a named option of an item as its own line,
+     * set "variant_of" to the parent item name, "variant" to the option name,
+     * and "additional_price" to the add-on amount when the menu prints one. An
+     * option listed with no extra amount is still a variant: keep variant_of
+     * and variant, and leave additional_price "". Options the menu names as
+     * choices of an item inside that item's description or details are also
+     * variants: return each explicitly named option as its own variant line
+     * with variant_of set to that item's name. Only choices the menu explicitly
+     * offers for that item are variants: an ordinary ingredient the dish always
+     * contains is NOT a variant, and you must never invent an option or price
+     * the menu does not state. A full price printed for the option line is not
+     * an add-on amount: leave "variant_of", "variant" and "additional_price" as
+     * "" and keep the line as its own object. The parent keeps its own object
+     * and its own price.
+     */
+    'Variants: A variant is an explicitly offered alternative or replacement choice belonging to one or more parent products. It may change, replace or determine an ingredient, component or preparation.\n' +
+    'Variants do not have to be listed directly under their parent product. They may appear in a separate section, table, group or shared options list. When the menu explicitly states that a group of options is available for multiple named products, associate every option with every named parent product.\n' +
+    'Create a separate variant object for each option-parent relationship. Set "variant_of" to the exact parent product name and "variant" to the exact option name. Do not create standalone products for shared variant options.\n' +
+    'An option that replaces or changes an existing ingredient or component is a variant, not an add-on. An optional extra added on top of the original product without replacing anything is an add-on and must follow the Add-ons rule.\n' +
+    'A variant may have no additional charge. If the menu explicitly prints an additional charge with a plus sign, put that amount in "additional_price". Never treat a complete product price as an additional charge or calculate a price difference.\n' +
+    'Only use explicitly stated options and parent relationships. Ordinary ingredients are not variants unless offered as choices. Never invent options or associations.\n\n' +
     'Portion options of one food product are NOT variants: a "Half plate" or "4 pieces" line printed ' +
     'with its own full price is a serving size of the same product, so follow the Sizes rule above ' +
     '(same "name", portion in "serving", its own printed full price). Only use variant_of/variant when ' +
