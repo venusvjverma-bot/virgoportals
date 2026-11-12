@@ -36,6 +36,10 @@
     "visitor-orders": {
       "hasChanged": false,
       "hash": "8ecb92850446245958d70e320e1d8178e9c517503d3ab176dba1bb3b106adbb1"
+    },
+    "pdf-diag": {
+      "hasChanged": false,
+      "hash": "4df71398ac1a570a2800f757d02d78c0102308cc41e8922f1c2c385d9dcaec84"
     }
   }
 }
