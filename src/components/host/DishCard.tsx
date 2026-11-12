@@ -214,7 +214,7 @@ export function DishCard({
     ? isDrinkSection(dish.section) || dish.abv.trim().length > 0
     : false;
   const hasServingOptionsConfigured = servingOpts.some((o) => o.quantity.trim() || o.name.trim());
-  const hideHeadlinePrice = isDrinkSection(section) || (section !== 'add_on' && hasServingOptionsConfigured);
+  const hideHeadlinePrice = section !== 'add_on' && hasServingOptionsConfigured;
 
   const currentCategoryOptions = categoriesForSection(section);
 
@@ -274,12 +274,12 @@ export function DishCard({
       return;
     }
 
-    // Serving sizes are mandatory for drinks; for food they are optional and
-    // only rows the host started filling in are validated.
+    // Serving sizes are required for a drink only once the host starts filling
+    // them in; a drink without serving rows is saved with its base price.
     const filled = servingMode === 'measured'
       ? servingOpts.filter((o) => o.quantity.trim() || o.price.trim())
       : servingOpts.filter((o) => o.name.trim() || o.price.trim());
-    if (isDrinkSection(section) && filled.length === 0) {
+    if (isDrinkSection(section) && hasServingOptionsConfigured && filled.length === 0) {
       setError('Add at least one serving size with a price for this drink.');
       return;
     }
