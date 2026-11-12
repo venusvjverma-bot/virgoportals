@@ -126,7 +126,11 @@ export async function updateCombo(comboId: string, input: Omit<ComboInput, 'depa
 }
 
 export async function generateComboImage(restaurantId: string, comboId: string): Promise<string> {
-  const result = await callFunction<{ imageUrl?: unknown }>('dish-image', { restaurantId, comboId });
+  const result = await callFunction<{ imageUrl?: unknown }>('dish-image', {
+    restaurantId,
+    comboId,
+    clientRequestId: crypto.randomUUID(),
+  });
   if (typeof result.imageUrl !== 'string' || result.imageUrl.length === 0) {
     throw new Error('The image was generated but no image address was returned.');
   }

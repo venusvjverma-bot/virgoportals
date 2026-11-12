@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { AddOnOption, Dish, DishServingOption, DishVariant, DishRemovableIngredient, RestaurantPortal, PublicResource, ResourceType } from '@/types';
 import type { DailyUsageRow } from '@/lib/dailyTokenUsage';
+import type { DishImageGenerationRow } from '@/lib/dishImageHistory';
 
 const RESTAURANT_COLUMNS =
   'id, owner_email, name, city, welcome, system_prompt, status, created_at, timezone, currency, business_name, business_address';
@@ -712,6 +713,32 @@ export async function getHostCreditBalance(restaurantId: string): Promise<number
     .rpc('check_host_credit', { p_restaurant_id: restaurantId });
   if (error) throw error;
   return Number(data ?? 0);
+}
+
+export async function listDishImageHistory(
+  restaurantId: string
+): Promise<DishImageGenerationRow[]> {
+  const { data, error } = await supabase
+    .from('dish_image_generations')
+    .select(
+      'id, target_type, target_name, status, generation_id, credit_deducted, refunded, error_message, created_at, completed_at'
+    )
+    .eq('restaurant_id', restaurantId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return ((data ?? []) as unknown as DishImageGenerationRowData[]).map((row) => ({
+    id: row.id,
+    targetType: row.target_type,
+    targetName: row.target_name,
+    status: row.status,
+    generationId: row.generation_id,
+    creditDeducted: Number(row.credit_deducted),
+    refunded: row.refunded,
+    errorMessage: row.error_message,
+    createdAt: row.created_at,
+    completedAt: row.completed_at,
+  }));
 }
 
 export async function uploadMenuFile(

@@ -142,6 +142,7 @@ export function ResourceDetail({
     await callFunction<{ imageUrl: string }>('dish-image', {
       restaurantId: restaurant.id,
       dishId,
+      clientRequestId: crypto.randomUUID(),
     });
     await reloadDishes();
   }

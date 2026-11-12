@@ -13,6 +13,11 @@ interface ModelConfig {
   endpoint?: string;
 }
 
+interface BeginResult {
+  generation_id: string | null;
+  was_duplicate: boolean;
+}
+
 type Db = ReturnType<typeof createClient>;
 
 function json(body: unknown, status = 200): Response {
@@ -66,11 +71,17 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  let supabaseRef: Db | null = null;
+  let generationRecordId: string | null = null;
   try {
     const body = await req.json().catch(() => null);
     const restaurantId = body?.restaurantId as string | undefined;
     const dishId = body?.dishId as string | undefined;
     const comboId = body?.comboId as string | undefined;
+    const clientRequestId =
+      typeof body?.clientRequestId === 'string' && body.clientRequestId.length > 0
+        ? body.clientRequestId
+        : crypto.randomUUID();
 
     if (!restaurantId || (!dishId && !comboId) || (dishId && comboId)) {
       return json({ error: 'Missing dish or combo.' }, 400);
@@ -79,6 +90,7 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
+    supabaseRef = supabase;
 
     const userId = await verifyUser(supabase, req);
     if (!userId) return json({ error: 'Please sign in to continue.' }, 401);
@@ -115,6 +127,50 @@ Deno.serve(async (req: Request) => {
     }
     const targetRow = target as { name?: string; description?: string; ingredients?: string };
 
+    // Credit pre-flight: fails stale pending attempts (crash recovery),
+    // enforces the 1-credit minimum and deducts exactly 1 credit atomically.
+    // An idempotency key derived from the client's request ID makes retries of
+    // the same click free; every new Generate click gets a fresh key.
+    const idempotencyKey = `${restaurantId}:${isCombo ? 'combo' : 'dish'}:${targetId}:${clientRequestId}`;
+    const { data: beginData, error: beginError } = await supabase.rpc(
+      'begin_dish_image_generation',
+      {
+        p_restaurant_id: restaurantId,
+        p_target_type: isCombo ? 'combo' : 'dish',
+        p_target_id: targetId,
+        p_target_name: targetRow.name ?? (isCombo ? 'a combo meal' : 'a dish'),
+        p_idempotency_key: idempotencyKey,
+      }
+    );
+    if (beginError) {
+      const message = beginError.message ?? '';
+      if (message.includes('INSUFFICIENT_CREDITS')) {
+        return json(
+          { error: 'You need at least 1 credit to generate a dish image. Add credits in your Credit Wallet or contact the Virgo team.' },
+          402
+        );
+      }
+      throw beginError;
+    }
+    const beginRows = Array.isArray(beginData) ? (beginData as BeginResult[]) : [];
+    const begin = beginRows[0] ?? null;
+    generationRecordId = begin?.generation_id ?? null;
+    if (!generationRecordId) {
+      throw new Error('Could not record the generation request.');
+    }
+
+    // Wraps every failure path so the deducted credit is refunded exactly once
+    // before the error is returned to the host.
+    const failGeneration = async (message: string, status: number, apiGenerationId?: string) => {
+      await supabase.rpc('complete_dish_image_generation', {
+        p_generation_id: generationRecordId,
+        p_success: false,
+        p_api_generation_id: apiGenerationId ?? null,
+        p_error_message: message,
+      });
+      return json({ error: message }, status);
+    };
+
     const { data: configRow, error: configError } = await supabase
       .from('model_settings')
       .select('provider, api_key, model, endpoint')
@@ -129,7 +185,7 @@ Deno.serve(async (req: Request) => {
       endpoint: configRow?.endpoint ?? '',
     };
     if (!image.apiKey || !image.endpoint || !image.model) {
-      return json({ error: 'Admin has not set the image model' }, 400);
+      return failGeneration('Admin has not set the image model', 400);
     }
 
     const prompt = buildPrompt(
@@ -154,11 +210,8 @@ Deno.serve(async (req: Request) => {
 
     if (!imageResponse.ok) {
       const detail = await imageResponse.text().catch(() => '');
-      return json(
-        {
-          error: `The image model rejected the request (${imageResponse.status}).`,
-          detail: detail.slice(0, 300),
-        },
+      return failGeneration(
+        `The image model rejected the request (${imageResponse.status}).`,
         502
       );
     }
@@ -167,7 +220,7 @@ Deno.serve(async (req: Request) => {
     try {
       payload = await imageResponse.json() as Record<string, unknown>;
     } catch {
-      return json({ error: 'The image model returned an unreadable response.' }, 502);
+      return failGeneration('The image model returned an unreadable response.', 502);
     }
 
     const data = payload?.data;
@@ -175,6 +228,16 @@ Deno.serve(async (req: Request) => {
     const dataObj = data && typeof data === 'object' && !Array.isArray(data)
       ? (data as Record<string, unknown>)
       : null;
+
+    // Generation/prediction identifier: captured the moment the initial
+    // response arrives, before polling. Async providers return data.id;
+    // sync providers may carry a top-level id. Stored as null when absent.
+    let apiGenerationId: string | null = null;
+    if (dataObj && typeof dataObj.id === 'string') {
+      apiGenerationId = dataObj.id;
+    } else if (typeof payload?.id === 'string') {
+      apiGenerationId = payload.id;
+    }
 
     let bytes: Uint8Array | null = null;
 
@@ -186,7 +249,7 @@ Deno.serve(async (req: Request) => {
 
       if (status0 === 'failed' || status0 === 'error') {
         const errMsg = typeof dataObj.error === 'string' ? dataObj.error : 'Generation failed.';
-        return json({ error: `The image model rejected the request: ${errMsg}` }, 502);
+        return failGeneration(`The image model rejected the request: ${errMsg}`, 502, apiGenerationId);
       }
 
       if (status0 === 'completed' || status0 === 'succeeded') {
@@ -228,7 +291,7 @@ Deno.serve(async (req: Request) => {
 
             if (status === 'failed' || status === 'error') {
               const errMsg = typeof pollData.error === 'string' ? pollData.error : 'Generation failed.';
-              return json({ error: `The image model failed to generate: ${errMsg}` }, 502);
+              return failGeneration(`The image model failed to generate: ${errMsg}`, 502, apiGenerationId);
             }
 
             if (status === 'completed' || status === 'succeeded') {
@@ -244,9 +307,10 @@ Deno.serve(async (req: Request) => {
       }
 
       if (!bytes || bytes.length === 0) {
-        return json(
-          { error: 'The image model did not produce an image within the polling timeout.' },
-          504
+        return failGeneration(
+          'The image model did not produce an image within the polling timeout.',
+          504,
+          apiGenerationId
         );
       }
     } else {
@@ -262,14 +326,20 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!bytes || bytes.length === 0) {
-      return json({ error: 'The image model did not return an image.' }, 502);
+      return failGeneration('The image model did not return an image.', 502, apiGenerationId);
     }
 
     const path = `${restaurantId}/${isCombo ? 'combo-' : ''}${targetId}-${Date.now()}.png`;
     const { error: uploadError } = await supabase.storage
       .from('dish-images')
       .upload(path, bytes, { contentType: 'image/png', upsert: true });
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      return failGeneration(
+        'The generated image could not be saved. Your credit has been refunded.',
+        500,
+        apiGenerationId
+      );
+    }
 
     const { data: publicUrlData } = supabase.storage.from('dish-images').getPublicUrl(path);
     const imageUrl = publicUrlData.publicUrl;
@@ -285,12 +355,36 @@ Deno.serve(async (req: Request) => {
           .update({ image_url: imageUrl, updated_at: new Date().toISOString() })
           .eq('id', targetId)
           .eq('restaurant_id', restaurantId);
-    if (updateError) throw updateError;
+    if (updateError) {
+      return failGeneration(
+        'The image was generated but could not be attached to the dish. Your credit has been refunded.',
+        500,
+        apiGenerationId
+      );
+    }
 
     await supabase.from('usage_events').insert({ restaurant_id: restaurantId, kind: 'image' });
 
+    await supabase.rpc('complete_dish_image_generation', {
+      p_generation_id: generationRecordId,
+      p_success: true,
+      p_api_generation_id: apiGenerationId,
+      p_error_message: null,
+    });
+
     return json({ imageUrl });
   } catch (error) {
+    // An unexpected throw after the credit was deducted (e.g. a network
+    // failure calling the API) refunds the credit here; the completion
+    // function is idempotent, so an already-refunded record is untouched.
+    if (generationRecordId && supabaseRef) {
+      await supabaseRef.rpc('complete_dish_image_generation', {
+        p_generation_id: generationRecordId,
+        p_success: false,
+        p_api_generation_id: null,
+        p_error_message: error instanceof Error ? error.message : 'Image generation failed.',
+      }).catch(() => undefined);
+    }
     return json(
       { error: error instanceof Error ? error.message : 'Image generation failed.' },
       500

@@ -171,7 +171,11 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
 
   async function handleGenerateImage(dishId: string) {
     if (onGenerateImage) { await onGenerateImage(dishId); return; }
-    await callFunction<{ imageUrl: string }>('dish-image', { restaurantId, dishId });
+    await callFunction<{ imageUrl: string }>('dish-image', {
+      restaurantId,
+      dishId,
+      clientRequestId: crypto.randomUUID(),
+    });
     await onReload();
   }
 
