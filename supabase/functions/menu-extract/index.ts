@@ -733,21 +733,22 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'That file does not belong to your restaurant.' }, 403);
     }
 
-    const [configRow, extractRow] = await Promise.all([
+    const [chatResult, extractResult] = await Promise.all([
       supabase
         .from('model_settings')
         .select('provider, api_key, model, endpoint, reasoning_enabled, max_output_tokens')
         .eq('key', 'chatModel')
-        .maybeSingle()
-        .then((r) => r.data),
+        .maybeSingle(),
       supabase
         .from('model_settings')
         .select('model, reasoning_enabled')
         .eq('key', 'extractModel')
-        .maybeSingle()
-        .then((r) => r.data),
+        .maybeSingle(),
     ]);
-    if (configError) throw configError;
+    if (chatResult.error) throw chatResult.error;
+    if (extractResult.error) throw extractResult.error;
+    const configRow = chatResult.data;
+    const extractRow = extractResult.data;
 
     // Extraction model name and reasoning come from the dedicated extractModel
     // row; connection settings stay shared with Visitor Chat (chatModel). An
