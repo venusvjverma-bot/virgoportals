@@ -293,6 +293,46 @@ function isVariantLine(draft: DishDraft): boolean {
   );
 }
 
+const DEFAULT_VARIANT_NAMES = new Set([
+  'standard',
+  'regular',
+  'normal',
+  'classic',
+  'original',
+  'plain',
+  'default',
+  'base',
+]);
+
+function isZeroExtraPrice(priceText: string): boolean {
+  const n = Number(priceText.replace(/[^0-9.,]/g, '').replace(',', '.'));
+  return Number.isFinite(n) && n === 0;
+}
+
+/**
+ * Guarantees exactly one default option at the front of a dish's variant
+ * list: an existing Standard/Regular/Normal-style option is kept and moved
+ * first, otherwise a zero-price "Standard" is created. Repeated option
+ * names are de-duplicated so the same default can never appear twice.
+ */
+function withDefaultVariant(choices: VariantChoice[]): VariantChoice[] {
+  const seen = new Set<string>();
+  const others: VariantChoice[] = [];
+  let defaultChoice: VariantChoice | null = null;
+  for (const choice of choices) {
+    const key = normalizeName(choice.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (!defaultChoice && DEFAULT_VARIANT_NAMES.has(key)) {
+      defaultChoice = choice;
+      continue;
+    }
+    others.push(choice);
+  }
+  const first = defaultChoice ?? { name: 'Standard', additionalPrice: '0' };
+  return [first, ...others];
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -485,6 +525,8 @@ function extractionInstruction(): string {
     'Several add-ons may exist, and each is a separate object.\n\n' +
     'Variants: when a menu lists a named option of an item as its own line, ' +
     'set "variant_of" to the parent item name, "variant" to the option name, and "additional_price" to the add-on amount when the menu prints one. An option listed with no extra amount is still a variant: keep variant_of and variant, and leave additional_price "". ' +
+    'Options the menu names as choices of an item inside that item\'s description or details are also variants: return each explicitly named option as its own variant line with variant_of set to that item\'s name. ' +
+    'Only choices the menu explicitly offers for that item are variants: an ordinary ingredient the dish always contains is NOT a variant, and you must never invent an option or price the menu does not state. ' +
     'A full price printed for the option line is not an add-on amount: leave "variant_of", "variant" and "additional_price" as "" and keep the line as its own object. ' +
     'The parent keeps its own object and its own price.\n\n' +
     'Portion options of one food product are NOT variants: a "Half plate" or "4 pieces" line printed ' +
@@ -789,6 +831,9 @@ Deno.serve(async (req: Request) => {
       const choices = attachments.get(matches[0]) ?? [];
       choices.push({ name: line.variant || line.name, additionalPrice: line.additionalPrice });
       attachments.set(matches[0], choices);
+    }
+    for (const [group, choices] of attachments) {
+      attachments.set(group, withDefaultVariant(choices));
     }
     const standalone = unattached
       .filter((line) => !existingNames.has(normalizeName(line.name)))
