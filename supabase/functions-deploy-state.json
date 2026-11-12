@@ -19,7 +19,7 @@
     },
     "menu-extract": {
       "hasChanged": false,
-      "hash": "960b4215ce1bff4a91ab5f5db08b9e88db6161bf614d560a8abb7adcc6c0b38e"
+      "hash": "87ec18c8f701743331005fffe7d005cb3a72aaaa275a6accc3947db21ffe9bbc"
     },
     "print-queue": {
       "hasChanged": false,
@@ -36,10 +36,6 @@
     "visitor-orders": {
       "hasChanged": false,
       "hash": "8ecb92850446245958d70e320e1d8178e9c517503d3ab176dba1bb3b106adbb1"
-    },
-    "pdf-diag": {
-      "hasChanged": false,
-      "hash": "4df71398ac1a570a2800f757d02d78c0102308cc41e8922f1c2c385d9dcaec84"
     }
   }
 }

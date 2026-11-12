@@ -304,6 +304,16 @@ const DEFAULT_VARIANT_NAMES = new Set([
   'base',
 ]);
 
+/**
+ * A default option can carry qualifier words ("Standard milk", "Regular
+ * size"), so the leading default word is enough to identify it.
+ */
+function isDefaultVariantName(key: string): boolean {
+  if (DEFAULT_VARIANT_NAMES.has(key)) return true;
+  const firstWord = key.split(' ')[0] ?? '';
+  return firstWord.length > 0 && DEFAULT_VARIANT_NAMES.has(firstWord);
+}
+
 function isZeroExtraPrice(priceText: string): boolean {
   const n = Number(priceText.replace(/[^0-9.,]/g, '').replace(',', '.'));
   return Number.isFinite(n) && n === 0;
@@ -313,7 +323,9 @@ function isZeroExtraPrice(priceText: string): boolean {
  * Guarantees exactly one default option at the front of a dish's variant
  * list: an existing Standard/Regular/Normal-style option is kept and moved
  * first, otherwise a zero-price "Standard" is created. Repeated option
- * names are de-duplicated so the same default can never appear twice.
+ * names are de-duplicated so the same default can never appear twice. When
+ * the menu's own default option prints a nonzero extra price, its true
+ * price is kept rather than replaced with a synthetic zero option.
  */
 function withDefaultVariant(choices: VariantChoice[]): VariantChoice[] {
   const seen = new Set<string>();
@@ -323,14 +335,139 @@ function withDefaultVariant(choices: VariantChoice[]): VariantChoice[] {
     const key = normalizeName(choice.name);
     if (seen.has(key)) continue;
     seen.add(key);
-    if (!defaultChoice && DEFAULT_VARIANT_NAMES.has(key)) {
+    if (!defaultChoice && isDefaultVariantName(key)) {
       defaultChoice = choice;
       continue;
     }
     others.push(choice);
   }
-  const first = defaultChoice ?? { name: 'Standard', additionalPrice: '0' };
-  return [first, ...others];
+  if (defaultChoice) return [defaultChoice, ...others];
+  return [{ name: 'Standard', additionalPrice: '0' }, ...others];
+}
+
+/**
+ * Identifies rows the model marked as an option ("variant" filled) but left
+ * "variant_of" empty, so no parent can be read straight from the row. Rows
+ * whose own name equals the option name carry no parent evidence at all and
+ * are left to the normal dish path.
+ */
+function isOrphanVariantLine(draft: DishDraft): boolean {
+  return (
+    draft.section !== 'add_on' &&
+    draft.variant.length > 0 &&
+    draft.variantOf.length === 0 &&
+    normalizeName(draft.name) !== normalizeName(draft.variant)
+  );
+}
+
+/**
+ * Picks the row that represents the base product inside a cluster of orphan
+ * option rows: the default-named row with no extra price when there is one,
+ * otherwise the first row printed without an extra amount, otherwise the
+ * first row. Its printed price is the dish's base price.
+ */
+function pickVariantRepresentative(rows: DishDraft[]): DishDraft {
+  const zeroExtra = rows.filter((row) => isZeroExtraPrice(row.additionalPrice));
+  const defaultZero = zeroExtra.find((row) => isDefaultVariantName(normalizeName(row.variant)));
+  if (defaultZero) return defaultZero;
+  if (zeroExtra.length > 0) return zeroExtra[0];
+  return rows[0];
+}
+
+interface ResolvedExtraction {
+  fresh: GroupedDraft[];
+  variantChoices: Map<GroupedDraft, VariantChoice[]>;
+  skipped: number;
+}
+
+/**
+ * Splits extracted rows into the dishes to save and the variant choices
+ * attached to each dish.
+ *
+ * Rows that name their parent through "variant_of" attach to it directly.
+ * Rows that name an option but leave "variant_of" empty are clustered by
+ * their shared dish name and section: the cluster attaches to the extracted
+ * dish of that same name, or forms the dish itself when no dish row was
+ * extracted (the model printed the base price on the default option's row).
+ * A lone option row with no matching dish stays a normal standalone product,
+ * and a cluster whose dish already exists in the menu is skipped rather than
+ * recreated - nothing is ever guessed.
+ */
+function resolveDishesAndVariants(drafts: DishDraft[], existingNames: Set<string>): ResolvedExtraction {
+  const variantLines = drafts.filter(isVariantLine);
+  const orphanLines = drafts.filter(isOrphanVariantLine);
+  const plainDrafts = drafts.filter((draft) => !isVariantLine(draft) && !isOrphanVariantLine(draft));
+  const grouped = groupDraftsByVariant(splitCombinedDrafts(plainDrafts));
+  const freshPlain = grouped.filter((group) => !existingNames.has(normalizeName(group.draft.name)));
+  const plainGroupCount = freshPlain.length;
+
+  const variantChoices = new Map<GroupedDraft, VariantChoice[]>();
+  const unattached: DishDraft[] = [];
+  for (const line of variantLines) {
+    const matches = freshPlain.filter(
+      (group) =>
+        group.draft.section === line.section && normalizeName(group.draft.name) === normalizeName(line.variantOf)
+    );
+    if (matches.length !== 1) {
+      unattached.push(line);
+      continue;
+    }
+    const choices = variantChoices.get(matches[0]) ?? [];
+    choices.push({ name: line.variant || line.name, additionalPrice: line.additionalPrice });
+    variantChoices.set(matches[0], choices);
+  }
+
+  let skippedOrphanRows = 0;
+  const orphanClusters = new Map<string, DishDraft[]>();
+  for (const line of orphanLines) {
+    const key = `${line.section}\u0000${normalizeName(line.name)}`;
+    const rows = orphanClusters.get(key) ?? [];
+    rows.push(line);
+    orphanClusters.set(key, rows);
+  }
+  for (const rows of orphanClusters.values()) {
+    const parentName = normalizeName(rows[0].name);
+    const target = freshPlain.find(
+      (group) => group.draft.section === rows[0].section && normalizeName(group.draft.name) === parentName
+    );
+    if (target) {
+      const choices = variantChoices.get(target) ?? [];
+      for (const row of rows) {
+        choices.push({ name: row.variant || row.name, additionalPrice: row.additionalPrice });
+      }
+      variantChoices.set(target, choices);
+      continue;
+    }
+    if (rows.length >= 2 && !existingNames.has(parentName)) {
+      const group: GroupedDraft = { draft: pickVariantRepresentative(rows), variants: [] };
+      freshPlain.push(group);
+      variantChoices.set(
+        group,
+        rows.map((row) => ({ name: row.variant || row.name, additionalPrice: row.additionalPrice }))
+      );
+      continue;
+    }
+    if (rows.length === 1 && !existingNames.has(parentName)) {
+      unattached.push(rows[0]);
+      continue;
+    }
+    skippedOrphanRows += rows.length;
+  }
+
+  for (const [group, choices] of variantChoices) {
+    variantChoices.set(group, withDefaultVariant(choices));
+  }
+  const standalone = unattached
+    .filter((line) => !existingNames.has(normalizeName(line.name)))
+    .map((draft): GroupedDraft => ({ draft, variants: [] }));
+  const fresh = [...freshPlain, ...standalone];
+  const skipped =
+    grouped.length -
+    plainGroupCount +
+    unattached.filter((line) => existingNames.has(normalizeName(line.name))).length +
+    skippedOrphanRows;
+
+  return { fresh, variantChoices, skipped };
 }
 
 function json(body: unknown, status = 200): Response {
@@ -813,33 +950,7 @@ Deno.serve(async (req: Request) => {
     if (existingError) throw existingError;
     const existingNames = new Set((existing ?? []).map((row) => normalizeName(String(row.name ?? ''))));
 
-    const variantLines = drafts.filter(isVariantLine);
-    const grouped = groupDraftsByVariant(splitCombinedDrafts(drafts.filter((draft) => !isVariantLine(draft))));
-    const freshPlain = grouped.filter((group) => !existingNames.has(normalizeName(group.draft.name)));
-
-    const attachments = new Map<GroupedDraft, VariantChoice[]>();
-    const unattached: DishDraft[] = [];
-    for (const line of variantLines) {
-      const matches = freshPlain.filter(
-        (group) =>
-          group.draft.section === line.section && normalizeName(group.draft.name) === normalizeName(line.variantOf)
-      );
-      if (matches.length !== 1) {
-        unattached.push(line);
-        continue;
-      }
-      const choices = attachments.get(matches[0]) ?? [];
-      choices.push({ name: line.variant || line.name, additionalPrice: line.additionalPrice });
-      attachments.set(matches[0], choices);
-    }
-    for (const [group, choices] of attachments) {
-      attachments.set(group, withDefaultVariant(choices));
-    }
-    const standalone = unattached
-      .filter((line) => !existingNames.has(normalizeName(line.name)))
-      .map((draft): GroupedDraft => ({ draft, variants: [] }));
-    const fresh = [...freshPlain, ...standalone];
-    const skipped = grouped.length + unattached.length - fresh.length;
+    const { fresh, variantChoices, skipped } = resolveDishesAndVariants(drafts, existingNames);
 
     const payload = fresh.map((group) => {
       const dish = group.draft;
@@ -884,7 +995,7 @@ Deno.serve(async (req: Request) => {
       };
     });
 
-    const choicesPerDish = fresh.map((group) => attachments.get(group) ?? []);
+    const choicesPerDish = fresh.map((group) => variantChoices.get(group) ?? []);
 
     let savedRows: Array<Record<string, unknown>> = [];
     if (payload.length > 0) {
