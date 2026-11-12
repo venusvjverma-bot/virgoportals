@@ -733,19 +733,32 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'That file does not belong to your restaurant.' }, 403);
     }
 
-    const { data: configRow, error: configError } = await supabase
-      .from('model_settings')
-      .select('provider, api_key, model, endpoint, reasoning_enabled, max_output_tokens')
-      .eq('key', 'chatModel')
-      .maybeSingle();
+    const [configRow, extractRow] = await Promise.all([
+      supabase
+        .from('model_settings')
+        .select('provider, api_key, model, endpoint, reasoning_enabled, max_output_tokens')
+        .eq('key', 'chatModel')
+        .maybeSingle()
+        .then((r) => r.data),
+      supabase
+        .from('model_settings')
+        .select('model, reasoning_enabled')
+        .eq('key', 'extractModel')
+        .maybeSingle()
+        .then((r) => r.data),
+    ]);
     if (configError) throw configError;
 
+    // Extraction model name and reasoning come from the dedicated extractModel
+    // row; connection settings stay shared with Visitor Chat (chatModel). An
+    // empty extractModel row falls back to the chat model entirely.
     const chat: ModelConfig = {
       provider: configRow?.provider ?? '',
       apiKey: configRow?.api_key ?? '',
-      model: configRow?.model ?? '',
+      model: extractRow?.model?.trim() || configRow?.model || '',
       endpoint: configRow?.endpoint ?? '',
-      reasoningEnabled: configRow?.reasoning_enabled ?? false,
+      reasoningEnabled:
+        extractRow?.model?.trim() ? extractRow?.reasoning_enabled === true : (configRow?.reasoning_enabled ?? false),
       maxOutputTokens: configRow?.max_output_tokens ?? null,
     };
     if (!chat.apiKey || !chat.endpoint || !chat.model) {

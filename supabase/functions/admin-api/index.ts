@@ -8,6 +8,7 @@ const corsHeaders = {
 
 const CHAT_KEY = 'chatModel';
 const IMAGE_KEY = 'imageModel';
+const EXTRACT_KEY = 'extractModel';
 
 const DEFAULT_TEMPERATURE = 0.8;
 const DEFAULT_MAX_OUTPUT_TOKENS = 1500;
@@ -72,8 +73,10 @@ function describeFailure(kind: string, status: number, detail: string): string {
   return `${hint} (${kind} test returned HTTP ${status})${snippet ? ` Provider said: ${snippet}` : ''}`;
 }
 
-function resolveKind(value: unknown): { kind: 'chat' | 'image'; key: string } {
-  return value === 'image' ? { kind: 'image', key: IMAGE_KEY } : { kind: 'chat', key: CHAT_KEY };
+function resolveKind(value: unknown): { kind: 'chat' | 'image' | 'extract'; key: string } {
+  if (value === 'image') return { kind: 'image', key: IMAGE_KEY };
+  if (value === 'extract') return { kind: 'extract', key: EXTRACT_KEY };
+  return { kind: 'chat', key: CHAT_KEY };
 }
 
 function toPublic(row: ModelRow) {
@@ -244,13 +247,15 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === 'read') {
-      const [chat, image] = await Promise.all([
+      const [chat, image, extract] = await Promise.all([
         loadModel(supabase, CHAT_KEY),
         loadModel(supabase, IMAGE_KEY),
+        loadModel(supabase, EXTRACT_KEY),
       ]);
       return json({
         chatModel: chat ? toPublic(chat) : { provider: '', model: '', endpoint: '', hasApiKey: false },
         imageModel: image ? toPublic(image) : { provider: '', model: '', endpoint: '', hasApiKey: false },
+        extractModel: extract ? toPublic(extract) : { provider: '', model: '', endpoint: '', hasApiKey: false },
       });
     }
 
@@ -284,6 +289,25 @@ Deno.serve(async (req: Request) => {
         patch.max_output_tokens = settings.maxOutputTokens;
       }
 
+      // The extraction model owns only its model name and reasoning switch.
+      // Connection settings stay shared with the chat model and are never
+      // written from this section.
+      if (kind === 'extract') {
+        const extractPatch: Record<string, unknown> = {
+          key,
+          model,
+          reasoning_enabled: body?.reasoningEnabled === true,
+          updated_at: new Date().toISOString(),
+        };
+        const { data, error } = await supabase
+          .from('model_settings')
+          .upsert(extractPatch, { onConflict: 'key' })
+          .select(MODEL_COLUMNS)
+          .single();
+        if (error) throw error;
+        return json({ model: toPublic(data as ModelRow) });
+      }
+
       const { data, error } = await supabase
         .from('model_settings')
         .upsert(patch, { onConflict: 'key' })
@@ -296,6 +320,57 @@ Deno.serve(async (req: Request) => {
 
     if (action === 'test') {
       const { kind, key } = resolveKind(body?.kind);
+
+      // Extraction tests the extraction model + reasoning over the shared
+      // connection (provider, key, endpoint) from the chat model.
+      if (kind === 'extract') {
+        const [extractConfig, chatConfig] = await Promise.all([
+          loadModel(supabase, EXTRACT_KEY),
+          loadModel(supabase, CHAT_KEY),
+        ]);
+        if (!extractConfig?.model || !chatConfig?.api_key || !chatConfig.endpoint) {
+          return json({ error: 'Admin has not set the extraction model or the shared connection.' }, 400);
+        }
+        const testBody: Record<string, unknown> = {
+          model: extractConfig.model,
+          temperature: 0,
+          max_tokens: 1000,
+          messages: [
+            { role: 'system', content: 'You are a connection test for a restaurant menu assistant.' },
+            { role: 'user', content: 'Reply in one short sentence confirming you are online.' },
+          ],
+        };
+        const notice = applyReasoning(testBody, extractConfig);
+
+        const response = await fetch(chatConfig.endpoint, {
+          method: 'POST',
+          headers: authHeaders(chatConfig.provider, chatConfig.api_key),
+          body: JSON.stringify(testBody),
+        });
+        if (!response.ok) {
+          const detail = await response.text().catch(() => '');
+          return json({ error: describeFailure('extraction', response.status, detail) }, 502);
+        }
+        let payload: { choices?: Array<{ message?: { content?: unknown } }> } | null = null;
+        try {
+          payload = await response.json();
+        } catch {
+          return json({ error: 'The extraction model returned a response that was not valid JSON.' }, 502);
+        }
+        const rawText = payload?.choices?.[0]?.message?.content;
+        const reply = typeof rawText === 'string' ? rawText.trim() : '';
+        if (!reply) {
+          return json(
+            {
+              error:
+                'The extraction model responded but no message text was found. Check that the endpoint returns an OpenAI-compatible chat completion.',
+            },
+            502
+          );
+        }
+        return json({ reply, notice });
+      }
+
       const config = await loadModel(supabase, key);
 
       if (!config?.api_key || !config.endpoint || !config.model) {

@@ -29,6 +29,7 @@ export interface ModelState {
 export interface AdminModels {
   chatModel: ModelState;
   imageModel: ModelState;
+  extractModel: ModelState;
 }
 
 export type HostStatus = 'Active' | 'Blocked';
@@ -188,7 +189,7 @@ export interface UsageRow {
   messages: number;
 }
 
-export type AdminView = 'home' | 'hosts' | 'credits' | 'subscriptions' | 'chat' | 'image' | 'bot' | 'usage' | 'theme';
+export type AdminView = 'home' | 'hosts' | 'credits' | 'subscriptions' | 'chat' | 'image' | 'extract' | 'bot' | 'usage' | 'theme';
 export type HostView =
   | 'dashboard'
   | 'subscription'

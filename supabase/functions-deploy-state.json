@@ -3,7 +3,7 @@
   "functions": {
     "admin-api": {
       "hasChanged": false,
-      "hash": "7681316b401cc1c1222639d066d7322dc5ab10c917bacf3c7b9d88cb5740bca0"
+      "hash": "688cb64a6fe2b78a02a85129d0eb4810ee535188abb7945ab81d8e4048d26b2e"
     },
     "admin-cleanup": {
       "hasChanged": false,
@@ -19,7 +19,7 @@
     },
     "menu-extract": {
       "hasChanged": false,
-      "hash": "87ec18c8f701743331005fffe7d005cb3a72aaaa275a6accc3947db21ffe9bbc"
+      "hash": "6896420571ff817697f192680910283d255a071ed6c51911b6ae41d19a7afa4d"
     },
     "print-queue": {
       "hasChanged": false,

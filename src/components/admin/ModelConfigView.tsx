@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
+  FileSearch,
   FlaskConical,
   ImageIcon,
   Info,
@@ -18,7 +19,7 @@ import { Notice } from '@/components/ui/Notice';
 import { cn } from '@/lib/cn';
 import type { ModelConfig, ModelState } from '@/types';
 
-export type ModelKind = 'chat' | 'image';
+export type ModelKind = 'chat' | 'image' | 'extract';
 
 export interface TestResult {
   reply?: string;
@@ -29,6 +30,8 @@ export interface TestResult {
 interface ModelConfigViewProps {
   kind: ModelKind;
   config: ModelState;
+  /** For the extraction model: the shared connection it runs on. */
+  sharedConnection?: { provider: string; endpoint: string; hasApiKey: boolean };
   onSave: (config: ModelConfig) => Promise<void> | void;
   onTest: () => Promise<TestResult>;
 }
@@ -55,6 +58,13 @@ const COPY = {
     saveLabel: 'Save image model',
     icon: ImageIcon,
   },
+  extract: {
+    title: 'Menu AI Extraction model',
+    blurb: 'The model that reads uploaded menus and turns them into dishes.',
+    note: 'Uses the same Provider, API key and Endpoint as the Chat model, so those are managed on the Chat model page.',
+    saveLabel: 'Save extraction model',
+    icon: FileSearch,
+  },
 } as const;
 
 function draftFrom(config: ModelState): ModelConfig {
@@ -75,7 +85,7 @@ function reasoningIsSupported(provider: string, endpoint: string): boolean {
   return haystack.includes('venice');
 }
 
-export function ModelConfigView({ kind, config, onSave, onTest }: ModelConfigViewProps) {
+export function ModelConfigView({ kind, config, sharedConnection, onSave, onTest }: ModelConfigViewProps) {
   const [draft, setDraft] = useState<ModelConfig>(() => draftFrom(config));
   const [temperatureText, setTemperatureText] = useState(String(config.temperature));
   const [maxTokensText, setMaxTokensText] = useState(String(config.maxOutputTokens));
@@ -88,7 +98,10 @@ export function ModelConfigView({ kind, config, onSave, onTest }: ModelConfigVie
   const copy = COPY[kind];
   const Icon = copy.icon;
   const isChat = kind === 'chat';
-  const reasoningSupported = reasoningIsSupported(config.provider, config.endpoint);
+  const isExtract = kind === 'extract';
+  const connectionProvider = isExtract ? sharedConnection?.provider ?? '' : config.provider;
+  const connectionEndpoint = isExtract ? sharedConnection?.endpoint ?? '' : config.endpoint;
+  const reasoningSupported = reasoningIsSupported(connectionProvider, connectionEndpoint);
 
   useEffect(() => {
     setDraft(draftFrom(config));
@@ -198,19 +211,21 @@ export function ModelConfigView({ kind, config, onSave, onTest }: ModelConfigVie
         {editing ? (
           <>
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
-              <Field label="Provider" htmlFor={`${kind}-provider`}>
-                <Select
-                  id={`${kind}-provider`}
-                  value={draft.provider}
-                  onChange={(event) => update('provider', event.target.value)}
-                >
-                  {PROVIDERS.map((provider) => (
-                    <option key={provider} value={provider}>
-                      {provider}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              {!isExtract ? (
+                <Field label="Provider" htmlFor={`${kind}-provider`}>
+                  <Select
+                    id={`${kind}-provider`}
+                    value={draft.provider}
+                    onChange={(event) => update('provider', event.target.value)}
+                  >
+                    {PROVIDERS.map((provider) => (
+                      <option key={provider} value={provider}>
+                        {provider}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              ) : null}
 
               <Field label="Model name" htmlFor={`${kind}-model`}>
                 <Input
@@ -221,34 +236,38 @@ export function ModelConfigView({ kind, config, onSave, onTest }: ModelConfigVie
                 />
               </Field>
 
-              <Field label="API key" htmlFor={`${kind}-key`} className="sm:col-span-2">
-                <Input
-                  id={`${kind}-key`}
-                  type="password"
-                  autoComplete="off"
-                  value={draft.apiKey}
-                  placeholder={
-                    config.hasApiKey ? 'A key is saved — leave blank to keep it' : 'sk-...'
-                  }
-                  onChange={(event) => update('apiKey', event.target.value)}
-                />
-              </Field>
+              {!isExtract ? (
+                <>
+                  <Field label="API key" htmlFor={`${kind}-key`} className="sm:col-span-2">
+                    <Input
+                      id={`${kind}-key`}
+                      type="password"
+                      autoComplete="off"
+                      value={draft.apiKey}
+                      placeholder={
+                        config.hasApiKey ? 'A key is saved — leave blank to keep it' : 'sk-...'
+                      }
+                      onChange={(event) => update('apiKey', event.target.value)}
+                    />
+                  </Field>
 
-              <Field label="Endpoint" htmlFor={`${kind}-endpoint`} className="sm:col-span-2">
-                <Input
-                  id={`${kind}-endpoint`}
-                  value={draft.endpoint}
-                  placeholder="https://api.openai.com/v1/..."
-                  onChange={(event) => update('endpoint', event.target.value)}
-                />
-              </Field>
+                  <Field label="Endpoint" htmlFor={`${kind}-endpoint`} className="sm:col-span-2">
+                    <Input
+                      id={`${kind}-endpoint`}
+                      value={draft.endpoint}
+                      placeholder="https://api.openai.com/v1/..."
+                      onChange={(event) => update('endpoint', event.target.value)}
+                    />
+                  </Field>
+                </>
+              ) : null}
 
-              {isChat ? (
+              {isChat || isExtract ? (
                 <>
                   <Field
                     label="Reasoning"
                     htmlFor={`${kind}-reasoning`}
-                    hint="Off is faster and cheaper for menu questions."
+                    hint={isExtract ? 'Off is faster for menu reading.' : 'Off is faster and cheaper for menu questions.'}
                   >
                     <Select
                       id={`${kind}-reasoning`}
@@ -302,7 +321,7 @@ export function ModelConfigView({ kind, config, onSave, onTest }: ModelConfigVie
               ) : null}
             </div>
 
-            {isChat && !reasoningSupported ? (
+            {(isChat || isExtract) && !reasoningSupported ? (
               <Notice tone="info" className="mt-5">
                 The reasoning switch is only sent to Venice endpoints. Your provider is not Venice,
                 so reasoning, temperature and the token cap are saved but not applied — we only send
@@ -312,27 +331,58 @@ export function ModelConfigView({ kind, config, onSave, onTest }: ModelConfigVie
           </>
         ) : (
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <ReadOnlyField label="Provider" value={config.provider} />
-            <ReadOnlyField label="Model name" value={config.model} />
+            {!isExtract ? (
+              <>
+                <ReadOnlyField label="Provider" value={config.provider} />
+                <ReadOnlyField label="Model name" value={config.model} />
 
-            <ReadOnlyField
-              label="API key"
-              className="sm:col-span-2"
-              value={
-                <span className="flex items-center gap-2">
-                  <Badge tone={config.hasApiKey ? 'success' : 'warning'}>
-                    {config.hasApiKey ? 'A key is saved' : 'No key saved'}
-                  </Badge>
-                  <span className="text-xs text-ink-muted">
-                    Stored on the server. It is never sent to this page.
-                  </span>
-                </span>
-              }
-            />
+                <ReadOnlyField
+                  label="API key"
+                  className="sm:col-span-2"
+                  value={
+                    <span className="flex items-center gap-2">
+                      <Badge tone={config.hasApiKey ? 'success' : 'warning'}>
+                        {config.hasApiKey ? 'A key is saved' : 'No key saved'}
+                      </Badge>
+                      <span className="text-xs text-ink-muted">
+                        Stored on the server. It is never sent to this page.
+                      </span>
+                    </span>
+                  }
+                />
 
-            <ReadOnlyField label="Endpoint" value={config.endpoint} className="sm:col-span-2" />
+                <ReadOnlyField label="Endpoint" value={config.endpoint} className="sm:col-span-2" />
+              </>
+            ) : (
+              <>
+                <ReadOnlyField label="Model name" value={config.model} />
+                <ReadOnlyField
+                  label="Provider"
+                  value={sharedConnection?.provider || 'Not set'}
+                />
+                <ReadOnlyField
+                  label="API key"
+                  className="sm:col-span-2"
+                  value={
+                    <span className="flex items-center gap-2">
+                      <Badge tone={sharedConnection?.hasApiKey ? 'success' : 'warning'}>
+                        {sharedConnection?.hasApiKey ? 'Shared with the Chat model' : 'No key saved on the Chat model'}
+                      </Badge>
+                      <span className="text-xs text-ink-muted">
+                        Managed on the Chat model page.
+                      </span>
+                    </span>
+                  }
+                />
+                <ReadOnlyField
+                  label="Endpoint"
+                  value={sharedConnection?.endpoint}
+                  className="sm:col-span-2"
+                />
+              </>
+            )}
 
-            {isChat ? (
+            {isChat || isExtract ? (
               <>
                 <ReadOnlyField
                   label="Reasoning"
@@ -349,12 +399,16 @@ export function ModelConfigView({ kind, config, onSave, onTest }: ModelConfigVie
                     </span>
                   }
                 />
-                <ReadOnlyField label="Temperature" value={String(config.temperature)} />
-                <ReadOnlyField
-                  label="Maximum output tokens"
-                  value={String(config.maxOutputTokens)}
-                  className="sm:col-span-2"
-                />
+                {isChat ? (
+                  <>
+                    <ReadOnlyField label="Temperature" value={String(config.temperature)} />
+                    <ReadOnlyField
+                      label="Maximum output tokens"
+                      value={String(config.maxOutputTokens)}
+                      className="sm:col-span-2"
+                    />
+                  </>
+                ) : null}
               </>
             ) : null}
           </div>
@@ -401,7 +455,7 @@ export function ModelConfigView({ kind, config, onSave, onTest }: ModelConfigVie
 
         {status === 'tested' && result ? (
           <div className="mt-5 animate-pop rounded-xl bg-cream-50 p-4 ring-1 ring-inset ring-cream-200">
-            {kind === 'chat' ? (
+            {kind !== 'image' ? (
               <div className="flex items-start gap-3">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-olive-700 text-cream-100">
                   <Sparkles className="h-4 w-4" />

@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { callFunction } from '@/lib/functions';
 import type { AdminModels, CreditAdjustment, CreditHost, Host, ModelConfig, ModelState, UsageRow } from '@/types';
 
-export type ModelKind = 'chat' | 'image';
+export type ModelKind = 'chat' | 'image' | 'extract';
 
 export async function adminWhoami(): Promise<boolean> {
   const result = await callFunction<{ isAdmin: boolean }>('admin-api', { action: 'whoami' });
@@ -14,6 +14,15 @@ export async function adminReadModels(): Promise<AdminModels> {
 }
 
 export async function adminSaveModel(kind: ModelKind, config: ModelConfig): Promise<ModelState> {
+  if (kind === 'extract') {
+    const result = await callFunction<{ model: ModelState }>('admin-api', {
+      action: 'save',
+      kind,
+      model: config.model,
+      reasoningEnabled: config.reasoningEnabled,
+    });
+    return result.model;
+  }
   const result = await callFunction<{ model: ModelState }>('admin-api', {
     action: 'save',
     kind,

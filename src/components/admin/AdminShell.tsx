@@ -11,6 +11,7 @@ import {
   Sparkles,
   Users,
   X,
+  FileSearch,
 } from 'lucide-react';
 import { LogoMark } from '@/components/Logo';
 import { Button } from '@/components/ui/Button';
@@ -29,6 +30,7 @@ const NAV: NavItem[] = [
   { id: 'credits', label: 'Credit Controller', icon: Coins },
   { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
   { id: 'chat', label: 'Chat model', icon: Sparkles },
+  { id: 'extract', label: 'Menu AI Extraction', icon: FileSearch },
   { id: 'image', label: 'Image model', icon: ImageIcon },
   { id: 'bot', label: 'Default bot text', icon: FileText },
   { id: 'usage', label: 'Usage', icon: BarChart3 },

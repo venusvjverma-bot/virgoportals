@@ -36,6 +36,7 @@ const TITLES: Record<AdminView, { title: string; subtitle: string }> = {
   subscriptions: { title: 'Subscriptions', subtitle: 'Read-only monitoring of host subscriptions and payments.' },
   chat: { title: 'Chat model', subtitle: 'One model behind every host conversation.' },
   image: { title: 'Image model', subtitle: 'Dish image generation settings.' },
+  extract: { title: 'Menu AI Extraction model', subtitle: 'The model that reads uploaded menus. Shares its connection with the chat model.' },
   bot: { title: 'Default bot text', subtitle: 'The prompt new hosts start from.' },
   usage: { title: 'Usage', subtitle: 'All-time activity across restaurant portals.' },
   theme: { title: 'Theme uploader', subtitle: 'Upload and manage theme images.' },
@@ -105,7 +106,8 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   async function handleSaveModel(kind: ModelKind, config: ModelConfig) {
     const saved = await adminSaveModel(kind, config);
-    setModels((current) => (current ? { ...current, [kind === 'image' ? 'imageModel' : 'chatModel']: saved } : current));
+    const modelKey = kind === 'image' ? 'imageModel' : kind === 'extract' ? 'extractModel' : 'chatModel';
+    setModels((current) => (current ? { ...current, [modelKey]: saved } : current));
   }
 
   async function handleTestModel(kind: ModelKind): Promise<TestResult> {
@@ -197,6 +199,19 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 config={models.imageModel}
                 onSave={(config) => handleSaveModel('image', config)}
                 onTest={() => handleTestModel('image')}
+              />
+            ) : null}
+            {view === 'extract' ? (
+              <ModelConfigView
+                kind="extract"
+                config={models.extractModel}
+                sharedConnection={{
+                  provider: models.chatModel.provider,
+                  endpoint: models.chatModel.endpoint,
+                  hasApiKey: models.chatModel.hasApiKey,
+                }}
+                onSave={(config) => handleSaveModel('extract', config)}
+                onTest={() => handleTestModel('extract')}
               />
             ) : null}
             {view === 'bot' ? <BotTextView value={botText} onSave={handleSaveBotText} /> : null}
