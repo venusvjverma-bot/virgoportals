@@ -90,9 +90,23 @@ function useVisibleHeight(ref: RefObject<HTMLDivElement>, active: boolean) {
     const viewport = window.visualViewport;
     if (!node || !viewport) return;
 
+    let lastHeight = -1;
+    let lastOffset = -1;
+
     const apply = () => {
-      const visible = Math.min(viewport.height, document.documentElement.clientHeight);
-      node.style.height = `${Math.round(visible)}px`;
+      const height = Math.round(Math.min(viewport.height, document.documentElement.clientHeight));
+      // When the keyboard opens or the visual viewport pans (zoom), its top edge
+      // moves down relative to the layout viewport. Shift the shell down by the
+      // same amount so its top edge — and the header — stay on screen.
+      const offset = Math.round(viewport.offsetTop);
+      if (height !== lastHeight) {
+        lastHeight = height;
+        node.style.height = `${height}px`;
+      }
+      if (offset !== lastOffset) {
+        lastOffset = offset;
+        node.style.transform = offset > 0 ? `translateY(${offset}px)` : '';
+      }
     };
 
     apply();
@@ -104,6 +118,7 @@ function useVisibleHeight(ref: RefObject<HTMLDivElement>, active: boolean) {
       viewport.removeEventListener('scroll', apply);
       window.removeEventListener('resize', apply);
       node.style.height = '';
+      node.style.transform = '';
     };
   }, [ref, active]);
 }
