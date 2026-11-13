@@ -253,7 +253,7 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
       const next = new Set(openedIds);
       next.add(order.id);
       setOpenedIds(next);
-      void markOrdersOpened([order.id]).catch(() => {
+      void markOrdersOpened(restaurant.id, [order.id]).catch(() => {
         // Shared state will converge on the next load; keep the local highlight.
       });
     }

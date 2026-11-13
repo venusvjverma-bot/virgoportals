@@ -89,7 +89,7 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
     try {
       await updateOrderStatus(order.id, newStatus);
       // A status change counts as having seen the order on every device.
-      void markOrdersOpened([order.id]).catch(() => {});
+      void markOrdersOpened(order.restaurantId, [order.id]).catch(() => {});
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update the order status.');

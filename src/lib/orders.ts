@@ -218,12 +218,15 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus)
   });
 }
 
-export async function markOrdersOpened(orderIds: string[]): Promise<void> {
+export async function markOrdersOpened(
+  restaurantId: string,
+  orderIds: string[]
+): Promise<void> {
   if (orderIds.length === 0) return;
   const { error } = await supabase
     .from('order_opens')
     .upsert(
-      orderIds.map((orderId) => ({ order_id: orderId })),
+      orderIds.map((orderId) => ({ order_id: orderId, restaurant_id: restaurantId })),
       { onConflict: 'order_id', ignoreDuplicates: true }
     );
   if (error) throw error;
