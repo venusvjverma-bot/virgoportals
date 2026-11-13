@@ -218,6 +218,17 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus)
   });
 }
 
+export async function markOrdersOpened(orderIds: string[]): Promise<void> {
+  if (orderIds.length === 0) return;
+  const { error } = await supabase
+    .from('order_opens')
+    .upsert(
+      orderIds.map((orderId) => ({ order_id: orderId })),
+      { onConflict: 'order_id', ignoreDuplicates: true }
+    );
+  if (error) throw error;
+}
+
 import { formatMinor } from '@/lib/currency';
 export { formatMinor };
 

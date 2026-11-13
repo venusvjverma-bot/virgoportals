@@ -3,6 +3,7 @@ import { ArrowLeft, Download, ExternalLink, Loader2, Phone, X } from 'lucide-rea
 import {
   getOrder,
   updateOrderStatus,
+  markOrdersOpened,
   formatMinor,
   paymentLabel,
   statusLabel,
@@ -87,6 +88,8 @@ export function OrderDetailView({ orderId, onBack }: OrderDetailViewProps) {
     setUpdating(true);
     try {
       await updateOrderStatus(order.id, newStatus);
+      // A status change counts as having seen the order on every device.
+      void markOrdersOpened([order.id]).catch(() => {});
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update the order status.');

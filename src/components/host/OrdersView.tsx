@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import {
   listOrders,
   updateOrderStatus,
+  markOrdersOpened,
   formatMinor,
   statusLabel,
   nextStatus,
@@ -24,30 +25,6 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
   completed: 'bg-cream-200 text-ink-soft',
   cancelled: 'bg-error-100 text-error-700',
 };
-
-function openedOrdersKey(restaurantId: string): string {
-  return `vp:host:opened-orders:${restaurantId}`;
-}
-
-function loadOpenedOrderIds(restaurantId: string): Set<string> {
-  try {
-    const raw = localStorage.getItem(openedOrdersKey(restaurantId));
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return new Set();
-    return new Set(arr.filter((v): v is string => typeof v === 'string'));
-  } catch {
-    return new Set();
-  }
-}
-
-function saveOpenedOrderIds(restaurantId: string, ids: Set<string>): void {
-  try {
-    localStorage.setItem(openedOrdersKey(restaurantId), JSON.stringify([...ids]));
-  } catch {
-    // Ignore quota errors
-  }
-}
 
 function locationFilterKey(restaurantId: string): string {
   return `vp:host:orders-location-filter:${restaurantId}`;
@@ -91,7 +68,7 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
   const [locationFilter, setLocationFilter] = useState<'all' | Set<string>>(
     () => loadLocationFilter(restaurant.id)
   );
-  const [openedIds, setOpenedIds] = useState<Set<string>>(() => loadOpenedOrderIds(restaurant.id));
+  const [openedIds, setOpenedIds] = useState<Set<string>>(() => new Set());
   const [departments, setDepartments] = useState<Department[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [alerts, setAlerts] = useState<Order[]>([]);
@@ -117,8 +94,17 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
     }
     loadingRef.current = true;
     try {
-      const data = await listOrders(restaurant.id);
+      const [data, openedRows] = await Promise.all([
+        listOrders(restaurant.id),
+        supabase
+          .from('order_opens')
+          .select('order_id')
+          .eq('restaurant_id', restaurant.id),
+      ]);
       setOrders(data);
+      setOpenedIds(
+        new Set((openedRows.data ?? []).map((row) => row.order_id as string))
+      );
       setError(null);
       hasLoadedRef.current = true;
 
@@ -190,6 +176,25 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
         },
         () => { void load(); }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'order_opens',
+          filter: `restaurant_id=eq.${restaurant.id}`,
+        },
+        (payload) => {
+          const orderId = (payload.new as { order_id?: string }).order_id;
+          if (!orderId) return;
+          setOpenedIds((current) => {
+            if (current.has(orderId)) return current;
+            const next = new Set(current);
+            next.add(orderId);
+            return next;
+          });
+        }
+      )
       .subscribe((status) => {
         if (gen !== channelGenRef.current) return;
         if (status === 'SUBSCRIBED') {
@@ -248,7 +253,9 @@ export function OrdersView({ restaurant, onOpenOrder, alertAudioRef }: OrdersVie
       const next = new Set(openedIds);
       next.add(order.id);
       setOpenedIds(next);
-      saveOpenedOrderIds(restaurant.id, next);
+      void markOrdersOpened([order.id]).catch(() => {
+        // Shared state will converge on the next load; keep the local highlight.
+      });
     }
     onOpenOrder(order);
   }
