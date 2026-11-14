@@ -44,8 +44,9 @@ function providerHeaders(provider: string, apiKey: string): Record<string, strin
   return headers;
 }
 
-function buildPrompt(name: string, description: string, ingredients: string): string {
-  const parts = [`A professional food photograph of ${name}.`];
+function buildPrompt(name: string, description: string, ingredients: string, section?: string): string {
+  const kind = section === 'drinks' ? 'drink' : 'food';
+  const parts = [`A professional ${kind} photograph of ${name}.`];
   if (description) parts.push(description.replace(/\s+/g, ' ').trim() + '.');
   if (ingredients) parts.push(`Made with ${ingredients.replace(/\s+/g, ' ').trim()}.`);
   parts.push('Plated on a rustic table, soft natural light, overhead angle, appetizing, high detail.');
@@ -117,7 +118,7 @@ Deno.serve(async (req: Request) => {
           .maybeSingle()
       : await supabase
           .from('dishes')
-          .select('id, name, description, ingredients, restaurant_id')
+          .select('id, name, description, ingredients, section, restaurant_id')
           .eq('id', dishId)
           .eq('restaurant_id', restaurantId)
           .maybeSingle();
@@ -125,7 +126,7 @@ Deno.serve(async (req: Request) => {
     if (!target) {
       return json({ error: isCombo ? 'That combo no longer exists.' : 'That dish no longer exists.' }, 404);
     }
-    const targetRow = target as { name?: string; description?: string; ingredients?: string };
+    const targetRow = target as { name?: string; description?: string; ingredients?: string; section?: string };
 
     // Credit pre-flight: fails stale pending attempts (crash recovery),
     // enforces the 1-credit minimum and deducts exactly 1 credit atomically.
@@ -191,7 +192,8 @@ Deno.serve(async (req: Request) => {
     const prompt = buildPrompt(
       targetRow.name ?? (isCombo ? 'a combo meal' : 'a dish'),
       targetRow.description ?? '',
-      targetRow.ingredients ?? ''
+      targetRow.ingredients ?? '',
+      isCombo ? undefined : targetRow.section
     );
 
     const imageResponse = await fetch(image.endpoint, {
