@@ -212,20 +212,20 @@ export function ResourceDetail({
         </div>
       </div>
 
-      <div className="mb-6 flex gap-1 rounded-xl bg-white p-1 ring-1 ring-cream-200">
+      <div className="mb-6 flex gap-1.5 rounded-2xl bg-white p-1.5 ring-1 ring-cream-200 shadow-[0_2px_8px_rgba(41,42,39,0.06)]">
         {TABS.map((t) => {
           const Icon = t.icon;
           return (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+              className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-olive-500 focus-visible:ring-offset-1 active:scale-[0.96] ${
                 tab === t.id
-                  ? 'bg-olive-700 text-white shadow-soft'
-                  : 'text-ink-muted hover:bg-cream-100 hover:text-ink'
+                  ? 'bg-olive-700 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_6px_rgba(0,0,0,0.18)] hover:bg-olive-600'
+                  : 'bg-white text-ink-muted ring-1 ring-cream-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_1px_3px_rgba(41,42,39,0.08)] hover:bg-cream-50 hover:text-ink hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_2px_6px_rgba(41,42,39,0.12)]'
               }`}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-4 w-4 stroke-[2.25]" />
               <span className="hidden sm:inline">{t.label}</span>
             </button>
           );
