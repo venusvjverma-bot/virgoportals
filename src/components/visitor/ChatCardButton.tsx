@@ -29,18 +29,18 @@ export function ChatCardButton({
       type="button"
       onClick={onOpen}
       aria-label={ariaLabel}
-      className="flex w-full flex-col gap-2 overflow-hidden rounded-2xl bg-white p-3 text-left shadow-lift ring-1 ring-olive-300 transition-all duration-200 hover:shadow-lift hover:ring-olive-500 focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-[0.99]"
+      className="flex w-full flex-col gap-1.5 overflow-hidden rounded-2xl bg-white p-2.5 text-left shadow-lift ring-1 ring-olive-300 transition-all duration-200 hover:shadow-lift hover:ring-olive-500 focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-[0.99]"
     >
-      <div className="flex gap-3">
-        <div className="flex w-24 shrink-0 flex-col">
+      <div className="flex gap-2.5">
+        <div className="flex w-20 shrink-0 flex-col">
           {imageUrl ? (
             <img
               src={imageUrl}
               alt={name}
-              className="h-24 w-24 shrink-0 rounded-xl object-cover ring-1 ring-cream-200"
+              className="h-20 w-20 shrink-0 rounded-xl object-cover ring-1 ring-cream-200"
             />
           ) : (
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl bg-cream-100 text-[11px] text-ink-faint ring-1 ring-inset ring-cream-200">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-cream-100 text-[11px] text-ink-faint ring-1 ring-inset ring-cream-200">
               No image
             </div>
           )}

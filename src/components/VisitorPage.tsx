@@ -809,7 +809,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         className="relative z-10 shrink-0 pt-[env(safe-area-inset-top)]"
         style={{ background: 'linear-gradient(90deg, #3F5037 0%, #A4AE91 100%)' }}
       >
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-5 py-3 sm:py-4">
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-5 py-2.5 sm:py-3">
           <img
             src={mascotUrl()}
             alt=""
@@ -863,7 +863,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
         ref={scrollRef}
         className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-soft"
       >
-        <div className="mx-auto max-w-3xl space-y-5 px-5 py-6">
+        <div className="mx-auto max-w-3xl space-y-3.5 px-5 py-4">
           {messages.length === 0 && !showSelector && !sending ? (
             <div className="flex items-center gap-2 text-sm text-ink-muted">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -884,7 +884,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
       </main>
 
       <div className="relative z-10 shrink-0 pb-[env(safe-area-inset-bottom)]">
-        <div className="mx-auto max-w-3xl px-5 py-3 sm:py-4">
+        <div className="mx-auto max-w-3xl px-5 py-2.5 sm:py-3">
           {sendError ? (
             <Notice tone="error" className="mb-3">
               {sendError}
@@ -972,7 +972,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
                 border: '1px solid #E5DED3',
                 color: '#292929',
               }}
-              className="flex-1 px-5 py-3 text-sm shadow-soft transition-all duration-200 placeholder:text-[#858585] focus:outline-none focus:ring-2 focus:ring-olive-500"
+              className="flex-1 px-5 py-2.5 text-sm shadow-soft transition-all duration-200 placeholder:text-[#858585] focus:outline-none focus:ring-2 focus:ring-olive-500"
             />
             <button
               type="submit"
@@ -1224,7 +1224,7 @@ function MessageBubble({
           </svg>
           <div
             className={cn(
-              'rounded-[22px] px-4 py-3 text-sm leading-relaxed',
+              'rounded-[22px] px-4 py-2.5 text-sm leading-snug',
               isVisitor
                 ? 'rounded-br-none bg-[#3F4F3A] text-white'
                 : 'rounded-bl-none bg-[#F6F1EA] text-[#1C1917]'
@@ -1234,11 +1234,11 @@ function MessageBubble({
           </div>
         </div>
         {groups.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {groups.map((group) => {
               if (group.start >= revealed) return null;
               return (
-                <div key={`group-${group.key}`} className="space-y-3">
+                <div key={`group-${group.key}`} className="space-y-2.5">
                   <CardSectionHeading label={group.label} />
                   {group.cards.slice(0, revealed - group.start)}
                 </div>
