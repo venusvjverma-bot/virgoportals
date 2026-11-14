@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { AlertTriangle, Layers, Loader2, RotateCcw, Send, ShoppingBag, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { AlertTriangle, Layers, Loader2, RotateCcw, Send, ShoppingBasket, Sparkles, UtensilsCrossed } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
 import { ItemDetailPanel, type DishSelection } from '@/components/visitor/ItemDetailPanel';
 import { ComboDetailPanel, type ComboSubmission } from '@/components/visitor/ComboDetailPanel';
@@ -835,9 +835,9 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
             onClick={handleResetChat}
             aria-label="Reset chat"
             title="Reset chat"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white transition-all duration-200 hover:bg-white/25"
+            className="group flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_6px_rgba(0,0,0,0.18)] ring-1 ring-white/20 transition-all duration-200 hover:bg-white/25 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_10px_rgba(0,0,0,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 active:scale-95 active:shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
           >
-            <RotateCcw className="h-5 w-5" />
+            <RotateCcw className="h-[18px] w-[18px] stroke-[2.25] transition-transform duration-300 group-hover:-rotate-45" />
           </button>
           {/* Basket icon */}
           <button
@@ -845,14 +845,14 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
             onClick={() => setOverlay('basket')}
             aria-label={`Open basket${basketCount > 0 ? `, ${basketCount} items` : ''}`}
             className={cn(
-              'relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white transition-all duration-200 hover:bg-white/25',
+              'group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_6px_rgba(0,0,0,0.18)] ring-1 ring-white/20 transition-all duration-200 hover:bg-white/25 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_10px_rgba(0,0,0,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 active:scale-95 active:shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]',
               basketBadge && 'animate-pop'
             )}
           >
-            <ShoppingBag className="h-5 w-5" />
+            <ShoppingBasket className="h-[18px] w-[18px] stroke-[2.25] transition-transform duration-200 group-active:scale-90" />
             {basketCount > 0 ? (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-olive-600 px-1 text-[10px] font-bold text-white ring-2 ring-white/80">
-                {basketCount}
+              <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-gradient-to-b from-[#EB7C10] to-[#d96c04] px-1 text-[11px] font-bold leading-none text-white shadow-[0_2px_5px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.35)] ring-2 ring-white/85 transition-transform duration-200 group-active:scale-90">
+                {basketCount > 99 ? '99+' : basketCount}
               </span>
             ) : null}
           </button>
