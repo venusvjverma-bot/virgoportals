@@ -699,7 +699,14 @@ function extractionInstruction(): string {
     'non-alcoholic lager → drinks/non_alcoholic_beer, fries → food/sides.\n\n' +
     'Use an empty string "" for any field the document does not state. ' +
     'Never invent prices, ingredients, allergens, serving sizes or alcohol ' +
-    'percentages, and never carry an allergen over from a different item.'
+    'percentages, and never carry an allergen over from a different item.\n\n' +
+    'Product labels and additional information:\n' +
+    'Capture all important information, labels, symbols and classifications associated with each menu item. Include this information in the "description" field alongside the item\'s printed description.\n' +
+    'This applies to all types of menus and products. Preserve meaningful product-specific information, including ratings, certifications, dietary labels, origin, quality classifications, sustainability information, special characteristics and other relevant labels.\n' +
+    'If a menu includes a legend explaining symbols, ratings or classifications, use that explanation when it can be clearly associated with the relevant item. Preserve both the original label and its explained meaning.\n' +
+    'Keep the original printed description intact and append the additional information. Never replace or omit existing description content.\n' +
+    'Only include information explicitly stated in the menu or clearly explained by its legend. Never invent, assume or infer labels, classifications or their meanings.\n' +
+    'Important: If an item has no printed description and no additional product information, return an empty string ("") for "description". Never generate placeholder text, assumptions or explanatory text when no information is available.'
   );
 }
 
