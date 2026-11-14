@@ -973,7 +973,8 @@ export function DishCard({
                     )}
                   </div>
                 </div>
-                {!isDrinkSection(dish!.section) && !(dish!.servingOptions && dish!.servingOptions.length > 0) ? (
+                {(!isDrinkSection(dish!.section) && !(dish!.servingOptions && dish!.servingOptions.length > 0)) ||
+                (isDrinkSection(dish!.section) && dish!.servingOptions?.length === 1) ? (
                   <ReadOnlyRow label="Serving size" value={dish!.serving} />
                 ) : null}
                 {showSavedAbv ? <ReadOnlyRow label="Alcohol" value={dish!.abv} /> : null}
