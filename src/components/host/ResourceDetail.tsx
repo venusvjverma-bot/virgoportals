@@ -16,8 +16,6 @@ import {
   CheckCircle2,
   Trash2,
   Archive,
-  RotateCcw,
-  ShoppingBasket,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -232,22 +230,6 @@ export function ResourceDetail({
             </button>
           );
         })}
-        <button
-          type="button"
-          aria-label="Reset chat"
-          title="Reset chat"
-          className="group flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-ink-muted transition-all hover:bg-cream-100 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-95"
-        >
-          <RotateCcw className="h-4 w-4 stroke-[2.25] transition-transform duration-300 group-hover:-rotate-45" />
-        </button>
-        <button
-          type="button"
-          aria-label="Open basket"
-          title="Open basket"
-          className="group flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-ink-muted transition-all hover:bg-cream-100 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-95"
-        >
-          <ShoppingBasket className="h-4 w-4 stroke-[2.25] transition-transform duration-200 group-active:scale-90" />
-        </button>
       </div>
 
       {tab === 'details' ? (
