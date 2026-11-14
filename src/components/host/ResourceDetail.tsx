@@ -236,17 +236,17 @@ export function ResourceDetail({
           type="button"
           aria-label="Reset chat"
           title="Reset chat"
-          className="group flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_6px_rgba(0,0,0,0.18)] ring-1 ring-white/20 transition-all duration-200 hover:bg-white/25 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_10px_rgba(0,0,0,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 active:scale-95 active:shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+          className="group flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-ink-muted transition-all hover:bg-cream-100 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-95"
         >
-          <RotateCcw className="h-[18px] w-[18px] stroke-[2.25] transition-transform duration-300 group-hover:-rotate-45" />
+          <RotateCcw className="h-4 w-4 stroke-[2.25] transition-transform duration-300 group-hover:-rotate-45" />
         </button>
         <button
           type="button"
           aria-label="Open basket"
           title="Open basket"
-          className="group flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_2px_6px_rgba(0,0,0,0.18)] ring-1 ring-white/20 transition-all duration-200 hover:bg-white/25 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_10px_rgba(0,0,0,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 active:scale-95 active:shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]"
+          className="group flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-ink-muted transition-all hover:bg-cream-100 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-olive-500 active:scale-95"
         >
-          <ShoppingBasket className="h-[18px] w-[18px] stroke-[2.25] transition-transform duration-200 group-active:scale-90" />
+          <ShoppingBasket className="h-4 w-4 stroke-[2.25] transition-transform duration-200 group-active:scale-90" />
         </button>
       </div>
 
