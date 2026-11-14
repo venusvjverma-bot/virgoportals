@@ -528,7 +528,7 @@ export function DishCard({
                 </Field>
               </div>
 
-              {(isDrinkSection(section) || hasServingOptionsConfigured) ? (
+              {((isDrinkSection(section) && servingOpts.length > 0) || hasServingOptionsConfigured) ? (
                 showAbv ? (
                   <div className="mt-4 grid gap-4 sm:grid-cols-1">
                     <Field label="Alcohol %" htmlFor={`${fieldIdPrefix}-abv`}>
@@ -974,8 +974,14 @@ export function DishCard({
                   </div>
                 </div>
                 {(!isDrinkSection(dish!.section) && !(dish!.servingOptions && dish!.servingOptions.length > 0)) ||
-                (isDrinkSection(dish!.section) && dish!.servingOptions?.length === 1) ? (
-                  <ReadOnlyRow label="Serving size" value={dish!.serving} />
+                (isDrinkSection(dish!.section) && (
+                  dish!.servingOptions?.length === 1 ||
+                  (dish!.servingOptions?.length === 0 && dish!.serving.trim().length > 0)
+                )) ? (
+                  <ReadOnlyRow
+                    label="Serving size"
+                    value={dish!.servingOptions?.length === 1 ? dish!.servingOptions[0].label : dish!.serving}
+                  />
                 ) : null}
                 {showSavedAbv ? <ReadOnlyRow label="Alcohol" value={dish!.abv} /> : null}
                 <ReadOnlyRow label="Description" value={dish!.description} />
