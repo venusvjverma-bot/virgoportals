@@ -32,21 +32,23 @@ export async function resolveSession(): Promise<Session | null> {
 
   const email = user.email ?? '';
 
-  try {
-    if (await adminWhoami()) {
-      return { userId: user.id, email, role: 'admin' };
-    }
-  } catch {
-    // A failure here must not grant admin; fall through to the host check.
-  }
-
   const { data: owned } = await supabase
     .from('restaurants')
     .select('id')
     .eq('owner_id', user.id)
     .maybeSingle();
 
-  return { userId: user.id, email, role: owned ? 'host' : 'no-portal' };
+  if (owned) return { userId: user.id, email, role: 'host' };
+
+  try {
+    if (await adminWhoami()) {
+      return { userId: user.id, email, role: 'admin' };
+    }
+  } catch {
+    // A failure here must not grant admin.
+  }
+
+  return { userId: user.id, email, role: 'no-portal' };
 }
 
 export async function signIn(email: string, password: string): Promise<void> {
