@@ -390,6 +390,22 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
             price: item.price,
             quantity: item.quantity,
             servingLabel: item.servingLabel ?? null,
+            variantName: item.variantName ?? null,
+            variantAdditionalPrice: item.variantAdditionalPrice ?? null,
+            addOns: (item.addOns ?? []).map((addOn) => ({
+              name: addOn.name,
+              price: addOn.price,
+            })),
+            removedIngredientLabels: item.removedIngredientLabels ?? [],
+            additionalRequest: item.additionalRequest ?? null,
+            comboSelections: (item.comboSelections ?? []).map((selection) => ({
+              groupId: selection.groupId,
+              dishId: selection.dishId,
+              dishName: selection.dishName,
+              servingOptionId: selection.servingOptionId,
+              servingLabel: selection.servingLabel,
+              upgradeMinor: selection.upgradeMinor,
+            })),
           })),
         });
         // Stale guard: only apply if no newer request superseded this one.
@@ -434,6 +450,22 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           price: item.price,
           quantity: item.quantity,
           servingLabel: item.servingLabel ?? null,
+          variantName: item.variantName ?? null,
+          variantAdditionalPrice: item.variantAdditionalPrice ?? null,
+          addOns: (item.addOns ?? []).map((addOn) => ({
+            name: addOn.name,
+            price: addOn.price,
+          })),
+          removedIngredientLabels: item.removedIngredientLabels ?? [],
+          additionalRequest: item.additionalRequest ?? null,
+          comboSelections: (item.comboSelections ?? []).map((selection) => ({
+            groupId: selection.groupId,
+            dishId: selection.dishId,
+            dishName: selection.dishName,
+            servingOptionId: selection.servingOptionId,
+            servingLabel: selection.servingLabel,
+            upgradeMinor: selection.upgradeMinor,
+          })),
         })),
       });
       const botMessage: ChatMessage = {
@@ -500,6 +532,22 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           price: item.price,
           quantity: item.quantity,
           servingLabel: item.servingLabel ?? null,
+          variantName: item.variantName ?? null,
+          variantAdditionalPrice: item.variantAdditionalPrice ?? null,
+          addOns: (item.addOns ?? []).map((addOn) => ({
+            name: addOn.name,
+            price: addOn.price,
+          })),
+          removedIngredientLabels: item.removedIngredientLabels ?? [],
+          additionalRequest: item.additionalRequest ?? null,
+          comboSelections: (item.comboSelections ?? []).map((selection) => ({
+            groupId: selection.groupId,
+            dishId: selection.dishId,
+            dishName: selection.dishName,
+            servingOptionId: selection.servingOptionId,
+            servingLabel: selection.servingLabel,
+            upgradeMinor: selection.upgradeMinor,
+          })),
         })),
       });
       const botMessage: ChatMessage = {

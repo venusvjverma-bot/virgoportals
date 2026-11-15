@@ -144,12 +144,32 @@ interface VariantRow {
   is_active: boolean;
 }
 
+interface BasketAddOnInput {
+  name: string;
+  price: string;
+}
+
+interface BasketComboSelectionInput {
+  groupId: string;
+  dishId: string;
+  dishName: string;
+  servingOptionId?: string | null;
+  servingLabel?: string | null;
+  upgradeMinor: number;
+}
+
 interface BasketItemInput {
   name: string;
   price: string;
   quantity: number;
   section?: string | null;
   servingLabel?: string | null;
+  variantName?: string | null;
+  variantAdditionalPrice?: string | null;
+  addOns?: BasketAddOnInput[];
+  removedIngredientLabels?: string[];
+  additionalRequest?: string | null;
+  comboSelections?: BasketComboSelectionInput[];
 }
 
 interface ResourceRow {
@@ -290,6 +310,50 @@ function buildBasketContext(items: BasketItemInput[], currency = 'SEK'): string 
     const lineTotal = formatMinorUnits(safePrice * item.quantity, currency);
     const unitPrice = formatMinorUnits(safePrice, currency);
     lines.push(`- ${item.name}${serving}: ${item.quantity} x ${unitPrice} = ${lineTotal}`);
+
+    const variantName = typeof item.variantName === 'string' ? item.variantName.trim() : '';
+    if (variantName) {
+      const variantPrice = parsePriceMinor(item.variantAdditionalPrice ?? '');
+      const priceSuffix = variantPrice && variantPrice > 0
+        ? ` (+${formatMinorUnits(variantPrice, currency)})`
+        : '';
+      lines.push(`  Selected variant: ${variantName}${priceSuffix}`);
+    }
+
+    const addOnGroups = new Map<string, { name: string; count: number; totalMinor: number }>();
+    for (const addOn of Array.isArray(item.addOns) ? item.addOns : []) {
+      if (!addOn || typeof addOn.name !== 'string' || typeof addOn.price !== 'string') continue;
+      const name = addOn.name.trim();
+      if (!name) continue;
+      const group = addOnGroups.get(name) ?? { name, count: 0, totalMinor: 0 };
+      group.count += 1;
+      group.totalMinor += parsePriceMinor(addOn.price) ?? 0;
+      addOnGroups.set(name, group);
+    }
+    for (const addOn of addOnGroups.values()) {
+      const count = addOn.count > 1 ? `${addOn.count} x ` : '';
+      lines.push(`  Add-on: + ${count}${addOn.name} (${formatMinorUnits(addOn.totalMinor, currency)})`);
+    }
+
+    for (const label of Array.isArray(item.removedIngredientLabels) ? item.removedIngredientLabels : []) {
+      if (typeof label === 'string' && label.trim()) lines.push(`  Removed ingredient: No ${label.trim()}`);
+    }
+
+    const request = typeof item.additionalRequest === 'string' ? item.additionalRequest.trim() : '';
+    if (request) lines.push(`  Additional request: ${request}`);
+
+    const selections = Array.isArray(item.comboSelections) ? item.comboSelections : [];
+    if (selections.length > 0) {
+      lines.push('  Combo selections:');
+      for (const selection of selections) {
+        if (!selection || typeof selection.dishName !== 'string' || !selection.dishName.trim()) continue;
+        const servingText = selection.servingLabel ? ` (${selection.servingLabel})` : '';
+        const upgradeText = selection.upgradeMinor > 0
+          ? ` (+${formatMinorUnits(selection.upgradeMinor, currency)})`
+          : '';
+        lines.push(`    - ${selection.dishName.trim()}${servingText}${upgradeText}`);
+      }
+    }
   }
   lines.push(`Basket total: ${formatMinorUnits(totalMinor, currency)}`);
   lines.push('Use this information if the guest asks about their basket, total, or what they have ordered.');
