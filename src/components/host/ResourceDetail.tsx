@@ -541,7 +541,6 @@ function DepartmentDetails({
   const [scheduleAvailable, setScheduleAvailable] = useState(department.scheduleAvailable);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [hasOrders, setHasOrders] = useState<boolean | null>(null);
 
@@ -626,7 +625,6 @@ function DepartmentDetails({
       onDelete();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not delete.');
-      setConfirmDelete(false);
     }
   }
 
@@ -715,7 +713,7 @@ function DepartmentDetails({
                 <p>All menu items, bot settings and QR links for <span className="font-medium">{department.name}</span> will be permanently deleted.</p>
               }
               hasOrders={hasOrders}
-              onDelete={() => setConfirmDelete(true)}
+              onDelete={handleDelete}
               onArchive={() => setConfirmArchive(true)}
             />
           ) : (
@@ -780,17 +778,6 @@ function DepartmentDetails({
       )}
 
       <ConfirmDialog
-        open={confirmDelete}
-        title="Remove this department?"
-        confirmLabel="Remove"
-        tone="danger"
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmDelete(false)}
-      >
-        <p>All menu items, bot settings and QR links for <span className="font-medium">{department.name}</span> will be permanently deleted.</p>
-      </ConfirmDialog>
-
-      <ConfirmDialog
         open={confirmArchive}
         title="Archive this department?"
         confirmLabel="Archive"
@@ -827,7 +814,6 @@ function EventDetails({
   const [endTime, setEndTime] = useState(event.endTime ?? '');
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [hasOrders, setHasOrders] = useState<boolean | null>(null);
 
@@ -915,7 +901,6 @@ function EventDetails({
       onDelete();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not delete.');
-      setConfirmDelete(false);
     }
   }
 
@@ -979,7 +964,7 @@ function EventDetails({
               <p>All menu items, bot settings and QR links for <span className="font-medium">{event.name}</span> will be permanently deleted.</p>
             }
             hasOrders={hasOrders}
-            onDelete={() => setConfirmDelete(true)}
+            onDelete={handleDelete}
             onArchive={() => setConfirmArchive(true)}
           />
         </>
@@ -1036,17 +1021,6 @@ function EventDetails({
           />
         </Card>
       )}
-
-      <ConfirmDialog
-        open={confirmDelete}
-        title="Remove this event?"
-        confirmLabel="Remove"
-        tone="danger"
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmDelete(false)}
-      >
-        <p>All menu items, bot settings and QR links for <span className="font-medium">{event.name}</span> will be permanently deleted.</p>
-      </ConfirmDialog>
 
       <ConfirmDialog
         open={confirmArchive}
