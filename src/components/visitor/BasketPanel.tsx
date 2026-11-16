@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Minus, Plus, ShoppingBag, Trash2, X, ArrowRight } from 'lucide-react';
+import { Clock, Minus, Plus, ShoppingBag, Trash2, X, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { basketLineKey, groupAddOns } from '@/lib/basketLine';
 import { formatMinor, parsePriceToMinor, formatPriceInput } from '@/lib/currency';
@@ -19,6 +19,8 @@ interface BasketPanelProps {
   onChangeServingSize: (dishId: string, servingOptionId: string | null, removedKey: string, option: DishServingOption) => void;
   onEditItem: (item: BasketItem) => void;
   canEditItem: (item: BasketItem) => boolean;
+  checkoutBlocked?: boolean;
+  checkoutBlockedMessage?: string;
 }
 
 export function BasketPanel({
@@ -34,6 +36,8 @@ export function BasketPanel({
   onChangeServingSize,
   onEditItem,
   canEditItem,
+  checkoutBlocked = false,
+  checkoutBlockedMessage,
 }: BasketPanelProps) {
   const [closing, setClosing] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -271,11 +275,38 @@ export function BasketPanel({
             <button
               type="button"
               onClick={onCheckout}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-olive-700 py-3.5 text-sm font-semibold text-white shadow-soft transition-all duration-200 hover:bg-olive-800 hover:shadow-lift active:scale-[0.99]"
+              disabled={checkoutBlocked}
+              className={cn(
+                'mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold shadow-soft transition-all duration-200 active:scale-[0.99]',
+                checkoutBlocked
+                  ? 'cursor-not-allowed bg-olive-700/40 text-white'
+                  : 'bg-olive-700 text-white hover:bg-olive-800 hover:shadow-lift'
+              )}
             >
-              Go to checkout
-              <ArrowRight className="h-4 w-4" />
+              {checkoutBlocked ? 'Checkout unavailable' : 'Go to checkout'}
+              {checkoutBlocked ? <Clock className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
             </button>
+            {checkoutBlocked && checkoutBlockedMessage ? (
+              <div
+                className="mt-3 flex items-start gap-2.5 rounded-xl px-4 py-3"
+                style={{ backgroundColor: '#FFF0DF', border: '1px solid #EB7C10' }}
+                role="status"
+              >
+                <Clock className="mt-0.5 h-4 w-4 shrink-0" style={{ color: '#A94B0B' }} />
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: '#A94B0B' }}>
+                    We&apos;re closed for today
+                  </p>
+                  <p className="mt-0.5 text-xs" style={{ color: '#A94B0B' }}>
+                    {checkoutBlockedMessage}
+                  </p>
+                </div>
+              </div>
+            ) : checkoutBlocked ? (
+              <p className="mt-3 text-center text-xs text-ink-muted">
+                This department is currently not accepting orders. Please try again later.
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>

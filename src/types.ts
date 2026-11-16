@@ -123,6 +123,7 @@ export interface Department {
   closeTime: string | null;
   systemPrompt: string;
   isActive: boolean;
+  scheduleAvailable: boolean;
   archived: boolean;
   chatBackgroundAssetId: string | null;
   printerEnabled: boolean;
@@ -179,6 +180,8 @@ export interface PublicResource {
   tableServiceCharge: number;
   roomServiceEnabled: boolean;
   roomServiceCharge: number;
+  isActive: boolean;
+  scheduleAvailable: boolean;
 }
 
 export interface UsageRow {

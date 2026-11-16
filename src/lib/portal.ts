@@ -137,6 +137,8 @@ interface PublicResourceRow {
   welcome: string;
   system_prompt: string;
   timezone: string;
+  is_active: boolean;
+  schedule_available: boolean;
   currency: string;
   chat_background_path: string | null;
   table_service_enabled: boolean;
@@ -168,6 +170,8 @@ function mapPublicResource(row: PublicResourceRow): PublicResource {
     tableServiceCharge: row.table_service_charge ?? 0,
     roomServiceEnabled: row.room_service_enabled ?? false,
     roomServiceCharge: row.room_service_charge ?? 0,
+    isActive: row.is_active ?? true,
+    scheduleAvailable: row.schedule_available ?? false,
   };
 }
 

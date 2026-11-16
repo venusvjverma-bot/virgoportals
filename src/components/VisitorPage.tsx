@@ -13,6 +13,7 @@ import { ChatCardButton } from '@/components/visitor/ChatCardButton';
 import { CheckoutView, type ConfirmedOrder } from '@/components/visitor/CheckoutView';
 import { OrderConfirmation } from '@/components/visitor/OrderConfirmation';
 import { basketLineKey, unitPriceWithExtras } from '@/lib/basketLine';
+import { departmentAvailability, nextOpeningLabel } from '@/lib/departmentAvailability';
 import { callFunction } from '@/lib/functions';
 import { getPublicPortal, getPublicResource, getPublicDishImages, listPublicAddOns, listServingOptionsByDish, type PublicPortal } from '@/lib/portal';
 import { themeAssetUrl, mascotUrl } from '@/lib/themeAssets';
@@ -806,6 +807,25 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
 
   const basketCount = basket.reduce((sum, item) => sum + item.quantity, 0);
 
+  // ── Checkout availability (manual status first, then schedule) ──
+  // Recomputed every minute so checkout reopens automatically at the next
+  // opening time without a page refresh.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const availability = departmentAvailability(
+    view.isActive,
+    view.scheduleAvailable,
+    view,
+    view.timezone,
+    nowTick
+  );
+  const checkoutBlocked = availability !== 'available';
+  const scheduleClosed = availability === 'schedule-closed';
+  const scheduleOpeningLabel = scheduleClosed ? nextOpeningLabel(view) : null;
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-cream-100">
@@ -1092,7 +1112,13 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           resourceName={view.resourceId ? view.name : ''}
           currency={view.currency}
           onClose={() => setOverlay(null)}
-          onCheckout={() => setOverlay('checkout')}
+          onCheckout={() => { if (!checkoutBlocked) setOverlay('checkout'); }}
+          checkoutBlocked={checkoutBlocked}
+          checkoutBlockedMessage={
+            scheduleClosed
+              ? `We're closed for today. See you at ${scheduleOpeningLabel ?? 'our next opening time'}.`
+              : undefined
+          }
           servingOptionsByDish={basketServingOptions}
           onUpdateQuantity={handleUpdateBasketQuantity}
           onRemove={handleRemoveFromBasket}

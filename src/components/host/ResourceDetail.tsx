@@ -538,6 +538,7 @@ function DepartmentDetails({
   const [openTime, setOpenTime] = useState(department.openTime ?? '');
   const [closeTime, setCloseTime] = useState(department.closeTime ?? '');
   const [isActive, setIsActive] = useState(department.isActive);
+  const [scheduleAvailable, setScheduleAvailable] = useState(department.scheduleAvailable);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -567,6 +568,7 @@ function DepartmentDetails({
     setOpenTime(department.openTime ?? '');
     setCloseTime(department.closeTime ?? '');
     setIsActive(department.isActive);
+    setScheduleAvailable(department.scheduleAvailable);
     setStatus('idle');
   }, [department]);
 
@@ -574,7 +576,8 @@ function DepartmentDetails({
     name !== department.name ||
     openTime !== (department.openTime ?? '') ||
     closeTime !== (department.closeTime ?? '') ||
-    isActive !== department.isActive;
+    isActive !== department.isActive ||
+    scheduleAvailable !== department.scheduleAvailable;
 
   function handleEdit() {
     setError(null);
@@ -586,6 +589,7 @@ function DepartmentDetails({
     setOpenTime(department.openTime ?? '');
     setCloseTime(department.closeTime ?? '');
     setIsActive(department.isActive);
+    setScheduleAvailable(department.scheduleAvailable);
     setError(null);
     setStatus('idle');
     setMode('read');
@@ -604,6 +608,7 @@ function DepartmentDetails({
         openTime: openTime || null,
         closeTime: closeTime || null,
         isActive,
+        scheduleAvailable,
       });
       setStatus('saved');
       onSaved();
@@ -648,7 +653,7 @@ function DepartmentDetails({
             <InfoRow icon={<Clock className="h-5 w-5" />} label="Closing time">
               {alwaysOpen ? 'Always open' : (department.closeTime || '—')}
             </InfoRow>
-            <InfoRow icon={<UtensilsCrossed className="h-5 w-5" />} label="Status" last>
+            <InfoRow icon={<UtensilsCrossed className="h-5 w-5" />} label="Status">
               {department.isActive ? (
                 <span
                   className="inline-flex items-center rounded-full text-[13px] font-medium"
@@ -662,6 +667,23 @@ function DepartmentDetails({
                   style={{ backgroundColor: '#EFEEE9', color: '#68675F', padding: '6px 12px' }}
                 >
                   Inactive
+                </span>
+              )}
+            </InfoRow>
+            <InfoRow icon={<UtensilsCrossed className="h-5 w-5" />} label="Automatic availability" last>
+              {department.scheduleAvailable ? (
+                <span
+                  className="inline-flex items-center rounded-full text-[13px] font-medium"
+                  style={{ backgroundColor: '#E4E8DF', color: '#465641', padding: '6px 12px' }}
+                >
+                  On schedule
+                </span>
+              ) : (
+                <span
+                  className="inline-flex items-center rounded-full text-[13px] font-medium"
+                  style={{ backgroundColor: '#EFEEE9', color: '#68675F', padding: '6px 12px' }}
+                >
+                  Off
                 </span>
               )}
             </InfoRow>
@@ -734,8 +756,15 @@ function DepartmentDetails({
             </Select>
           </Field>
 
+          <Field label="Automatic availability" htmlFor="dept-schedule" className="mt-5">
+            <Select id="dept-schedule" value={scheduleAvailable ? 'true' : 'false'} onChange={(e) => { setScheduleAvailable(e.target.value === 'true'); setStatus('idle'); }}>
+              <option value="false">Disabled — always available when Active</option>
+              <option value="true">Enabled — follow opening hours</option>
+            </Select>
+          </Field>
+
           <p className="mt-4 text-xs text-ink-muted">
-            Timezone: {restaurant.timezone}. Hours that cross midnight (e.g. 18:00 – 02:00) are supported.
+            Timezone: {restaurant.timezone}. Hours that cross midnight (e.g. 18:00 – 02:00) are supported. When automatic availability is enabled and the manual status is Active, checkout is only available between the opening and closing times above; the manual Active/Inactive status always takes priority.
           </p>
 
           {error ? <Notice tone="error" className="mt-4">{error}</Notice> : null}

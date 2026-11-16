@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { getBotText } from '@/lib/config';
 import type { Department } from '@/types';
 
-const COLUMNS = 'id, restaurant_id, name, is_default, open_time, close_time, system_prompt, is_active, archived, chat_background_asset_id, printer_enabled, printer_name, printer_connection, printer_ip, printer_port, table_service_enabled, table_service_charge, room_service_enabled, room_service_charge, created_at';
+const COLUMNS = 'id, restaurant_id, name, is_default, open_time, close_time, system_prompt, is_active, schedule_available, archived, chat_background_asset_id, printer_enabled, printer_name, printer_connection, printer_ip, printer_port, table_service_enabled, table_service_charge, room_service_enabled, room_service_charge, created_at';
 
 interface DepartmentRow {
   id: string;
@@ -13,6 +13,7 @@ interface DepartmentRow {
   close_time: string | null;
   system_prompt: string;
   is_active: boolean;
+  schedule_available: boolean;
   archived: boolean;
   chat_background_asset_id: string | null;
   printer_enabled: boolean;
@@ -37,6 +38,7 @@ function mapDepartment(row: DepartmentRow): Department {
     closeTime: row.close_time,
     systemPrompt: row.system_prompt,
     isActive: row.is_active,
+    scheduleAvailable: row.schedule_available,
     archived: row.archived,
     chatBackgroundAssetId: row.chat_background_asset_id,
     printerEnabled: row.printer_enabled,
@@ -80,7 +82,7 @@ export async function createDepartment(
 
 export async function updateDepartment(
   departmentId: string,
-  patch: Partial<Pick<Department, 'name' | 'openTime' | 'closeTime' | 'systemPrompt' | 'isActive' | 'chatBackgroundAssetId' | 'printerEnabled' | 'printerName' | 'printerConnection' | 'printerIp' | 'printerPort' | 'tableServiceEnabled' | 'tableServiceCharge' | 'roomServiceEnabled' | 'roomServiceCharge'>>
+  patch: Partial<Pick<Department, 'name' | 'openTime' | 'closeTime' | 'systemPrompt' | 'isActive' | 'scheduleAvailable' | 'chatBackgroundAssetId' | 'printerEnabled' | 'printerName' | 'printerConnection' | 'printerIp' | 'printerPort' | 'tableServiceEnabled' | 'tableServiceCharge' | 'roomServiceEnabled' | 'roomServiceCharge'>>
 ): Promise<Department> {
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.name !== undefined) update.name = patch.name;
@@ -88,6 +90,7 @@ export async function updateDepartment(
   if (patch.closeTime !== undefined) update.close_time = patch.closeTime;
   if (patch.systemPrompt !== undefined) update.system_prompt = patch.systemPrompt;
   if (patch.isActive !== undefined) update.is_active = patch.isActive;
+  if (patch.scheduleAvailable !== undefined) update.schedule_available = patch.scheduleAvailable;
   if (patch.chatBackgroundAssetId !== undefined) update.chat_background_asset_id = patch.chatBackgroundAssetId;
   if (patch.printerEnabled !== undefined) update.printer_enabled = patch.printerEnabled;
   if (patch.printerName !== undefined) update.printer_name = patch.printerName;

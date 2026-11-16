@@ -66,6 +66,61 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/**
+ * Whether the department's saved opening window contains the current moment,
+ * evaluated in the restaurant's saved IANA timezone. Blank fields keep the
+ * existing "Always open" meaning; a single saved bound splits the day at that
+ * bound; both bounds with closing earlier than opening span midnight
+ * (e.g. 18:00–02:00). Unparseable values fall open rather than silently
+ * closing an active department.
+ */
+function isWithinDepartmentHours(
+  openTime: string | null,
+  closeTime: string | null,
+  timeZone: string
+): boolean {
+  const parse = (value: string | null): number | null => {
+    if (!value) return null;
+    const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+    const h = Number(match[1]);
+    const m = Number(match[2]);
+    if (h > 23 || m > 59) return null;
+    return h * 60 + m;
+  };
+  const open = parse(openTime);
+  const close = parse(closeTime);
+  if (open === null && close === null) return true;
+
+  const nowFmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = nowFmt.formatToParts(new Date());
+  const get = (type: string): number => Number(parts.find((p) => p.type === type)?.value ?? NaN);
+  const year = get('year');
+  const month = get('month');
+  const day = get('day');
+  const hour = get('hour') % 24;
+  const minute = get('minute');
+  if ([year, month, day, hour, minute].some((n) => Number.isNaN(n))) return true;
+  const minuteOfDay = hour * 60 + minute;
+
+  if (open !== null && close !== null) {
+    if (open === close) return true;
+    if (open < close) return minuteOfDay >= open && minuteOfDay < close;
+    // Overnight window (e.g. 18:00–02:00).
+    return minuteOfDay >= open || minuteOfDay < close;
+  }
+  if (open !== null) return minuteOfDay >= open;
+  return minuteOfDay < close!;
+}
+
 const TIP_PERCENTS = new Map<string, number>([['5', 5], ['10', 10], ['13', 13], ['20', 20]]);
 const MAX_CUSTOM_TIP_MINOR = 1_000_000;
 const MAX_SERVICE_LOCATION_CHARS = 20;
@@ -244,7 +299,7 @@ Deno.serve(async (req: Request) => {
       // ── Verify restaurant exists and is Active ──
       const { data: restaurant, error: restError } = await supabase
         .from('restaurants')
-        .select('id, name, status, currency')
+        .select('id, name, status, currency, timezone')
         .eq('id', restaurantId)
         .maybeSingle();
 
@@ -271,7 +326,7 @@ Deno.serve(async (req: Request) => {
       if (resourceType === 'department' && resourceId) {
         const { data: dept } = await supabase
           .from('departments')
-          .select('id, name, restaurant_id, is_active, archived, table_service_enabled, table_service_charge, room_service_enabled, room_service_charge')
+          .select('id, name, restaurant_id, is_active, schedule_available, open_time, close_time, archived, table_service_enabled, table_service_charge, room_service_enabled, room_service_charge')
           .eq('id', resourceId)
           .maybeSingle();
         if (!dept || dept.restaurant_id !== restaurantId) {
@@ -279,6 +334,16 @@ Deno.serve(async (req: Request) => {
         }
         if (dept.archived || !dept.is_active) {
           return json({ error: 'This department is not currently active.' }, 400);
+        }
+        // ── Automatic schedule-based availability ──
+        // Independent of the manual is_active status (which is still checked
+        // above and always takes priority). Only applies when the host enabled
+        // the schedule for this department. Times are evaluated in the
+        // restaurant's saved timezone, never the server's or visitor's zone.
+        if (dept.schedule_available) {
+          if (!isWithinDepartmentHours(dept.open_time, dept.close_time, restaurant.timezone ?? 'Europe/Stockholm')) {
+            return json({ error: `We're closed for today. See you at ${dept.open_time ?? 'our next opening time'}.` }, 403);
+          }
         }
         resourceName = dept.name;
         departmentId = dept.id;
