@@ -62,6 +62,11 @@ interface LoadedView {
   tableServiceCharge?: number;
   roomServiceEnabled?: boolean;
   roomServiceCharge?: number;
+  isActive: boolean;
+  scheduleAvailable: boolean;
+  timezone?: string;
+  openTime?: string | null;
+  closeTime?: string | null;
 }
 
 type VisitorOverlay = null | 'basket' | 'checkout' | 'confirmation' | 'combos';
@@ -185,6 +190,11 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
             tableServiceCharge: resource.tableServiceCharge,
             roomServiceEnabled: resource.roomServiceEnabled,
             roomServiceCharge: resource.roomServiceCharge,
+            isActive: resource.isActive,
+            scheduleAvailable: resource.scheduleAvailable,
+            timezone: resource.timezone,
+            openTime: resource.openTime,
+            closeTime: resource.closeTime,
           };
         } else if (portalId) {
           const portal: PublicPortal | null = await getPublicPortal(portalId);
@@ -198,6 +208,8 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
             name: portal.name,
             city: portal.city,
             currency: portal.currency || 'SEK',
+            isActive: true,
+            scheduleAvailable: false,
           };
         }
         if (loaded) {
@@ -815,16 +827,6 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
     const timer = window.setInterval(() => setNowTick(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
-  const availability = departmentAvailability(
-    view.isActive,
-    view.scheduleAvailable,
-    view,
-    view.timezone,
-    nowTick
-  );
-  const checkoutBlocked = availability !== 'available';
-  const scheduleClosed = availability === 'schedule-closed';
-  const scheduleOpeningLabel = scheduleClosed ? nextOpeningLabel(view) : null;
 
   if (loading) {
     return (
@@ -852,6 +854,20 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
       </div>
     );
   }
+
+  // ── Checkout availability (manual status first, then schedule) ──
+  // Computed after the guards so `view` is non-null; rechecks every minute so
+  // checkout reopens automatically at the next opening time.
+  const availability = departmentAvailability(
+    view.isActive,
+    view.scheduleAvailable,
+    view,
+    view.timezone ?? 'UTC',
+    nowTick
+  );
+  const checkoutBlocked = availability !== 'available';
+  const scheduleClosed = availability === 'schedule-closed';
+  const scheduleOpeningLabel = scheduleClosed ? nextOpeningLabel(view) : null;
 
   const backgroundUrl =
     view?.chatBackgroundPath && !backgroundFailed ? themeAssetUrl(view.chatBackgroundPath) : null;
