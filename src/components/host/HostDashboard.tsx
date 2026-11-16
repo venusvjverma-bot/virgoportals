@@ -136,6 +136,7 @@ export function HostDashboard({ onLogout }: HostDashboardProps) {
         setSelectedOrderId(null);
       }}
       restaurantName={portal.name || 'Your restaurant'}
+      restaurantTimezone={portal.timezone}
       onLogout={onLogout}
     >
       {view === 'dashboard' ? (

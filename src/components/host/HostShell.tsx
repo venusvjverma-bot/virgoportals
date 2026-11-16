@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BarChart3, Calendar, CreditCard, LayoutGrid, LogOut, Menu, QrCode, ScrollText, ShoppingBag, Sparkles, Store, X } from 'lucide-react';
 import { LogoMark } from '@/components/Logo';
 import { Button } from '@/components/ui/Button';
@@ -31,19 +31,41 @@ interface HostShellProps {
   active: HostView;
   onSelect: (view: HostView) => void;
   restaurantName: string;
+  restaurantTimezone: string;
   onLogout: () => void;
   children: React.ReactNode;
+}
+
+function formatDashboardDateTime(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: '2-digit',
+    month: 'short',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const values = new Map(parts.map(({ type, value }) => [type, value]));
+  return `${values.get('hour')}:${values.get('minute')} | ${values.get('day')}-${values.get('month')}-${values.get('year')}`;
 }
 
 export function HostShell({
   active,
   onSelect,
   restaurantName,
+  restaurantTimezone,
   onLogout,
   children,
 }: HostShellProps) {
   const [navOpen, setNavOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const heading = TITLES[active] ?? { title: '', subtitle: '' };
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <div className="min-h-screen bg-cream-100">
@@ -146,6 +168,11 @@ export function HostShell({
           <div className="mx-auto max-w-5xl">
             {heading.title ? (
               <div className="mb-7">
+                {active === 'dashboard' ? (
+                  <p className="mb-2 text-xs text-ink-faint">
+                    {formatDashboardDateTime(currentTime, restaurantTimezone)}
+                  </p>
+                ) : null}
                 <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">
                   {heading.title}
                 </h1>
