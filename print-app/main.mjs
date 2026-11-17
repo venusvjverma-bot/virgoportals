@@ -31,7 +31,7 @@ const RETRY_DELAY_MS = 30_000;
 const HEARTBEAT_MS = 60_000;
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? 'https://mnoqtlwafknnxmakghhu.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY ?? '';
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ub3F0bHdhZmtubnhtYWtnaGh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2MjUzMjQsImV4cCI6MjEwNzIwMTMyNH0.mSKWLrdV2vwHefVdUXc2rlxMAs3Ey-VjAy5_1Gvjsjw';
 
 const CONFIG_DIR = path.join(app.getPath('userData'), 'virgo-print-app');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');

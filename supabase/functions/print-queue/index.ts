@@ -60,7 +60,9 @@ Deno.serve(async (req: Request) => {
 
     const token = authHeader.slice('Bearer '.length);
     const { data: userData } = await supabase.auth.getUser(token);
-    const role = userData?.user?.role ?? (await supabase.auth.getClaims(token)).data?.claims?.role;
+    // getUser already rejects invalid/expired tokens; the role claim tells us
+    // whether the caller is the legacy service-role agent or a signed-in host.
+    const role = userData?.user?.role;
 
     let caller: { kind: 'service_role'; restaurantId: null } | { kind: 'host'; restaurantId: string } | null = null;
 
