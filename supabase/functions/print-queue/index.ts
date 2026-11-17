@@ -14,15 +14,34 @@ function json(body: unknown, status = 200): Response {
 }
 
 interface QueuePayload {
-  action: 'claim' | 'complete' | 'fail';
+  action: 'claim' | 'complete' | 'fail' | 'heartbeat' | 'register';
   jobId?: string;
   error?: string;
   maxAttempts?: number;
   departmentIds?: string[];
+  agentName?: string;
+  appVersion?: string;
 }
 
 const MAX_ATTEMPTS = 5;
 const CLAIM_STALE_MINUTES = 5;
+
+interface PrintJobRow {
+  id: string;
+  job_type: string;
+  department_id: string | null;
+  restaurant_id: string;
+  printer: {
+    name?: string;
+    connection?: string;
+    ip?: string;
+    port?: number;
+    paperWidthMm?: number;
+  } | null;
+  ticket: Record<string, unknown> | null;
+  attempts: number;
+  created_at: string;
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -39,16 +58,96 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Only the service role (print agent or trusted callers) may drive the queue.
     const token = authHeader.slice('Bearer '.length);
     const { data: userData } = await supabase.auth.getUser(token);
     const role = userData?.user?.role ?? (await supabase.auth.getClaims(token)).data?.claims?.role;
-    if (role !== 'service_role') {
-      return json({ error: 'Not authorized for queue operations.' }, 403);
+
+    let caller: { kind: 'service_role'; restaurantId: null } | { kind: 'host'; restaurantId: string } | null = null;
+
+    if (role === 'service_role') {
+      // Legacy path: trusted agent installed with the service key.
+      caller = { kind: 'service_role', restaurantId: null };
+    } else {
+      // New path: the desktop printing app signed in with the host's account.
+      // Resolve the restaurant the caller owns, so every queue operation is
+      // strictly scoped to that restaurant.
+      const authedClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: restaurant } = await authedClient
+        .from('restaurants')
+        .select('id')
+        .eq('owner_id', userData?.user?.id ?? '00000000-0000-0000-0000-000000000000')
+        .limit(1)
+        .maybeSingle();
+      if (restaurant?.id) {
+        caller = { kind: 'host', restaurantId: restaurant.id };
+      } else {
+        return json({ error: 'Not authorized for queue operations.' }, 403);
+      }
     }
 
     const body = (await req.json().catch(() => null)) as QueuePayload | null;
     if (!body?.action) return json({ error: 'Missing action.' }, 400);
+
+    // ── register: create or refresh this installation's registry row ──
+    if (body.action === 'register') {
+      if (caller.kind !== 'host') return json({ error: 'Register is only for host sign-in installations.' }, 403);
+
+      const { data: existing } = await supabase
+        .from('print_agents')
+        .select('id')
+        .eq('restaurant_id', caller.restaurantId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      const now = new Date().toISOString();
+      if (existing?.id) {
+        const { error } = await supabase
+          .from('print_agents')
+          .update({
+            name: body.agentName ?? 'Printing app',
+            app_version: body.appVersion ?? null,
+            last_heartbeat_at: now,
+          })
+          .eq('id', existing.id);
+        if (error) return json({ error: error.message }, 500);
+        return json({ agentId: existing.id });
+      }
+
+      const { data: created, error } = await supabase
+        .from('print_agents')
+        .insert({
+          restaurant_id: caller.restaurantId,
+          name: body.agentName ?? 'Printing app',
+          app_version: body.appVersion ?? null,
+          last_heartbeat_at: now,
+        })
+        .select('id')
+        .single();
+      if (error) return json({ error: error.message }, 500);
+      return json({ agentId: created.id });
+    }
+
+    // ── heartbeat: keep this installation marked as connected ──
+    if (body.action === 'heartbeat') {
+      if (caller.kind !== 'host') return json({ success: true });
+      const { data: agent } = await supabase
+        .from('print_agents')
+        .select('id')
+        .eq('restaurant_id', caller.restaurantId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (!agent?.id) return json({ success: true });
+      const { error } = await supabase
+        .from('print_agents')
+        .update({ last_heartbeat_at: new Date().toISOString() })
+        .eq('id', agent.id);
+      if (error) return json({ error: error.message }, 500);
+      return json({ success: true });
+    }
 
     // ── claim: fetch pending jobs and mark them as printing ──
     if (body.action === 'claim') {
@@ -66,13 +165,17 @@ Deno.serve(async (req: Request) => {
         .eq('status', 'pending')
         .order('created_at', { ascending: true })
         .limit(20);
+      if (caller.kind === 'host') {
+        // Restaurant isolation: a signed-in app only ever sees its own restaurant.
+        query = query.eq('restaurant_id', caller.restaurantId);
+      }
       if (body.departmentIds && body.departmentIds.length > 0) {
         query = query.in('department_id', body.departmentIds);
       }
       const { data: pending, error } = await query;
       if (error) return json({ error: error.message }, 500);
 
-      const jobs = pending ?? [];
+      const jobs = (pending ?? []) as PrintJobRow[];
       if (jobs.length === 0) return json({ jobs: [] });
 
       const ids = jobs.map((j) => j.id);
@@ -82,16 +185,16 @@ Deno.serve(async (req: Request) => {
         .in('id', ids)
         .eq('status', 'pending')
         .select('id, job_type, department_id, restaurant_id, printer, ticket, attempts, created_at');
-      if (claimError) return json({ error: claimError.message }, 500);
+      if (claimError) return json({ error: errorText(claimError) }, 500);
 
-      return json({ jobs: claimed ?? [] });
+      return json({ jobs: (claimed ?? []) as PrintJobRow[] });
     }
 
     if (!body.jobId) return json({ error: 'Missing jobId.' }, 400);
 
     // ── complete: printer accepted the job ──
     if (body.action === 'complete') {
-      const { error } = await supabase
+      let completeQuery = supabase
         .from('print_jobs')
         .update({
           status: 'printed',
@@ -100,6 +203,8 @@ Deno.serve(async (req: Request) => {
           updated_at: new Date().toISOString(),
         })
         .eq('id', body.jobId);
+      if (caller.kind === 'host') completeQuery = completeQuery.eq('restaurant_id', caller.restaurantId);
+      const { error } = await completeQuery;
       if (error) return json({ error: error.message }, 500);
       return json({ success: true });
     }
@@ -115,7 +220,7 @@ Deno.serve(async (req: Request) => {
 
       const attempts = job.attempts + 1;
       const exhausted = attempts >= (body.maxAttempts ?? MAX_ATTEMPTS);
-      const { error } = await supabase
+      let failQuery = supabase
         .from('print_jobs')
         .update({
           status: exhausted ? 'failed' : 'pending',
@@ -125,6 +230,8 @@ Deno.serve(async (req: Request) => {
           updated_at: new Date().toISOString(),
         })
         .eq('id', body.jobId);
+      if (caller.kind === 'host') failQuery = failQuery.eq('restaurant_id', caller.restaurantId);
+      const { error } = await failQuery;
       if (error) return json({ error: error.message }, 500);
       return json({ success: true, exhausted });
     }
@@ -134,3 +241,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: err instanceof Error ? err.message : 'An unexpected error occurred.' }, 500);
   }
 });
+
+function errorText(err: { message: string }): string {
+  return err.message;
+}

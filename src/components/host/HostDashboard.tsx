@@ -13,6 +13,7 @@ import { ResourceDetail } from '@/components/host/ResourceDetail';
 import { OrdersView } from '@/components/host/OrdersView';
 import { OrderDetailView } from '@/components/host/OrderDetailView';
 import { ReportsView } from '@/components/host/ReportsView';
+import { PrinterSetupView } from '@/components/host/PrinterSetupView';
 import { Button } from '@/components/ui/Button';
 import { Notice } from '@/components/ui/Notice';
 import { getOwnPortal, updatePortal } from '@/lib/portal';
@@ -169,6 +170,14 @@ export function HostDashboard({ onLogout }: HostDashboardProps) {
 
       {view === 'reports' ? (
         <ReportsView restaurant={portal} departments={departments} />
+      ) : null}
+
+      {view === 'printer-setup' ? (
+        <PrinterSetupView
+          restaurant={portal}
+          departments={departments}
+          onOpenDepartment={openDepartment}
+        />
       ) : null}
 
       {view === 'orders' ? (

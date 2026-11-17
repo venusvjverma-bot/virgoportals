@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { CheckCircle2, Loader2, Printer, Save } from 'lucide-react';
+import { CheckCircle2, Loader2, Printer, Save, Send, XCircle } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { updateDepartment } from '@/lib/departments';
 import type { Department } from '@/types';
 
@@ -13,6 +14,19 @@ const CONNECTION_OPTIONS: { value: 'wifi' | 'lan'; label: string }[] = [
   { value: 'lan', label: 'LAN' },
 ];
 
+interface PrintAgentRow {
+  id: string;
+  department_ids: string[] | null;
+  last_heartbeat_at: string | null;
+}
+
+const HEARTBEAT_ONLINE_MINUTES = 3;
+
+function printerAppOnline(lastHeartbeatAt: string | null): boolean {
+  if (!lastHeartbeatAt) return false;
+  return Date.now() - new Date(lastHeartbeatAt).getTime() < HEARTBEAT_ONLINE_MINUTES * 60_000;
+}
+
 export function PrinterView({ department, onSaved }: PrinterViewProps) {
   const [enabled, setEnabled] = useState(department.printerEnabled);
   const [name, setName] = useState(department.printerName ?? '');
@@ -22,6 +36,42 @@ export function PrinterView({ department, onSaved }: PrinterViewProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [appOnline, setAppOnline] = useState<boolean | null>(null);
+  const [appChecked, setAppChecked] = useState(false);
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  async function checkPrintingApp() {
+    try {
+      const { data, error: queryError } = await supabase
+        .from('print_agents')
+        .select('id, department_ids, last_heartbeat_at');
+      if (queryError) throw queryError;
+      const rows = (data ?? []) as PrintAgentRow[];
+      setAppOnline(rows.some((row) => (row.department_ids ?? []).includes(department.id) && printerAppOnline(row.last_heartbeat_at)));
+      setAppChecked(true);
+    } catch {
+      setAppOnline(false);
+      setAppChecked(true);
+    }
+  }
+
+  async function sendTestPrint() {
+    setTestResult(null);
+    setTestSending(true);
+    try {
+      const { data: jobId, error: rpcError } = await supabase.rpc('enqueue_department_test_print', {
+        p_department_id: department.id,
+      });
+      if (rpcError) throw rpcError;
+      setTestResult({ ok: true, message: 'Test ticket sent. It should print within a few seconds if the printing app is connected and the printer is on.' });
+      window.setTimeout(() => setTestResult(null), 8000);
+    } catch (err) {
+      setTestResult({ ok: false, message: err instanceof Error ? err.message : 'Could not send the test print.' });
+    } finally {
+      setTestSending(false);
+    }
+  }
 
   function validate(): string | null {
     if (enabled && !name.trim()) return 'Enter a printer name.';
@@ -160,6 +210,57 @@ export function PrinterView({ department, onSaved }: PrinterViewProps) {
               LAN printers connect through a network cable. Both need an IP address on the same network
               as the device printing the tickets.
             </p>
+
+            <div className="rounded-xl bg-cream-50 px-4 py-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  {appChecked && appOnline ? (
+                    <CheckCircle2 className="h-5 w-5 text-success-600" />
+                  ) : appChecked ? (
+                    <XCircle className="h-5 w-5 text-ink-faint" />
+                  ) : null}
+                  <p className="text-sm font-medium text-ink">
+                    {!appChecked
+                      ? 'Printing app status not checked yet'
+                      : appOnline
+                        ? 'Printing app connected for this department'
+                        : 'Printing app not connected for this department'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={checkPrintingApp}
+                  className="rounded-xl px-3 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-white hover:text-ink"
+                >
+                  Check status
+                </button>
+              </div>
+              {appChecked && !appOnline ? (
+                <p className="mt-2 text-xs text-ink-faint">
+                  Install the printing app from Printer Setup in the menu on the left and tick this
+                  department for that computer.
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={sendTestPrint}
+                disabled={testSending}
+                className="inline-flex items-center gap-2 rounded-xl bg-cream-100 px-5 py-2.5 text-sm font-semibold text-ink shadow-soft ring-1 ring-cream-200 transition-all duration-200 hover:bg-cream-200 active:scale-[0.99] disabled:opacity-50"
+              >
+                {testSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {testSending ? 'Sending…' : 'Send test print'}
+              </button>
+              {testResult ? (
+                <p
+                  className={`text-sm font-medium ${testResult.ok ? 'text-success-600' : 'text-error-600'}`}
+                >
+                  {testResult.message}
+                </p>
+              ) : null}
+            </div>
           </div>
         ) : (
           <p className="mt-4 text-sm text-ink-muted">
