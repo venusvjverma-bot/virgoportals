@@ -713,6 +713,11 @@ Deno.serve(async (req: Request) => {
       const priceId = (priceRow as { stripe_price_id: string } | null)?.stripe_price_id;
       if (!priceId) return json({ error: 'No Stripe price is mapped for this package. Run the price sync first.' }, 503);
 
+      const hostUserId = await verifyUser(supabase, req);
+      if (!hostUserId) return json({ error: 'Please sign in to continue.' }, 401);
+      const restaurantId = await getOwnedRestaurant(supabase, hostUserId);
+      if (!restaurantId) return json({ error: 'This account does not own a restaurant portal.' }, 403);
+
       const { data: emailData } = await supabase.auth.getUser((await getBearerToken(req)) ?? '');
       const hostEmail = (emailData?.user?.email ?? '').trim();
       if (!hostEmail) return json({ error: 'A signed-in account with an email is required.' }, 400);
@@ -755,6 +760,11 @@ Deno.serve(async (req: Request) => {
       if (priceError) throw priceError;
       const priceId = (priceRow as { stripe_price_id: string } | null)?.stripe_price_id;
       if (!priceId) return json({ error: 'No Stripe price is mapped for this package. Run the price sync first.' }, 503);
+
+      const hostUserId = await verifyUser(supabase, req);
+      if (!hostUserId) return json({ error: 'Please sign in to continue.' }, 401);
+      const restaurantId = await getOwnedRestaurant(supabase, hostUserId);
+      if (!restaurantId) return json({ error: 'This account does not own a restaurant portal.' }, 403);
 
       const { data: emailData } = await supabase.auth.getUser((await getBearerToken(req)) ?? '');
       const hostEmail = (emailData?.user?.email ?? '').trim();
