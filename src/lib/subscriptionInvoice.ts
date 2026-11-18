@@ -92,19 +92,16 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
   sep();
   y += 8;
 
-  // Line item. When the stored charged total is present it is VAT-INCLUSIVE
-  // (Stripe charged net + VAT), so the split is extracted from the gross —
-  // never added on top. Legacy rows without a stored total quote the amount
-  // VAT-exclusive and derive VAT from the rate.
+  // Line item. The charged amount is always VAT-INCLUSIVE (the TOTAL must
+  // equal the actual Stripe charge), so the breakdown is EXTRACTED from the
+  // gross — never added on top: net = round(gross / (1 + rate)), VAT = gross
+  // − net, so net + VAT always reconciles to the charged amount. The
+  // derivation from the charged total is authoritative, which also self-heals
+  // historical rows whose stored VAT split was recorded incorrectly.
   const rate = inv.vatRate ?? 0;
-  const hasStoredTotal = inv.totalCents != null;
-  const totalCents = hasStoredTotal ? (inv.totalCents as number) : inv.amountCents;
-  const vatCents = hasStoredTotal
-    ? Math.round(totalCents * (rate / (1 + rate)))
-    : rate > 0
-      ? Math.round(inv.amountCents * rate)
-      : 0;
-  const netCents = totalCents - vatCents;
+  const totalCents = inv.totalCents ?? inv.amountCents;
+  const netCents = rate > 0 ? Math.round(totalCents / (1 + rate)) : totalCents;
+  const vatCents = totalCents - netCents;
 
   doc.setFont('helvetica', 'bold');
   doc.text('Description', margin, y);
@@ -112,9 +109,9 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
   y += 6;
   doc.setFont('helvetica', 'normal');
   doc.text(inv.lineDescription, margin, y);
-  doc.text(money(netCents, inv.currency), right, y, { align: 'right' });
+  doc.text(money(totalCents, inv.currency), right, y, { align: 'right' });
   y += 5;
-  if (rate > 0 || hasStoredTotal) {
+  if (rate > 0) {
     doc.text('Price excl. VAT', margin, y);
     doc.text(money(netCents, inv.currency), right, y, { align: 'right' });
     y += 5;
