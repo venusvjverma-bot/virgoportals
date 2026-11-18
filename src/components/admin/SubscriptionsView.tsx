@@ -58,6 +58,8 @@ function downloadInvoice(row: AdminSubscriptionRow, p: PaymentRecord) {
       ? `Credit top-up — ${Math.round(p.credits ?? 0)} credits`
       : `${p.description ?? row.packageName ?? 'Subscription'} plan — monthly (cycle ${p.cycleNumber ?? ''})`,
     amountCents: p.amountCents,
+    vatCents: p.vatCents ?? null,
+    totalCents: p.totalCents ?? null,
     currency: cur,
     // Top-up prices are quoted excluding VAT like subscriptions. Legacy USD
     // rows keep the old no-VAT layout so historical invoices are unchanged.
@@ -190,7 +192,7 @@ export function SubscriptionsView() {
                       <td className="px-4 py-2 text-ink">{formatDate(p.paidAt ?? p.createdAt)}</td>
                       <td className="px-4 py-2 text-ink">{PAYMENT_TYPE_LABELS[p.type]}</td>
                       <td className="px-4 py-2 text-ink">{paymentItem(p, row)}</td>
-                      <td className="px-4 py-2 tabular-nums text-ink">{p.currency === 'USD' ? formatUsdLegacy(p.amountCents) : formatSekSafe(p.amountCents)}</td>
+                      <td className="px-4 py-2 tabular-nums text-ink">{p.currency === 'USD' ? formatUsdLegacy(p.amountCents) : formatSekSafe(p.totalCents ?? p.amountCents)}</td>
                       <td className="px-4 py-2 text-ink">{p.status}</td>
                       <td className="px-4 py-2 font-mono text-xs text-ink-muted">{p.paymentRef ?? '—'}</td>
                       <td className="px-4 py-2">

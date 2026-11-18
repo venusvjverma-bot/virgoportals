@@ -149,6 +149,8 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
         ? `Credit top-up — ${Math.round(p.credits ?? 0)} credits`
         : `${p.description ?? currentPackage?.name ?? 'Subscription'} plan — monthly (cycle ${p.cycleNumber ?? ''})`,
       amountCents: p.amountCents,
+      vatCents: p.vatCents ?? null,
+      totalCents: p.totalCents ?? null,
       currency: cur,
       // Top-up prices are quoted excluding VAT like subscriptions. Legacy USD
       // rows keep the old no-VAT layout so historical invoices are unchanged.
@@ -486,7 +488,7 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
                     <td className="px-4 py-3 text-ink">{formatDate(p.paidAt ?? p.createdAt)}</td>
                     <td className="px-4 py-3 text-ink">{PAYMENT_TYPE_LABELS[p.type]}</td>
                     <td className="px-4 py-3 text-ink">{paymentItem(p)}</td>
-                    <td className="px-4 py-3 tabular-nums text-ink">{p.currency === 'USD' ? formatUsdLegacy(p.amountCents) : formatSekSafe(p.amountCents)}</td>
+                    <td className="px-4 py-3 tabular-nums text-ink">{p.currency === 'USD' ? formatUsdLegacy(p.amountCents) : formatSekSafe(p.totalCents ?? p.amountCents)}</td>
                     <td className="px-4 py-3">
                       <span
                         className={

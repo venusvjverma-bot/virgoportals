@@ -289,6 +289,8 @@ function subPaymentRecord(p: Record<string, unknown>, pkgName: string | null): R
     credits: null,
     cycleNumber: cycle,
     amountCents: p.amount_cents,
+    vatCents: (p.vat_cents as number | null) ?? null,
+    totalCents: (p.total_cents as number | null) ?? null,
     currency: (p.currency as string | null) ?? 'SEK',
     status: p.status,
     paymentRef: p.provider_payment_ref,
@@ -306,6 +308,8 @@ function topupPaymentRecord(t: Record<string, unknown>, pkgName: string | null):
     credits: Number(t.credits),
     cycleNumber: null,
     amountCents: t.amount_cents,
+    vatCents: (t.vat_cents as number | null) ?? null,
+    totalCents: (t.total_cents as number | null) ?? null,
     currency: (t.currency as string | null) ?? 'SEK',
     status: t.status,
     paymentRef: t.provider_payment_ref,
@@ -467,9 +471,11 @@ async function handleStripeWebhook(event: Record<string, unknown>, supabase: Db)
       p_package_id: (pkg as { id: string }).id,
       p_cycle_number: 1,
       p_provider_payment_ref: `pi_${customerId ?? 'cs'}_1_${eventId}`,
+      // The charged total already includes VAT; record the exact split.
+      p_vat_cents: amount !== null ? Math.round(amount / 6) : null,
+      p_total_cents: amount,
     });
     if (allocError) throw allocError;
-    void amount;
     void currency;
     return json({ received: true, allocated: (alloc as [boolean, unknown, unknown] | null)?.[0] ?? false });
   }
@@ -509,6 +515,9 @@ async function handleStripeWebhook(event: Record<string, unknown>, supabase: Db)
       p_package_id: (pkg as { id: string }).id,
       p_provider: STRIPE_PROVIDER,
       p_provider_payment_ref: `evt_topup_${eventId}`,
+      // The charged total already includes VAT; record the exact split.
+      p_vat_cents: amount !== null ? Math.round(amount / 6) : null,
+      p_total_cents: amount,
     });
     if (allocError) throw allocError;
     return json({ received: true, allocated: (alloc as [boolean, unknown] | null)?.[0] ?? false });
@@ -658,9 +667,11 @@ Deno.serve(async (req: Request) => {
           results.push({ subscriptionId: String(sub.id), cycle });
           continue;
         }
+        // Stripe charges the VAT-inclusive total (net + 25% VAT = net × 1.25).
+        const chargeAmountCents = Math.round(amountCents * 1.25);
         const charge = await adapter.chargeRenewal({
           subscriptionRef: String(sub.provider_subscription_ref ?? ''),
-          amountCents,
+          amountCents: chargeAmountCents,
           currency,
           cycleNumber: Number(cycle),
         });
@@ -670,6 +681,8 @@ Deno.serve(async (req: Request) => {
             p_package_id: (sub.scheduled_package_id ?? sub.package_id) as string,
             p_cycle_number: Number(cycle),
             p_provider_payment_ref: charge.paymentRef,
+            p_vat_cents: Math.round(chargeAmountCents / 6),
+            p_total_cents: chargeAmountCents,
           });
         }
         results.push({ subscriptionId: String(sub.id), cycle });
@@ -824,10 +837,14 @@ Deno.serve(async (req: Request) => {
           name: `Virgo Portals — ${pkg.name} (Subscription)`,
           metadata: { kind: 'subscription', package_code: pkg.code },
         });
+        // Stripe charges the VAT-INCLUSIVE total (same 25% rate the UI
+        // displays); price_cents in the map stays the VAT-exclusive DB price.
+        const vatCents = Math.round(pkg.price_cents * 0.25);
+        const grossCents = pkg.price_cents + vatCents;
         const price = await stripe.prices.create({
           product: product.id,
           currency: 'sek',
-          unit_amount: pkg.price_cents,
+          unit_amount: grossCents,
           recurring: { interval: 'month' },
           metadata: { kind: 'subscription', package_code: pkg.code },
         });
@@ -840,12 +857,14 @@ Deno.serve(async (req: Request) => {
               stripe_product_id: product.id,
               stripe_price_id: price.id,
               price_cents: pkg.price_cents,
+              vat_cents: vatCents,
+              gross_cents: grossCents,
               currency: 'SEK',
             },
             { onConflict: 'package_code,kind' }
           );
         if (mapError) throw mapError;
-        synced.push({ code: pkg.code, kind: 'subscription', priceId: price.id });
+        synced.push({ code: pkg.code, kind: 'subscription', priceId: price.id, grossCents });
       }
 
       const { data: topupPkgs, error: topupErr } = await supabase
@@ -859,10 +878,13 @@ Deno.serve(async (req: Request) => {
           name: `Virgo Portals — ${pkg.name} (Credit Top-up)`,
           metadata: { kind: 'topup', package_code: pkg.code },
         });
+        // VAT-inclusive charge, mirroring the subscription path.
+        const vatCents = Math.round(pkg.price_cents * 0.25);
+        const grossCents = pkg.price_cents + vatCents;
         const price = await stripe.prices.create({
           product: product.id,
           currency: 'sek',
-          unit_amount: pkg.price_cents,
+          unit_amount: grossCents,
           metadata: { kind: 'topup', package_code: pkg.code },
         });
         const { error: mapError } = await supabase
@@ -874,12 +896,14 @@ Deno.serve(async (req: Request) => {
               stripe_product_id: product.id,
               stripe_price_id: price.id,
               price_cents: pkg.price_cents,
+              vat_cents: vatCents,
+              gross_cents: grossCents,
               currency: 'SEK',
             },
             { onConflict: 'package_code,kind' }
           );
         if (mapError) throw mapError;
-        synced.push({ code: pkg.code, kind: 'topup', priceId: price.id });
+        synced.push({ code: pkg.code, kind: 'topup', priceId: price.id, grossCents });
       }
 
       return json({ ok: true, synced });
@@ -920,13 +944,13 @@ Deno.serve(async (req: Request) => {
 
       const { data: payments, error: payError } = await supabase
         .from('subscription_payments')
-        .select('subscription_id, cycle_number, amount_cents, currency, status, package_id, provider_payment_ref, provider_invoice_url, paid_at, created_at')
+        .select('subscription_id, cycle_number, amount_cents, vat_cents, total_cents, currency, status, package_id, provider_payment_ref, provider_invoice_url, paid_at, created_at')
         .order('created_at', { ascending: false });
       if (payError) throw payError;
 
       const { data: topuppayments, error: topupPayError } = await supabase
         .from('credit_topup_payments')
-        .select('restaurant_id, credits, amount_cents, currency, status, package_id, provider_payment_ref, provider_invoice_url, paid_at, created_at')
+        .select('restaurant_id, credits, amount_cents, vat_cents, total_cents, currency, status, package_id, provider_payment_ref, provider_invoice_url, paid_at, created_at')
         .order('created_at', { ascending: false });
       if (topupPayError) throw topupPayError;
 
@@ -1009,7 +1033,7 @@ Deno.serve(async (req: Request) => {
         subId
           ? supabase
               .from('subscription_payments')
-              .select('cycle_number, amount_cents, currency, status, package_id, provider, provider_payment_ref, provider_invoice_url, paid_at, created_at')
+              .select('cycle_number, amount_cents, vat_cents, total_cents, currency, status, package_id, provider, provider_payment_ref, provider_invoice_url, paid_at, created_at')
               .eq('subscription_id', subId)
           : Promise.resolve({ data: [], error: null }),
         supabase

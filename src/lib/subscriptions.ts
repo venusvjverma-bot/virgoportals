@@ -25,6 +25,10 @@ export interface PaymentRecord {
   credits: number | null;
   cycleNumber: number | null;
   amountCents: number;
+  /** Stored VAT amount (minor units) for rows charged VAT-inclusively; null on legacy rows. */
+  vatCents?: number | null;
+  /** Stored charged total (minor units, VAT included); null on legacy rows. */
+  totalCents?: number | null;
   /** ISO currency of this payment as recorded (e.g. 'SEK'; older rows 'USD'). */
   currency: string;
   status: 'pending' | 'succeeded' | 'failed';
