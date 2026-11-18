@@ -8,6 +8,8 @@ import {
   changeScheduledPackage,
   getSubscriptionOverview,
   setAutoRenew,
+  startSubscriptionCheckout,
+  startTopupCheckout,
   testCheckout,
   testRenewal,
   testTopUp,
@@ -71,7 +73,6 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [topupSecret, setTopupSecret] = useState('');
 
   const refresh = useCallback(async () => {
     const result = await getSubscriptionOverview();
@@ -336,9 +337,23 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
           })}
         </div>
         {!sub ? (
-          <p className="mt-3 text-sm text-ink-muted">
-            Initial subscription checkout will be available once the payment provider is connected. Contact the Virgo team to subscribe in the meantime.
-          </p>
+          <div className="mt-4 rounded-xl bg-cream-50 px-4 py-3 ring-1 ring-cream-200">
+            <p className="text-sm text-ink-muted">
+              Pick a package to subscribe — you will be taken to Stripe's secure checkout to complete payment.
+            </p>
+            <Button
+              size="sm"
+              className="mt-3"
+              disabled={busy !== null}
+              onClick={() => run('subscribe-starter', async () => {
+                const url = await startSubscriptionCheckout('starter');
+                window.location.assign(url);
+              })}
+            >
+              {busy === 'subscribe-starter' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Subscribe to Starter
+            </Button>
+          </div>
         ) : null}
       </section>
 
@@ -359,22 +374,10 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
           </p>
         ) : (
           <p className="mt-4 rounded-xl bg-cream-50 px-4 py-3 text-xs leading-relaxed text-ink-muted ring-1 ring-cream-200">
-            Top-up purchases are currently available through the test-payment flow. Enter the test mode secret to simulate a
-            payment — no real money is charged.
+            You will be taken to Stripe's secure checkout to complete your purchase. Credits are added to your wallet
+            automatically once payment succeeds.
           </p>
         )}
-
-        {canPurchaseTopup ? (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input
-              type="password"
-              value={topupSecret}
-              onChange={(e) => setTopupSecret(e.target.value)}
-              placeholder="Test mode secret"
-              className="w-56 rounded-xl border border-cream-300 bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-olive-500"
-            />
-          </div>
-        ) : null}
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {topupPackages.map((pkg) => (
@@ -405,13 +408,11 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
               <div className="mt-4">
                 <Button
                   size="sm"
-                  disabled={busy !== null || !canPurchaseTopup || topupSecret.length === 0}
+                  disabled={busy !== null || !canPurchaseTopup}
                   onClick={() =>
                     run(`topup-${pkg.code}`, async () => {
-                      const result = await testTopUp(pkg.code, topupSecret);
-                      if (!result.ok) {
-                        throw new Error(result.message ?? 'Top-up purchase was not completed.');
-                      }
+                      const url = await startTopupCheckout(pkg.code);
+                      window.location.assign(url);
                     })
                   }
                 >

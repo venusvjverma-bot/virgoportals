@@ -1,4 +1,13 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import * as stripeAdapter from './stripeAdapter.ts';
+import {
+  stripeConfigured,
+  verifyStripeWebhook,
+  createSubscriptionCheckout,
+  createTopupCheckout,
+  chargeRenewal as stripeChargeRenewal,
+  getStripeSecret,
+} from './stripeAdapter.ts';
 
 /**
  * Provider-independent subscription API.
@@ -71,11 +80,8 @@ export interface WebhookEvent {
 
 /** Returns null until a provider adapter is implemented and configured. */
 function getAdapter(): PaymentAdapter | null {
-  // To connect a provider: implement PaymentAdapter, then return it here.
-  // Example secrets that will be required (provider-specific):
-  //   SUBSCRIPTION_PROVIDER_API_KEY  — provider secret key (server-side only)
-  //   SUBSCRIPTION_PROVIDER_WEBHOOK_SECRET — webhook signature verification
-  return null;
+  if (!stripeConfigured()) return null;
+  return stripeAdapter;
 }
 
 // ── Test-mode mock adapter ──────────────────────────────────────────────────
@@ -100,6 +106,81 @@ class MockTestAdapter implements PaymentAdapter {
 
 function testModeSecret(): string | null {
   return Deno.env.get('SUBSCRIPTION_TEST_MODE_SECRET') ?? null;
+}
+
+// ── Stripe adapter bridge ───────────────────────────────────────────────────
+// Adapts the Stripe helper module to the PaymentAdapter interface used by the
+// generic webhook + renewal flow. Renewal charging needs the Stripe customer
+// id, which is stored on host_subscriptions.provider_subscription_ref — the
+// same column used for provider subscription refs. For Stripe we store the
+// Stripe CUSTOMER id there at checkout time (the Checkout Session itself is
+// the subscription source; webhook events drive the subscription lifecycle).
+
+const STRIPE_PROVIDER = 'stripe';
+
+const stripeBridge: PaymentAdapter = {
+  providerName: STRIPE_PROVIDER,
+  async verifyWebhook(req: Request, _db: Db): Promise<WebhookEvent | null> {
+    const event = await verifyStripeWebhook(req);
+    if (!event) return null;
+    return {
+      eventId: String(event.id ?? ''),
+      eventType: String(event.type ?? ''),
+      providerPaymentRef: extractPaymentRef(event),
+      succeeded: extractSucceeded(event),
+    };
+  },
+  async chargeRenewal(args: {
+    subscriptionRef: string;
+    amountCents: number;
+    currency: string;
+    cycleNumber: number;
+  }): Promise<{ ok: boolean; paymentRef: string | null; invoiceUrl: string | null }> {
+    return stripeChargeRenewal({
+      customerId: args.subscriptionRef || null,
+      amountCents: args.amountCents,
+      currency: args.currency,
+      cycleNumber: args.cycleNumber,
+      description: `Virgo Portals subscription renewal — cycle ${args.cycleNumber}`,
+    });
+  },
+  async createSubscription(args: {
+    restaurantId: string;
+    packageCode: string;
+    amountCents: number;
+    currency: string;
+  }): Promise<{ subscriptionRef: string; checkoutUrl: string | null }> {
+    // Real subscription creation happens through Checkout Sessions in the
+    // dedicated checkout route (needs host email + return URLs); this
+    // interface method is only used by the test-mode flow.
+    return { subscriptionRef: '', checkoutUrl: null };
+  },
+};
+
+function extractPaymentRef(event: Record<string, unknown>): string | null {
+  const type = String(event.type ?? '');
+  const object = (event.data as { object?: Record<string, unknown> } | undefined)?.object ?? {};
+  if (type.startsWith('checkout.session.')) {
+    const session = object as { id?: string; payment_intent?: string | null };
+    return (session.payment_intent as string) ?? `cs_${session.id}`;
+  }
+  if (type.startsWith('payment_intent.')) {
+    return `pi_${(object as { id?: string }).id}`;
+  }
+  if (type.startsWith('charge.')) {
+    return ((object as { payment_intent?: string }).payment_intent as string) ?? null;
+  }
+  return (object as { id?: string }).id ? `obj_${(object as { id: string }).id}` : null;
+}
+
+function extractSucceeded(event: Record<string, unknown>): boolean {
+  const type = String(event.type ?? '');
+  return [
+    'checkout.session.completed',
+    'checkout.session.async_payment_succeeded',
+    'payment_intent.succeeded',
+    'payment_intent.amount_capturable_updated',
+  ].includes(type);
 }
 
 function getTestAdapter(): PaymentAdapter | null {
@@ -235,6 +316,207 @@ function topupPaymentRecord(t: Record<string, unknown>, pkgName: string | null):
   };
 }
 
+// ── Stripe webhook helpers ──────────────────────────────────────────────────
+
+function getBearerToken(req: Request): string | null {
+  const header = req.headers.get('Authorization') ?? '';
+  return header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : null;
+}
+
+function getOrigin(req: Request): string {
+  // The deployed function sits behind the Supabase functions domain; the
+  // app itself is served from the request's Origin when present.
+  const origin = req.headers.get('Origin');
+  if (origin) return origin;
+  const referer = req.headers.get('Referer');
+  if (referer) {
+    try {
+      return new URL(referer).origin;
+    } catch {
+      // fall through
+    }
+  }
+  return Deno.env.get('CHECKOUT_RETURN_ORIGIN') ?? new URL(req.url).origin;
+}
+
+interface CheckoutMeta extends Record<string, string> {
+  kind: 'subscription' | 'topup';
+  restaurant_id: string;
+  package_code: string;
+}
+
+function getCheckoutMeta(event: Record<string, unknown>): CheckoutMeta | null {
+  const object = (event.data as { object?: Record<string, unknown> } | undefined)?.object ?? {};
+  const metadata = (object.metadata ?? {}) as Record<string, string>;
+  if (!metadata.kind || !metadata.restaurant_id || !metadata.package_code) return null;
+  return metadata as CheckoutMeta;
+}
+
+function getAmountFromEvent(event: Record<string, unknown>): { amount: number | null; currency: string | null } {
+  const object = (event.data as { object?: Record<string, unknown> } | undefined)?.object ?? {};
+  // checkout.session objects expose amount_total; payment_intent objects expose amount + currency.
+  const amount = Number((object.amount_total as number | undefined) ?? (object.amount as number | undefined) ?? 0);
+  const currency = (object.currency as string | null)?.toUpperCase() ?? null;
+  return { amount: Number.isFinite(amount) && amount > 0 ? amount : null, currency };
+}
+
+async function handleStripeWebhook(event: Record<string, unknown>, supabase: Db): Promise<Response> {
+  const eventId = String(event.id ?? '');
+  const eventType = String(event.type ?? '');
+
+  // Duplicate-event protection: unique (provider, event_id). A replay loses
+  // the insert race and is dropped before any side effects.
+  const { data: claimed, error: claimError } = await supabase
+    .from('subscription_webhook_events')
+    .insert({ provider: STRIPE_PROVIDER, event_id: eventId, event_type: eventType })
+    .select('id');
+  if (claimError) {
+    if ((claimError as { code?: string }).code === '23505') return json({ received: true, duplicate: true });
+    throw claimError;
+  }
+  if (!claimed || claimed.length === 0) return json({ received: true, duplicate: true });
+
+  const succeeded = extractSucceeded(event);
+  const failed = [
+    'checkout.session.async_payment_failed',
+    'payment_intent.payment_failed',
+  ].includes(eventType);
+
+  if (!succeeded && !failed) {
+    // Other lifecycle events are recorded but require no action.
+    return json({ received: true, ignored: eventType });
+  }
+
+  const meta = getCheckoutMeta(event);
+  if (!meta) {
+    // Renewal charges are created server-side without checkout metadata and
+    // are handled through the renewal processor, not the webhook path.
+    return json({ received: true, no_metadata: true });
+  }
+
+  const { amount, currency } = getAmountFromEvent(event);
+
+  if (meta.kind === 'subscription') {
+    // Initial subscription purchase. On success: create or reset the
+    // host_subscriptions row and allocate cycle-1 credits through the REAL
+    // activation path. On failure: mark payment_failed without allocating.
+    const { data: pkg } = await supabase
+      .from('subscription_packages')
+      .select('id, code, price_cents')
+      .eq('code', meta.package_code)
+      .maybeSingle();
+    if (!pkg) return json({ received: true, error: 'Unknown package.' }, 400);
+
+    const { data: existing } = await supabase
+      .from('host_subscriptions')
+      .select('id, status')
+      .eq('restaurant_id', meta.restaurant_id)
+      .maybeSingle();
+    if (existing && (existing as { status: string }).status === 'active') {
+      return json({ received: true, already_active: true });
+    }
+
+    const { data: emailData } = await supabase.auth.getUser((await getBearerToken(new Request('https://x'))) ?? '');
+    void emailData; // not available in webhook context; the customer id comes from the session object
+
+    const sessionObject = (event.data as { object?: Record<string, unknown> }).object ?? {};
+    const customerId = (sessionObject.customer as string | null) ?? null;
+
+    if (failed) {
+      if (existing) {
+        await supabase
+          .from('host_subscriptions')
+          .update({ status: 'payment_failed', updated_at: new Date().toISOString() })
+          .eq('id', (existing as { id: string }).id);
+      }
+      return json({ received: true });
+    }
+
+    // Record the customer id on the subscription row so renewal charging can
+    // find the saved payment method later.
+    if (existing) {
+      await supabase
+        .from('host_subscriptions')
+        .update({
+          status: 'incomplete',
+          package_id: (pkg as { id: string }).id,
+          provider: STRIPE_PROVIDER,
+          provider_subscription_ref: customerId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', (existing as { id: string }).id);
+    } else {
+      await supabase.from('host_subscriptions').insert({
+        restaurant_id: meta.restaurant_id,
+        package_id: (pkg as { id: string }).id,
+        status: 'incomplete',
+        provider: STRIPE_PROVIDER,
+        provider_subscription_ref: customerId,
+        billing_anchor_day: new Date().getUTCDate(),
+        period_start: new Date().toISOString(),
+      });
+    }
+
+    if (amount === null) {
+      console.error('Stripe webhook succeeded without a usable amount', { eventId, eventType });
+      return json({ received: true, error: 'Missing amount.' }, 400);
+    }
+
+    const { data: alloc, error: allocError } = await supabase.rpc('allocate_subscription_credits', {
+      p_restaurant_id: meta.restaurant_id,
+      p_package_id: (pkg as { id: string }).id,
+      p_cycle_number: 1,
+      p_provider_payment_ref: `pi_${customerId ?? 'cs'}_1_${eventId}`,
+    });
+    if (allocError) throw allocError;
+    void amount;
+    void currency;
+    return json({ received: true, allocated: (alloc as [boolean, unknown, unknown] | null)?.[0] ?? false });
+  }
+
+  if (meta.kind === 'topup') {
+    // One-off credit top-up. On success: idempotent allocation through the
+    // REAL allocate_topup_credits path. On failure: record failed without
+    // allocating.
+    const { data: pkg } = await supabase
+      .from('credit_topup_packages')
+      .select('id, credits, price_cents')
+      .eq('code', meta.package_code)
+      .maybeSingle();
+    if (!pkg) return json({ received: true, error: 'Unknown package.' }, 400);
+
+    if (failed) {
+      await supabase.from('credit_topup_payments').insert({
+        restaurant_id: meta.restaurant_id,
+        package_id: (pkg as { id: string }).id,
+        credits: (pkg as { credits: string }).credits,
+        amount_cents: amount ?? 0,
+        currency: currency ?? 'SEK',
+        status: 'failed',
+        provider: STRIPE_PROVIDER,
+        provider_payment_ref: `evt_${eventId}`,
+      });
+      return json({ received: true });
+    }
+
+    if (amount === null) {
+      console.error('Stripe top-up webhook succeeded without a usable amount', { eventId, eventType });
+      return json({ received: true, error: 'Missing amount.' }, 400);
+    }
+
+    const { data: alloc, error: allocError } = await supabase.rpc('allocate_topup_credits', {
+      p_restaurant_id: meta.restaurant_id,
+      p_package_id: (pkg as { id: string }).id,
+      p_provider: STRIPE_PROVIDER,
+      p_provider_payment_ref: `evt_topup_${eventId}`,
+    });
+    if (allocError) throw allocError;
+    return json({ received: true, allocated: (alloc as [boolean, unknown] | null)?.[0] ?? false });
+  }
+
+  return json({ received: true, unknown_kind: true });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -250,6 +532,18 @@ Deno.serve(async (req: Request) => {
   try {
     // ── Webhook route (provider → server) ──
     if (route === 'webhook') {
+      // Stripe-specific handling: raw-body signature verification, then typed
+      // processing against the existing allocation RPCs. The generic adapter
+      // path below is retained for other providers.
+      const stripeEvent = await verifyStripeWebhook(req).catch(() => null);
+      if (stripeEvent) {
+        return handleStripeWebhook(stripeEvent, supabase);
+      }
+      // Stripe IS configured but the signature check failed — never fall
+      // through to the generic path, reject immediately.
+      if (stripeConfigured()) {
+        return json({ error: 'Invalid webhook payload.' }, 400);
+      }
       const adapter = getAdapter();
       if (!adapter) {
         return json({ error: 'No payment provider is configured.' }, 503);
@@ -295,7 +589,15 @@ Deno.serve(async (req: Request) => {
     // scheduler. Requires the SCHEDULED_RENEWAL_SECRET edge function secret
     // to be configured; returns 503 until it is set.
     if (route === 'process-renewals') {
-      const schedulerSecret = Deno.env.get('SCHEDULED_RENEWAL_SECRET');
+      // Secret resolution: prefer the edge function secret; fall back to the
+      // Vault secret the pg_cron scheduler reads (both must hold the same
+      // value). Never exposed to the frontend.
+      let schedulerSecret = Deno.env.get('SCHEDULED_RENEWAL_SECRET');
+      if (!schedulerSecret) {
+        const { data: secretData, error: secretError } = await supabase.rpc('get_renewal_scheduler_secret');
+        if (secretError) throw secretError;
+        schedulerSecret = (secretData as unknown as string | null) ?? null;
+      }
       if (!schedulerSecret) {
         return json({ error: 'Renewal scheduling is not configured (SCHEDULED_RENEWAL_SECRET missing).' }, 503);
       }
@@ -376,12 +678,206 @@ Deno.serve(async (req: Request) => {
       return json({ expiredCount: expired.data ?? 0, processed: results.length, results });
     }
 
+    // Shared body/action parse — every route below is JSON POST traffic.
+    const body = await req.json().catch(() => null);
+    const action = body?.action as string | undefined;
+
+    // ── Checkout routes (authenticated host → Stripe Checkout) ──
+    // Both return { url } for the browser to redirect to. Payment
+    // confirmation happens exclusively via webhook — nothing here marks a
+    // payment successful.
+
+    if (action === 'createSubscriptionCheckout') {
+      const adapter = getAdapter();
+      if (!adapter) return json({ error: 'Payment provider is not configured.' }, 503);
+
+      const packageCode = String(body?.packageCode ?? '');
+      const { data: pkg, error: pkgError } = await supabase
+        .from('subscription_packages')
+        .select('id, code, name, price_cents')
+        .eq('code', packageCode)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (pkgError) throw pkgError;
+      if (!pkg) return json({ error: 'That package is not available.' }, 400);
+
+      // One Stripe price per package code, created out-of-band and mapped in
+      // stripe_price_map. Without a mapped price we cannot start checkout.
+      const { data: priceRow, error: priceError } = await supabase
+        .from('stripe_price_map')
+        .select('stripe_price_id')
+        .eq('package_code', packageCode)
+        .eq('kind', 'subscription')
+        .maybeSingle();
+      if (priceError) throw priceError;
+      const priceId = (priceRow as { stripe_price_id: string } | null)?.stripe_price_id;
+      if (!priceId) return json({ error: 'No Stripe price is mapped for this package. Run the price sync first.' }, 503);
+
+      const { data: emailData } = await supabase.auth.getUser((await getBearerToken(req)) ?? '');
+      const hostEmail = (emailData?.user?.email ?? '').trim();
+      if (!hostEmail) return json({ error: 'A signed-in account with an email is required.' }, 400);
+
+      const origin = getOrigin(req);
+      const session = await createSubscriptionCheckout({
+        priceId,
+        customerEmail: hostEmail,
+        successUrl: `${origin}/?checkout=success`,
+        cancelUrl: `${origin}/?checkout=cancelled`,
+        metadata: {
+          kind: 'subscription',
+          restaurant_id: restaurantId,
+          package_code: packageCode,
+        },
+      });
+      return json({ ok: true, url: session.url });
+    }
+
+    if (action === 'createTopupCheckout') {
+      const adapter = getAdapter();
+      if (!adapter) return json({ error: 'Payment provider is not configured.' }, 503);
+
+      const packageCode = String(body?.packageCode ?? '');
+      const { data: pkg, error: pkgError } = await supabase
+        .from('credit_topup_packages')
+        .select('id, code, name, price_cents')
+        .eq('code', packageCode)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (pkgError) throw pkgError;
+      if (!pkg) return json({ error: 'That top-up package is not available.' }, 400);
+
+      const { data: priceRow, error: priceError } = await supabase
+        .from('stripe_price_map')
+        .select('stripe_price_id')
+        .eq('package_code', packageCode)
+        .eq('kind', 'topup')
+        .maybeSingle();
+      if (priceError) throw priceError;
+      const priceId = (priceRow as { stripe_price_id: string } | null)?.stripe_price_id;
+      if (!priceId) return json({ error: 'No Stripe price is mapped for this package. Run the price sync first.' }, 503);
+
+      const { data: emailData } = await supabase.auth.getUser((await getBearerToken(req)) ?? '');
+      const hostEmail = (emailData?.user?.email ?? '').trim();
+      if (!hostEmail) return json({ error: 'A signed-in account with an email is required.' }, 400);
+
+      const origin = getOrigin(req);
+      const session = await createTopupCheckout({
+        priceId,
+        customerEmail: hostEmail,
+        successUrl: `${origin}/?checkout=success`,
+        cancelUrl: `${origin}/?checkout=cancelled`,
+        metadata: {
+          kind: 'topup',
+          restaurant_id: restaurantId,
+          package_code: packageCode,
+        },
+      });
+      return json({ ok: true, url: session.url });
+    }
+
+    // ── One-time price sync: creates Stripe Products + Prices for every
+    // active package and stores the id mapping. Protected by
+    // STRIPE_PRICE_SYNC_SECRET passed as a bearer token.
+    if (route === 'sync-stripe-prices') {
+      // Secret resolution: prefer the edge function secret; fall back to the
+      // Vault entry the operator can rotate. Never exposed to the frontend.
+      let syncSecret = Deno.env.get('STRIPE_PRICE_SYNC_SECRET');
+      if (!syncSecret) {
+        const { data: vaultRows, error: vaultError } = await supabase.rpc('get_stripe_price_sync_secret');
+        if (vaultError) throw vaultError;
+        syncSecret = (vaultRows as unknown as string | null) ?? null;
+      }
+      if (!syncSecret) {
+        return json({ error: 'Price sync is not configured (STRIPE_PRICE_SYNC_SECRET missing).' }, 503);
+      }
+      const header = req.headers.get('Authorization') ?? '';
+      if (header !== `Bearer ${syncSecret}`) {
+        return json({ error: 'Unauthorized.' }, 401);
+      }
+      if (!getStripeSecret()) {
+        return json({ error: 'Stripe is not configured (STRIPE_SECRET_KEY missing).' }, 503);
+      }
+
+      const { Stripe } = await import('npm:stripe@14.25.0');
+      const stripe = new Stripe(getStripeSecret()!, { apiVersion: '2024-04-10' });
+
+      const synced: Array<{ code: string; kind: string; priceId: string }> = [];
+
+      const { data: subPkgs, error: subErr } = await supabase
+        .from('subscription_packages')
+        .select('code, name, price_cents')
+        .eq('is_active', true)
+        .order('sort_order');
+      if (subErr) throw subErr;
+      for (const pkg of (subPkgs ?? []) as Array<{ code: string; name: string; price_cents: number }>) {
+        const product = await stripe.products.create({
+          name: `Virgo Portals — ${pkg.name} (Subscription)`,
+          metadata: { kind: 'subscription', package_code: pkg.code },
+        });
+        const price = await stripe.prices.create({
+          product: product.id,
+          currency: 'sek',
+          unit_amount: pkg.price_cents,
+          recurring: { interval: 'month' },
+          metadata: { kind: 'subscription', package_code: pkg.code },
+        });
+        const { error: mapError } = await supabase
+          .from('stripe_price_map')
+          .upsert(
+            {
+              package_code: pkg.code,
+              kind: 'subscription',
+              stripe_product_id: product.id,
+              stripe_price_id: price.id,
+              price_cents: pkg.price_cents,
+              currency: 'SEK',
+            },
+            { onConflict: 'package_code,kind' }
+          );
+        if (mapError) throw mapError;
+        synced.push({ code: pkg.code, kind: 'subscription', priceId: price.id });
+      }
+
+      const { data: topupPkgs, error: topupErr } = await supabase
+        .from('credit_topup_packages')
+        .select('code, name, price_cents')
+        .eq('is_active', true)
+        .order('sort_order');
+      if (topupErr) throw topupErr;
+      for (const pkg of (topupPkgs ?? []) as Array<{ code: string; name: string; price_cents: number }>) {
+        const product = await stripe.products.create({
+          name: `Virgo Portals — ${pkg.name} (Credit Top-up)`,
+          metadata: { kind: 'topup', package_code: pkg.code },
+        });
+        const price = await stripe.prices.create({
+          product: product.id,
+          currency: 'sek',
+          unit_amount: pkg.price_cents,
+          metadata: { kind: 'topup', package_code: pkg.code },
+        });
+        const { error: mapError } = await supabase
+          .from('stripe_price_map')
+          .upsert(
+            {
+              package_code: pkg.code,
+              kind: 'topup',
+              stripe_product_id: product.id,
+              stripe_price_id: price.id,
+              price_cents: pkg.price_cents,
+              currency: 'SEK',
+            },
+            { onConflict: 'package_code,kind' }
+          );
+        if (mapError) throw mapError;
+        synced.push({ code: pkg.code, kind: 'topup', priceId: price.id });
+      }
+
+      return json({ ok: true, synced });
+    }
+
     // ── Host + admin routes (authenticated) ──
     const userId = await verifyUser(supabase, req);
     if (!userId) return json({ error: 'Please sign in to continue.' }, 401);
-
-    const body = await req.json().catch(() => null);
-    const action = body?.action as string | undefined;
 
     // Admin read-only monitoring view.
     if (action === 'adminListSubscriptions') {

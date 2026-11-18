@@ -77,6 +77,24 @@ export async function cancelSubscription(): Promise<void> {
   await callFunction('subscription-api', { action: 'cancelSubscription' });
 }
 
+/** Starts Stripe Checkout for an initial subscription purchase. Returns the redirect URL. */
+export async function startSubscriptionCheckout(packageCode: string): Promise<string> {
+  const result = await callFunction<{ url: string }>('subscription-api', {
+    action: 'createSubscriptionCheckout',
+    packageCode,
+  });
+  return result.url;
+}
+
+/** Starts Stripe Checkout for a one-off credit top-up. Returns the redirect URL. */
+export async function startTopupCheckout(packageCode: string): Promise<string> {
+  const result = await callFunction<{ url: string }>('subscription-api', {
+    action: 'createTopupCheckout',
+    packageCode,
+  });
+  return result.url;
+}
+
 export interface AdminSubscriptionRow {
   subscriptionId: string;
   ownerId: string;
