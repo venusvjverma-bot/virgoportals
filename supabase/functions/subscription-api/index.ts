@@ -472,7 +472,7 @@ async function handleStripeWebhook(event: Record<string, unknown>, supabase: Db)
       p_cycle_number: 1,
       p_provider_payment_ref: `pi_${customerId ?? 'cs'}_1_${eventId}`,
       // The charged total already includes VAT; record the exact split.
-      p_vat_cents: amount !== null ? Math.round(amount / 6) : null,
+      p_vat_cents: amount !== null ? Math.round(amount / 5) : null,
       p_total_cents: amount,
     });
     if (allocError) throw allocError;
@@ -516,7 +516,7 @@ async function handleStripeWebhook(event: Record<string, unknown>, supabase: Db)
       p_provider: STRIPE_PROVIDER,
       p_provider_payment_ref: `evt_topup_${eventId}`,
       // The charged total already includes VAT; record the exact split.
-      p_vat_cents: amount !== null ? Math.round(amount / 6) : null,
+      p_vat_cents: amount !== null ? Math.round(amount / 5) : null,
       p_total_cents: amount,
     });
     if (allocError) throw allocError;
@@ -681,7 +681,7 @@ Deno.serve(async (req: Request) => {
             p_package_id: (sub.scheduled_package_id ?? sub.package_id) as string,
             p_cycle_number: Number(cycle),
             p_provider_payment_ref: charge.paymentRef,
-            p_vat_cents: Math.round(chargeAmountCents / 6),
+            p_vat_cents: Math.round(chargeAmountCents / 5),
             p_total_cents: chargeAmountCents,
           });
         }

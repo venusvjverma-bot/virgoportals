@@ -92,16 +92,19 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
   sep();
   y += 8;
 
-  // Line item. Prices are quoted VAT-exclusive; the VAT amount and the total
-  // payable are shown as separate lines. Stored values (from the actual
-  // Stripe charge) take precedence over the derived calculation.
+  // Line item. When the stored charged total is present it is VAT-INCLUSIVE
+  // (Stripe charged net + VAT), so the split is extracted from the gross —
+  // never added on top. Legacy rows without a stored total quote the amount
+  // VAT-exclusive and derive VAT from the rate.
   const rate = inv.vatRate ?? 0;
-  const hasStoredSplit = inv.totalCents != null || inv.vatCents != null;
-  const vatCents = inv.vatCents != null ? inv.vatCents : rate > 0 ? Math.round(inv.amountCents * rate) : 0;
-  const totalCents = inv.totalCents != null ? inv.totalCents : inv.amountCents + vatCents;
-  const netCents = hasStoredSplit && inv.totalCents != null && inv.vatCents != null
-    ? inv.totalCents - inv.vatCents
-    : inv.amountCents;
+  const hasStoredTotal = inv.totalCents != null;
+  const totalCents = hasStoredTotal ? (inv.totalCents as number) : inv.amountCents;
+  const vatCents = hasStoredTotal
+    ? Math.round(totalCents * (rate / (1 + rate)))
+    : rate > 0
+      ? Math.round(inv.amountCents * rate)
+      : 0;
+  const netCents = totalCents - vatCents;
 
   doc.setFont('helvetica', 'bold');
   doc.text('Description', margin, y);
@@ -111,7 +114,7 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
   doc.text(inv.lineDescription, margin, y);
   doc.text(money(netCents, inv.currency), right, y, { align: 'right' });
   y += 5;
-  if (rate > 0 || hasStoredSplit) {
+  if (rate > 0 || hasStoredTotal) {
     doc.text('Price excl. VAT', margin, y);
     doc.text(money(netCents, inv.currency), right, y, { align: 'right' });
     y += 5;
