@@ -324,6 +324,31 @@ Deno.serve(async (req: Request) => {
         if (reserved.error) throw reserved.error;
         const [ok, cycle] = reserved.data as [boolean, number];
         if (!ok) continue;
+
+        // The reservation RPC writes the pending payment row carrying the
+        // package's current SEK price. Read it back rather than trusting any
+        // locally computed value.
+        const { data: pendingRow, error: pendingError } = await supabase
+          .from('subscription_payments')
+          .select('id, amount_cents, currency')
+          .eq('subscription_id', sub.id)
+          .eq('cycle_number', Number(cycle))
+          .maybeSingle();
+        if (pendingError) throw pendingError;
+        const amountCents = Number((pendingRow as { amount_cents: number } | null)?.amount_cents ?? 0);
+        const currency = String((pendingRow as { currency: string } | null)?.currency ?? 'SEK');
+        if (!pendingRow || !Number.isFinite(amountCents) || amountCents <= 0) {
+          // Never charge an unknown, zero, or invalid amount: fail loudly and
+          // leave the subscription untouched for the next scheduler run.
+          console.error('Renewal amount missing or invalid', {
+            subscriptionId: String(sub.id),
+            cycle: Number(cycle),
+            amountCents,
+          });
+          results.push({ subscriptionId: String(sub.id), cycle, error: 'Renewal amount missing or invalid' });
+          continue;
+        }
+
         const adapter = getAdapter();
         if (!adapter) {
           // No provider connected: the reserved cycle stays pending and no
@@ -333,8 +358,8 @@ Deno.serve(async (req: Request) => {
         }
         const charge = await adapter.chargeRenewal({
           subscriptionRef: String(sub.provider_subscription_ref ?? ''),
-          amountCents: 0,
-          currency: 'SEK',
+          amountCents,
+          currency,
           cycleNumber: Number(cycle),
         });
         if (charge.ok && charge.paymentRef) {
