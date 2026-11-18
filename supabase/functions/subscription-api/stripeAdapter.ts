@@ -45,17 +45,22 @@ export interface ParsedWebhook {
   event: { id: string; type: string; data: { object: Record<string, unknown> } };
 }
 
+// Deno cannot use the Node crypto path behind the sync constructEvent call;
+// Supabase edge functions must verify with the async SubtleCrypto provider.
+const cryptoProvider = Stripe.createSubtleCryptoProvider();
+
 export async function verifyStripeWebhook(req: Request): Promise<Record<string, unknown> | null> {
-  const secret = getStripeWebhookSecret();
+  const secret = (getStripeWebhookSecret() ?? '').trim();
   if (!secret) return null;
-  const signature = req.headers.get('stripe-signature');
+  const signature = (req.headers.get('stripe-signature') ?? '').trim();
   if (!signature) return null;
   const payload = await req.text();
   try {
-    const event = client().webhooks.constructEvent(payload, signature, secret);
+    const event = await client().webhooks.constructEventAsync(payload, signature, secret, undefined, cryptoProvider);
     return event as unknown as Record<string, unknown>;
-  } catch {
-    return null;
+  } catch (err) {
+    console.error('Stripe webhook signature verification failed:', (err as Error)?.message ?? err);
+    throw err;
   }
 }
 
