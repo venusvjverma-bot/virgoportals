@@ -78,9 +78,10 @@ export async function createSubscriptionCheckout(args: {
     line_items: [{ price: args.priceId, quantity: 1 }],
     customer_email: args.customerEmail,
     success_url: args.successUrl,
-    cancel_url: args.cancelUrl,
-    // Saved payment method so renewals can charge off-session.
-    setup_future_usage: 'on_session',
+    cancel_url: args.cancel_url ?? args.cancelUrl,
+    // setup_future_usage is not valid in subscription mode — Stripe saves the
+    // payment method to the customer automatically, so renewals can charge
+    // off-session without it.
     metadata: args.metadata,
   });
   return { id: session.id, url: session.url };
