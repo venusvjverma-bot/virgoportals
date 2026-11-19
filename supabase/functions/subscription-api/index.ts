@@ -436,14 +436,20 @@ async function handleStripeWebhook(event: Record<string, unknown>, supabase: Db)
       return json({ received: true });
     }
 
-    // Record the customer id on the subscription row so renewal charging can
-    // find the saved payment method later.
+    // Record the customer id on the subscription row and reset any stale
+    // state from the replaced record (old schedule, cancellation, expiry) so
+    // the new purchase starts clean — mirroring the test-mode reset.
     if (existing) {
       await supabase
         .from('host_subscriptions')
         .update({
           status: 'incomplete',
           package_id: (pkg as { id: string }).id,
+          scheduled_package_id: null,
+          auto_renew: true,
+          cancel_at_period_end: false,
+          canceled_at: null,
+          expired_at: null,
           provider: STRIPE_PROVIDER,
           provider_subscription_ref: customerId,
           updated_at: new Date().toISOString(),
@@ -1114,13 +1120,20 @@ Deno.serve(async (req: Request) => {
       if (pkgError) throw pkgError;
       if (!pkg) return json({ error: 'That package is not available.' }, 400);
 
+      // Scheduling only applies to an active paid subscription whose period
+      // has not ended. Without one the host must buy through checkout instead.
       const { data: sub, error: subError } = await supabase
         .from('host_subscriptions')
-        .select('id')
+        .select('id, status, period_end')
         .eq('restaurant_id', restaurantId)
         .maybeSingle();
       if (subError) throw subError;
-      if (!sub) return json({ error: 'No subscription to change.' }, 400);
+      const subRow = sub as { id: string; status: string; period_end: string | null } | null;
+      if (!subRow) return json({ error: 'No subscription to change.' }, 400);
+      const periodEnded = Boolean(subRow.period_end && subRow.period_end <= new Date().toISOString());
+      if (subRow.status !== 'active' || periodEnded) {
+        return json({ error: 'An active paid subscription is required to schedule a package change. Purchase a package instead.' }, 400);
+      }
 
       const { error } = await supabase
         .from('host_subscriptions')

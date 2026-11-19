@@ -122,6 +122,14 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
 
   const { subscription, packages, topupPackages, canPurchaseTopup, balance, payments } = overview;
   const sub = subscription;
+  // Only an active paid subscription whose period has not ended counts as a
+  // current plan. Incomplete, failed, expired, canceled, or ended-period
+  // records still let the host buy any package through Stripe Checkout.
+  const hasActivePaid = Boolean(
+    sub &&
+    sub.status === 'active' &&
+    (!sub.periodEnd || new Date(sub.periodEnd).getTime() > Date.now()),
+  );
   const currentCode = sub?.packageCode ?? '';
   const scheduledCode = sub?.cancelAtPeriodEnd ? null : sub?.scheduledPackageCode ?? null;
   const scheduledPackage = packages.find((p) => p.code === scheduledCode);
@@ -260,12 +268,14 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
       <section>
         <h3 className="font-display text-lg font-semibold tracking-tight text-ink">Packages</h3>
         <p className="mt-1 text-sm text-ink-muted">
-          Changes take effect at your next renewal. Your current plan stays active until then — nothing is charged now.
+          {hasActivePaid
+            ? 'Changes take effect at your next renewal. Your current plan stays active until then — nothing is charged now.'
+            : 'Choose a package and click Buy — payment completes through Stripe and your plan activates immediately after checkout.'}
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           {packages.map((pkg) => {
-            const isCurrent = pkg.code === currentCode && !sub?.cancelAtPeriodEnd;
-            const isScheduled = pkg.code === scheduledCode;
+            const isCurrent = hasActivePaid && pkg.code === currentCode && !sub?.cancelAtPeriodEnd;
+            const isScheduled = hasActivePaid && pkg.code === scheduledCode;
             return (
               <div
                 key={pkg.code}
@@ -323,14 +333,26 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
                       {busy === `undo-${pkg.code}` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                       Keep current plan
                     </Button>
-                  ) : (
+                  ) : hasActivePaid ? (
                     <Button
                       size="sm"
-                      disabled={busy !== null || !sub}
+                      disabled={busy !== null}
                       onClick={() => run(`pick-${pkg.code}`, () => changeScheduledPackage(pkg.code))}
                     >
                       {busy === `pick-${pkg.code}` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                       Schedule from next renewal
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      disabled={busy !== null}
+                      onClick={() => run(`buy-${pkg.code}`, async () => {
+                        const url = await startSubscriptionCheckout(pkg.code);
+                        window.location.assign(url);
+                      })}
+                    >
+                      {busy === `buy-${pkg.code}` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      Buy
                     </Button>
                   )}
                 </div>
@@ -338,23 +360,11 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
             );
           })}
         </div>
-        {!sub ? (
+        {!hasActivePaid ? (
           <div className="mt-4 rounded-xl bg-cream-50 px-4 py-3 ring-1 ring-cream-200">
             <p className="text-sm text-ink-muted">
-              Pick a package to subscribe — you will be taken to Stripe's secure checkout to complete payment.
+              Pick a package and click Buy — you will be taken to Stripe's secure checkout to complete payment.
             </p>
-            <Button
-              size="sm"
-              className="mt-3"
-              disabled={busy !== null}
-              onClick={() => run('subscribe-starter', async () => {
-                const url = await startSubscriptionCheckout('starter');
-                window.location.assign(url);
-              })}
-            >
-              {busy === 'subscribe-starter' ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Subscribe to Starter
-            </Button>
           </div>
         ) : null}
       </section>
