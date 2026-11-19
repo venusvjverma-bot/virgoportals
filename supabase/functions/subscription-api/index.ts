@@ -5,7 +5,6 @@ import {
   verifyStripeWebhook,
   createSubscriptionCheckout,
   createTopupCheckout,
-  chargeRenewal as stripeChargeRenewal,
   getStripeSecret,
 } from './stripeAdapter.ts';
 
@@ -16,14 +15,12 @@ import {
  *  1. Host-facing reads (own subscription, packages, payment history) and
  *     settings changes that carry no money (auto-renew toggle, package
  *     reschedule, cancellation at period end).
- *  2. A payment provider ADAPTER interface. No provider is connected yet —
- *     `getAdapter()` returns null until one is implemented. All payment
- *     confirmation flows through the adapter + webhooks; nothing here marks a
- *     payment successful on the basis of a frontend message.
- *  3. The renewal processor, intended to be invoked by a scheduled job
- *     (externally scheduled — see scheduler notes in the report). It expires
- *     due non-renewing subscriptions and reserves renewal cycles for the
- *     adapter to charge.
+ *  2. A payment provider ADAPTER interface. All payment confirmation flows
+ *     through webhooks; nothing here marks a payment successful on the basis
+ *     of a frontend message.
+ *  3. An expiry sweep invoked by a scheduled job. Stripe owns recurring
+ *     charging (Option A) and reports renewals via webhooks; this API only
+ *     expires due non-renewing subscriptions and mirrors Stripe's outcomes.
  *
  * Webhook verification: `verifyWebhook` is part of the adapter interface. The
  * generic webhook route rejects everything while no adapter is configured.
@@ -51,17 +48,6 @@ export interface PaymentAdapter {
   readonly providerName: string;
   /** Verify a webhook signature and parse the event. Must throw on bad signature. */
   verifyWebhook(req: Request, db: Db): Promise<WebhookEvent | null>;
-  /**
-   * Charge a saved payment method for a reserved renewal cycle. Returns the
-   * provider payment reference on success, or null when the provider reports
-   * failure. Implementations must be safe to re-run.
-   */
-  chargeRenewal(args: {
-    subscriptionRef: string;
-    amountCents: number;
-    currency: string;
-    cycleNumber: number;
-  }): Promise<{ ok: boolean; paymentRef: string | null; invoiceUrl: string | null }>;
   /** Create the provider-side recurring billing object for a new subscription. */
   createSubscription(args: {
     restaurantId: string;
@@ -96,6 +82,7 @@ class MockTestAdapter implements PaymentAdapter {
   async verifyWebhook(): Promise<WebhookEvent | null> {
     return null; // webhooks are never simulated
   }
+  /** Mock-only simulated charge, used by the test-mode renewal action. */
   async chargeRenewal(args: { cycleNumber: number }): Promise<{ ok: boolean; paymentRef: string | null; invoiceUrl: string | null }> {
     return { ok: true, paymentRef: `test_pay_${args.cycleNumber}_${crypto.randomUUID()}`, invoiceUrl: null };
   }
@@ -110,11 +97,9 @@ function testModeSecret(): string | null {
 
 // ── Stripe adapter bridge ───────────────────────────────────────────────────
 // Adapts the Stripe helper module to the PaymentAdapter interface used by the
-// generic webhook + renewal flow. Renewal charging needs the Stripe customer
-// id, which is stored on host_subscriptions.provider_subscription_ref — the
-// same column used for provider subscription refs. For Stripe we store the
-// Stripe CUSTOMER id there at checkout time (the Checkout Session itself is
-// the subscription source; webhook events drive the subscription lifecycle).
+// generic webhook path. Stripe owns recurring charging (Option A): renewals
+// arrive as invoice/subscription webhooks and are processed by
+// handleStripeBillingWebhook — there is no off-session charging here.
 
 const STRIPE_PROVIDER = 'stripe';
 
@@ -129,20 +114,6 @@ const stripeBridge: PaymentAdapter = {
       providerPaymentRef: extractPaymentRef(event),
       succeeded: extractSucceeded(event),
     };
-  },
-  async chargeRenewal(args: {
-    subscriptionRef: string;
-    amountCents: number;
-    currency: string;
-    cycleNumber: number;
-  }): Promise<{ ok: boolean; paymentRef: string | null; invoiceUrl: string | null }> {
-    return stripeChargeRenewal({
-      customerId: args.subscriptionRef || null,
-      amountCents: args.amountCents,
-      currency: args.currency,
-      cycleNumber: args.cycleNumber,
-      description: `Virgo Portals subscription renewal — cycle ${args.cycleNumber}`,
-    });
   },
   async createSubscription(args: {
     restaurantId: string;
@@ -183,7 +154,7 @@ function extractSucceeded(event: Record<string, unknown>): boolean {
   ].includes(type);
 }
 
-function getTestAdapter(): PaymentAdapter | null {
+function getTestAdapter(): MockTestAdapter | null {
   return testModeSecret() ? new MockTestAdapter() : null;
 }
 
@@ -320,6 +291,218 @@ function topupPaymentRecord(t: Record<string, unknown>, pkgName: string | null):
   };
 }
 
+// ── Stripe Billing renewal processing ──────────────────────────────────────
+// Stripe owns recurring billing: it charges the saved payment method, issues
+// the recurring invoice, and reports the outcome via webhooks. We mirror the
+// outcome into our own tables (activation, credits, history) — never the
+// reverse. Renewal events carry no checkout metadata; they are routed by the
+// Stripe SUBSCRIPTION id stored on host_subscriptions.provider_subscription_ref
+// (the customer id is kept alongside in provider_customer_ref).
+
+/** Retrieve an invoice's charged amount + currency from its lines (it carries no amount of its own). */
+async function getInvoiceAmount(invoiceId: string): Promise<{ amount: number | null; currency: string | null }> {
+  const { Stripe } = await import('npm:stripe@14.25.0');
+  const stripe = new Stripe(getStripeSecret()!, { apiVersion: '2024-04-10' });
+  const inv = await stripe.invoices.retrieve(invoiceId);
+  const line = inv.lines?.data?.[0] as { amount?: number; currency?: string } | undefined;
+  return {
+    amount: typeof line?.amount === 'number' && line.amount > 0 ? line.amount : null,
+    currency: line?.currency?.toUpperCase() ?? null,
+  };
+}
+
+/** Map a Stripe subscription id to our subscription row (by ref or by customer). */
+async function findSubscriptionByStripeRef(
+  supabase: Db,
+  subscriptionId: string | null,
+  customerId: string | null
+): Promise<Record<string, unknown> | null> {
+  if (subscriptionId) {
+    const { data } = await supabase
+      .from('host_subscriptions')
+      .select(SUBSCRIPTION_COLUMNS)
+      .eq('provider', STRIPE_PROVIDER)
+      .eq('provider_subscription_ref', subscriptionId)
+      .maybeSingle();
+    if (data) return data as Record<string, unknown>;
+  }
+  if (customerId) {
+    const { data } = await supabase
+      .from('host_subscriptions')
+      .select(SUBSCRIPTION_COLUMNS)
+      .eq('provider', STRIPE_PROVIDER)
+      .eq('provider_customer_ref', customerId)
+      .maybeSingle();
+    if (data) return data as Record<string, unknown>;
+  }
+  return null;
+}
+
+/** Next unprocessed cycle number for a subscription (max existing cycle + 1). */
+async function nextCycleNumber(supabase: Db, subscriptionId: string): Promise<number> {
+  const { data } = await supabase
+    .from('subscription_payments')
+    .select('cycle_number')
+    .eq('subscription_id', subscriptionId)
+    .order('cycle_number', { ascending: false })
+    .limit(1);
+  const rows = (data ?? []) as Array<{ cycle_number: number }>;
+  return Number(rows[0]?.cycle_number ?? 0) + 1;
+}
+
+/** Resolve the package from the invoice's price metadata, falling back to the row's package. */
+async function resolveRenewalPackage(
+  supabase: Db,
+  invoiceId: string,
+  fallbackPackageId: string
+): Promise<string> {
+  const { Stripe } = await import('npm:stripe@14.25.0');
+  const stripe = new Stripe(getStripeSecret()!, { apiVersion: '2024-04-10' });
+  const inv = (await stripe.invoices.retrieve(invoiceId, { expand: ['lines.data.price'] })) as unknown as {
+    lines?: { data?: Array<{ price?: { metadata?: Record<string, string> } }> };
+  };
+  const code = inv.lines?.data?.[0]?.price?.metadata?.package_code;
+  if (code) {
+    const { data } = await supabase
+      .from('subscription_packages')
+      .select('id')
+      .eq('code', code)
+      .maybeSingle();
+    if (data) return (data as { id: string }).id;
+  }
+  return fallbackPackageId;
+}
+
+async function handleStripeBillingWebhook(event: Record<string, unknown>, supabase: Db): Promise<Response> {
+  const eventId = String(event.id ?? '');
+  const eventType = String(event.type ?? '');
+  const object = (event.data as { object?: Record<string, unknown> } | undefined)?.object ?? {};
+
+  // ── Successful recurring payment (renewal) ──
+  if (eventType === 'invoice.paid' || eventType === 'invoice.payment_succeeded') {
+    const invoice = object as {
+      id?: string;
+      customer?: string | null;
+      subscription?: string | null;
+      billing_reason?: string;
+      amount_paid?: number;
+      currency?: string;
+      lines?: { data?: Array<{ amount?: number; currency?: string }> };
+    };
+    // The first invoice (billing_reason 'subscription_create') is the checkout
+    // confirmation — the checkout.session handler already processed it. Later
+    // invoices (subscription_cycle renewals, subscription_update anchor
+    // resets/upgrades) are genuine charges that must allocate credits.
+    if (invoice.billing_reason === 'subscription_create' || invoice.billing_reason === 'upcoming') {
+      return json({ received: true, ignored_reason: invoice.billing_reason });
+    }
+
+    const ourSub = await findSubscriptionByStripeRef(supabase, invoice.subscription ?? null, invoice.customer ?? null);
+    if (!ourSub) return json({ received: true, no_match: true });
+
+    const cycle = await nextCycleNumber(supabase, String(ourSub.id));
+    let amount = typeof invoice.amount_paid === 'number' && invoice.amount_paid > 0 ? invoice.amount_paid : null;
+    let currency = invoice.currency?.toUpperCase() ?? null;
+    if (amount === null && invoice.id) {
+      const fromLines = await getInvoiceAmount(invoice.id);
+      amount = fromLines.amount;
+      currency = currency ?? fromLines.currency;
+    }
+    if (amount === null) {
+      console.error('Stripe renewal invoice without a usable amount', { eventId, invoiceId: invoice.id });
+      return json({ received: true, error: 'Missing amount.' }, 400);
+    }
+
+    const packageId = invoice.id
+      ? await resolveRenewalPackage(supabase, invoice.id, String(ourSub.package_id))
+      : String(ourSub.package_id);
+
+    const { data: alloc, error: allocError } = await supabase.rpc('allocate_subscription_credits', {
+      p_restaurant_id: ourSub.restaurant_id,
+      p_package_id: packageId,
+      p_cycle_number: cycle,
+      p_provider_payment_ref: `in_${invoice.id}`,
+      p_vat_cents: Math.round(amount / 5),
+      p_total_cents: amount,
+    });
+    if (allocError) throw allocError;
+    void currency;
+    return json({ received: true, renewed: (alloc as [boolean, unknown, unknown] | null)?.[0] ?? false, cycle });
+  }
+
+  // ── Failed recurring payment ──
+  if (eventType === 'invoice.payment_failed') {
+    const invoice = object as { id?: string; customer?: string | null; subscription?: string | null; attempt_count?: number };
+    const ourSub = await findSubscriptionByStripeRef(supabase, invoice.subscription ?? null, invoice.customer ?? null);
+    if (!ourSub) return json({ received: true, no_match: true });
+
+    // Stripe retries automatically; we only reflect the failed state. No
+    // credits are allocated and no payment row is created — the eventual
+    // invoice.paid (after a successful retry) drives allocation.
+    await supabase
+      .from('host_subscriptions')
+      .update({ status: 'payment_failed', updated_at: new Date().toISOString() })
+      .eq('id', String(ourSub.id));
+    return json({ received: true, marked: 'payment_failed', attempt: invoice.attempt_count ?? null });
+  }
+
+  // ── Payment needs host action (3D Secure / authentication) ──
+  if (eventType === 'invoice.payment_action_required') {
+    const invoice = object as { customer?: string | null; subscription?: string | null };
+    const ourSub = await findSubscriptionByStripeRef(supabase, invoice.subscription ?? null, invoice.customer ?? null);
+    if (!ourSub) return json({ received: true, no_match: true });
+    // Keep the subscription active (Stripe holds the invoice open and retries
+    // after authentication) but flag it so the dashboard can prompt the host.
+    await supabase
+      .from('host_subscriptions')
+      .update({ status: 'payment_failed', updated_at: new Date().toISOString() })
+      .eq('id', String(ourSub.id));
+    return json({ received: true, marked: 'payment_action_required' });
+  }
+
+  // ── Subscription lifecycle sync ──
+  if (eventType === 'customer.subscription.updated' || eventType === 'customer.subscription.deleted') {
+    const sub = object as {
+      id?: string;
+      customer?: string | null;
+      status?: string;
+      cancel_at_period_end?: boolean;
+      current_period_end?: number;
+      canceled_at?: number | null;
+  };
+    const ourSub = await findSubscriptionByStripeRef(supabase, sub.id ?? null, sub.customer ?? null);
+    if (!ourSub) return json({ received: true, no_match: true });
+
+    if (eventType === 'customer.subscription.deleted' || sub.status === 'canceled') {
+      await supabase
+        .from('host_subscriptions')
+        .update({
+          status: 'canceled',
+          canceled_at: sub.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', String(ourSub.id));
+      return json({ received: true, marked: 'canceled' });
+    }
+
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (typeof sub.cancel_at_period_end === 'boolean') {
+      updates.cancel_at_period_end = sub.cancel_at_period_end;
+      updates.auto_renew = !sub.cancel_at_period_end;
+    }
+    if (typeof sub.current_period_end === 'number') {
+      updates.period_end = new Date(sub.current_period_end * 1000).toISOString();
+    }
+    if (sub.status === 'active' && ourSub.status !== 'active') {
+      updates.status = 'active';
+    }
+    await supabase.from('host_subscriptions').update(updates).eq('id', String(ourSub.id));
+    return json({ received: true, synced: true });
+  }
+
+  return json({ received: true, ignored: eventType });
+}
+
 // ── Stripe webhook helpers ──────────────────────────────────────────────────
 
 function getBearerToken(req: Request): string | null {
@@ -386,6 +569,18 @@ async function handleStripeWebhook(event: Record<string, unknown>, supabase: Db)
     'payment_intent.payment_failed',
   ].includes(eventType);
 
+  const stripeBillingTypes = [
+    'invoice.paid',
+    'invoice.payment_succeeded',
+    'invoice.payment_failed',
+    'invoice.payment_action_required',
+    'customer.subscription.updated',
+    'customer.subscription.deleted',
+  ];
+  if (stripeBillingTypes.includes(eventType)) {
+    return handleStripeBillingWebhook(event, supabase);
+  }
+
   if (!succeeded && !failed) {
     // Other lifecycle events are recorded but require no action.
     return json({ received: true, ignored: eventType });
@@ -393,8 +588,8 @@ async function handleStripeWebhook(event: Record<string, unknown>, supabase: Db)
 
   const meta = getCheckoutMeta(event);
   if (!meta) {
-    // Renewal charges are created server-side without checkout metadata and
-    // are handled through the renewal processor, not the webhook path.
+    // Charges created outside Checkout (none remain in the Option A
+    // architecture) are not processed here.
     return json({ received: true, no_metadata: true });
   }
 
@@ -425,6 +620,7 @@ async function handleStripeWebhook(event: Record<string, unknown>, supabase: Db)
 
     const sessionObject = (event.data as { object?: Record<string, unknown> }).object ?? {};
     const customerId = (sessionObject.customer as string | null) ?? null;
+    const subscriptionId = (sessionObject.subscription as string | null) ?? null;
 
     if (failed) {
       if (existing) {
@@ -451,7 +647,8 @@ async function handleStripeWebhook(event: Record<string, unknown>, supabase: Db)
           canceled_at: null,
           expired_at: null,
           provider: STRIPE_PROVIDER,
-          provider_subscription_ref: customerId,
+          provider_subscription_ref: subscriptionId,
+          provider_customer_ref: customerId,
           updated_at: new Date().toISOString(),
         })
         .eq('id', (existing as { id: string }).id);
@@ -461,7 +658,8 @@ async function handleStripeWebhook(event: Record<string, unknown>, supabase: Db)
         package_id: (pkg as { id: string }).id,
         status: 'incomplete',
         provider: STRIPE_PROVIDER,
-        provider_subscription_ref: customerId,
+        provider_subscription_ref: subscriptionId,
+        provider_customer_ref: customerId,
         billing_anchor_day: new Date().getUTCDate(),
         period_start: new Date().toISOString(),
       });
@@ -599,10 +797,10 @@ Deno.serve(async (req: Request) => {
       return json({ received: true });
     }
 
-    // ── Scheduled renewal processing (external scheduler → server) ──
-    // Protected by the service role key passed as a bearer token by the
-    // scheduler. Requires the SCHEDULED_RENEWAL_SECRET edge function secret
-    // to be configured; returns 503 until it is set.
+    // ── Expiry sweep (Stripe-managed renewals) ──
+    // Stripe owns recurring charging and reports renewals through webhooks.
+    // This route no longer charges anyone; it only expires subscriptions whose
+    // period has ended (e.g. renewals Stripe could not complete).
     if (route === 'process-renewals') {
       // Secret resolution: prefer the edge function secret; fall back to the
       // Vault secret the pg_cron scheduler reads (both must hold the same
@@ -624,77 +822,7 @@ Deno.serve(async (req: Request) => {
       const expired = await supabase.rpc('expire_due_subscriptions');
       if (expired.error) throw expired.error;
 
-      const { data: due, error: dueError } = await supabase
-        .from('host_subscriptions')
-        .select(SUBSCRIPTION_COLUMNS)
-        .eq('status', 'active')
-        .eq('auto_renew', true)
-        .eq('cancel_at_period_end', false)
-        .lte('period_end', new Date().toISOString());
-      if (dueError) throw dueError;
-
-      const results: Array<{ subscriptionId: string; cycle: number | null }> = [];
-      for (const sub of (due ?? []) as Array<Record<string, unknown>>) {
-        const reserved = await supabase.rpc('process_subscription_renewal', {
-          p_subscription_id: sub.id,
-        });
-        if (reserved.error) throw reserved.error;
-        const [ok, cycle] = reserved.data as [boolean, number];
-        if (!ok) continue;
-
-        // The reservation RPC writes the pending payment row carrying the
-        // package's current SEK price. Read it back rather than trusting any
-        // locally computed value.
-        const { data: pendingRow, error: pendingError } = await supabase
-          .from('subscription_payments')
-          .select('id, amount_cents, currency')
-          .eq('subscription_id', sub.id)
-          .eq('cycle_number', Number(cycle))
-          .maybeSingle();
-        if (pendingError) throw pendingError;
-        const amountCents = Number((pendingRow as { amount_cents: number } | null)?.amount_cents ?? 0);
-        const currency = String((pendingRow as { currency: string } | null)?.currency ?? 'SEK');
-        if (!pendingRow || !Number.isFinite(amountCents) || amountCents <= 0) {
-          // Never charge an unknown, zero, or invalid amount: fail loudly and
-          // leave the subscription untouched for the next scheduler run.
-          console.error('Renewal amount missing or invalid', {
-            subscriptionId: String(sub.id),
-            cycle: Number(cycle),
-            amountCents,
-          });
-          results.push({ subscriptionId: String(sub.id), cycle, error: 'Renewal amount missing or invalid' });
-          continue;
-        }
-
-        const adapter = getAdapter();
-        if (!adapter) {
-          // No provider connected: the reserved cycle stays pending and no
-          // credits are allocated. Nothing is simulated as paid.
-          results.push({ subscriptionId: String(sub.id), cycle });
-          continue;
-        }
-        // Stripe charges the VAT-inclusive total (net + 25% VAT = net × 1.25).
-        const chargeAmountCents = Math.round(amountCents * 1.25);
-        const charge = await adapter.chargeRenewal({
-          subscriptionRef: String(sub.provider_subscription_ref ?? ''),
-          amountCents: chargeAmountCents,
-          currency,
-          cycleNumber: Number(cycle),
-        });
-        if (charge.ok && charge.paymentRef) {
-          await supabase.rpc('allocate_subscription_credits', {
-            p_restaurant_id: sub.restaurant_id,
-            p_package_id: (sub.scheduled_package_id ?? sub.package_id) as string,
-            p_cycle_number: Number(cycle),
-            p_provider_payment_ref: charge.paymentRef,
-            p_vat_cents: Math.round(chargeAmountCents / 5),
-            p_total_cents: chargeAmountCents,
-          });
-        }
-        results.push({ subscriptionId: String(sub.id), cycle });
-      }
-
-      return json({ expiredCount: expired.data ?? 0, processed: results.length, results });
+      return json({ expiredCount: expired.data ?? 0, processed: 0, results: [] });
     }
 
     // Shared body/action parse — every route below is JSON POST traffic.

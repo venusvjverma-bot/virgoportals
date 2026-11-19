@@ -1,10 +1,11 @@
 /**
  * Stripe payment adapter for the subscription-api edge function.
  *
- * Implements the PaymentAdapter interface from ./index.ts:
- * - verifyWebhook: Stripe signature verification (STRIPE_WEBHOOK_SECRET)
- * - chargeRenewal: off-session PaymentIntent against a saved payment method
- * - createSubscription: Checkout Session (subscription mode) for initial purchase
+ * - verifyStripeWebhook: Stripe signature verification (STRIPE_WEBHOOK_SECRET)
+ * - createSubscriptionCheckout / createTopupCheckout: Checkout Sessions
+ *
+ * Recurring renewals are charged by Stripe itself (subscription billing);
+ * outcomes arrive as webhooks — there is no off-session charging here.
  *
  * Secrets (edge function secrets, never frontend):
  * - STRIPE_SECRET_KEY
@@ -107,52 +108,4 @@ export async function createTopupCheckout(args: {
 
 function helpers_customerEmail(email: string): string {
   return email;
-}
-
-// ── Renewal charging (off-session, saved payment method) ───────────────────
-
-export async function chargeRenewal(args: {
-  customerId: string | null;
-  amountCents: number;
-  currency: string;
-  cycleNumber: number;
-  description: string;
-}): Promise<{ ok: boolean; paymentRef: string | null; invoiceUrl: string | null }> {
-  const stripe = client();
-  if (!args.customerId) {
-    return { ok: false, paymentRef: null, invoiceUrl: null };
-  }
-
-  // Find the default payment method (set during the initial Checkout).
-  const methods = await stripe.paymentMethods.list({ customer: args.customerId, limit: 1 });
-  const paymentMethod = methods.data[0];
-  if (!paymentMethod) {
-    return { ok: false, paymentRef: null, invoiceUrl: listInvoiceUrl(args) };
-  }
-
-  try {
-    const intent = await stripe.paymentIntents.create({
-      amount: args.amountCents,
-      currency: args.currency.toLowerCase(),
-      customer: args.customerId,
-      payment_method: paymentMethod.id,
-      off_session: true,
-      confirm: true,
-      description: args.description,
-      statement_descriptor_suffix: 'Virgo Portals',
-    });
-    return {
-      ok: intent.status === 'succeeded',
-      paymentRef: intent.status === 'succeeded' ? `pi_${intent.id}` : null,
-      invoiceUrl: null,
-    };
-  } catch (err) {
-    // Card declined / authentication required etc. — a failed renewal charge.
-    console.error('Stripe renewal charge failed:', err instanceof Error ? err.message : err);
-    return { ok: false, paymentRef: null, invoiceUrl: null };
-  }
-}
-
-function listInvoiceUrl(_args: { cycleNumber: number }): string | null {
-  return null;
 }

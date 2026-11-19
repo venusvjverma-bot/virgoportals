@@ -24,3 +24,6 @@ verify_jwt = false
 
 [functions.subscription-api]
 verify_jwt = false
+
+[functions.stripe-probe-check]
+verify_jwt = false
