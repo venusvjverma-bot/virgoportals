@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
 import { buildDailyUsage, formatCredits, type DailyUsage } from '@/lib/dailyTokenUsage';
 import { getLlmUsageDaily } from '@/lib/portal';
+import { formatTokenCount } from '@/lib/formatTokens';
 import type { RestaurantPortal } from '@/types';
 
 const BAR_COLOR = '#E8833A';
@@ -10,8 +11,6 @@ const BASELINE_COLOR = '#6E7B62';
 const REFERENCE_COLOR = '#B4BDAB';
 const INK = '#292A27';
 const MUTED = '#77766F';
-
-const compactNumber = new Intl.NumberFormat('en-GB', { notation: 'compact', maximumFractionDigits: 1 });
 
 interface DailyTokenChartProps {
   portal: RestaurantPortal;
@@ -82,7 +81,7 @@ export function DailyTokenChart({ portal }: DailyTokenChartProps) {
                         style={{ bottom: `calc(${heightPct}% + 6px)`, color: INK }}
                         title={`${day.totalTokens.toLocaleString()} tokens`}
                       >
-                        {compactNumber.format(day.totalTokens)}
+                        {formatTokenCount(day.totalTokens)}
                       </span>
                       <div
                         className="absolute bottom-0 left-1/2 w-3/5 max-w-[44px] -translate-x-1/2 rounded-t-md transition-[height] duration-500 ease-out hover:brightness-95"
