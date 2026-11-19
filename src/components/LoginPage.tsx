@@ -114,7 +114,7 @@ export function LoginPage({
       <button
         type="button"
         onClick={onOpenPresentation}
-        className="group mx-auto mt-12 flex w-full max-w-md items-center gap-4 rounded-3xl bg-white p-5 text-left shadow-soft ring-1 ring-cream-200/80 transition hover:-translate-y-0.5 hover:shadow-lift"
+        className="group animate-bubble-pulse mx-auto mt-12 flex w-full max-w-md items-center gap-4 rounded-3xl bg-white p-5 text-left shadow-soft ring-1 ring-cream-200/80 transition hover:-translate-y-0.5 hover:shadow-lift"
       >
         <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-olive-700 text-cream-50 transition group-hover:bg-olive-800">
           <PlayCircle className="h-6 w-6" />
