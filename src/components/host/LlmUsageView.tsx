@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { Notice } from '@/components/ui/Notice';
 import { DailyTokenChart } from '@/components/host/DailyTokenChart';
 import { getLlmUsageTotals } from '@/lib/portal';
+import { formatTokenCount } from '@/lib/formatTokens';
 import type { RestaurantPortal } from '@/types';
 
 interface LlmUsageViewProps {
@@ -84,7 +85,7 @@ function UsageCard({ label, value }: UsageCardProps) {
         className="mt-3 text-3xl font-bold tabular-nums"
         style={{ color: '#292A27' }}
       >
-        {value.toLocaleString()}
+        {formatTokenCount(value)}
       </p>
     </div>
   );
