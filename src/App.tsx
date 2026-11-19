@@ -139,8 +139,15 @@ function App() {
     setLoginNotice(null);
   }
 
+  function goToLogin() {
+    window.history.replaceState({ screen: 'login' }, '');
+    setShowPresentation(false);
+    setShowSignup(false);
+    setShowForgot(false);
+  }
+
   function backFromPresentation() {
-    window.history.back();
+    goToLogin();
   }
 
   function goToSignup() {
@@ -239,7 +246,7 @@ function App() {
             <PresentationPage onBack={backFromPresentation} onBecomeHost={goToSignup} />
           </Suspense>
         ) : showSignup ? (
-          <HostSignupPage onBack={backToLogin} />
+          <HostSignupPage onBack={goToLogin} />
         ) : showForgot ? (
           <ForgotPasswordPage onBack={backToLogin} />
         ) : (
