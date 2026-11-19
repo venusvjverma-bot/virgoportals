@@ -1,13 +1,8 @@
-/**
- * Formats token counts consistently across the application.
- * The original numeric value is never changed; callers can retain exact values
- * in titles or detailed views when precision is needed.
- */
-const tokenCountFormatter = new Intl.NumberFormat('en-GB', {
-  notation: 'compact',
-  maximumFractionDigits: 2,
-});
-
-export function formatTokenCount(value: number): string {
-  return tokenCountFormatter.format(value);
+/** Compact token count for chart labels: 1.2k, 3.4M, 5.6B. */
+export function formatTokenCount(tokens: number): string {
+  if (!Number.isFinite(tokens) || tokens <= 0) return '0';
+  if (tokens >= 1_000_000_000) return `${(tokens / 1_000_000_000).toFixed(1)}B`;
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
+  return String(Math.round(tokens));
 }
