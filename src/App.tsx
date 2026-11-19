@@ -146,6 +146,7 @@ function App() {
   function goToSignup() {
     window.history.pushState({ screen: 'signup' }, '');
     setShowSignup(true);
+    setShowPresentation(false);
     setShowForgot(false);
     setLoginError(null);
     setLoginNotice(null);
