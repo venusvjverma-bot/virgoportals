@@ -11,7 +11,7 @@ import { createDish, deleteDish, replaceServingOptions, replaceRemovableIngredie
 import type { Dish } from '@/types';
 
 type DishPatch = Pick<Dish, 'name' | 'description' | 'ingredients' | 'allergy' | 'price' | 'category' | 'section' | 'serving' | 'abv' | 'available'>;
-import { SECTIONS, categoriesForSection, categoryBelongsToSection } from '@/lib/menuSections';
+import { SECTIONS, categoriesForSection, categoryBelongsToSection, categoryLabel, sectionLabel } from '@/lib/menuSections';
 
 interface ExtractResult {
   dishes: Dish[];
@@ -97,6 +97,31 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
       return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
     });
   }, [dishes, sectionFilter, categoryFilter, availabilityFilter, searchQuery]);
+
+  // Display-only grouping: the already-filtered, sortOrder-ordered dishes are
+  // partitioned into the three sections and, within each section, into the
+  // canonical category order. Dishes with a category outside the canonical
+  // list fall into a trailing "Other" group so none are ever hidden.
+  const groupedDishes = useMemo(() => {
+    const sectionRank: Record<string, number> = { food: 0, drinks: 1, add_on: 2 };
+    return (['food', 'drinks', 'add_on'] as const)
+      .map((section) => {
+        const sectionDishes = filteredDishes.filter((dish) => (dish.section ?? 'food') === section);
+        const groups = categoriesForSection(section)
+          .map((category) => ({
+            category: category.value,
+            label: category.label,
+            dishes: sectionDishes.filter((dish) => dish.category === category.value),
+          }))
+          .filter((group) => group.dishes.length > 0);
+        const known = new Set(groups.map((group) => group.category));
+        const other = sectionDishes.filter((dish) => !known.has(dish.category));
+        if (other.length > 0) groups.push({ category: 'other', label: 'Other', dishes: other });
+        return { section, label: sectionLabel(section), rank: sectionRank[section] ?? 2, groups };
+      })
+      .filter((entry) => entry.groups.length > 0)
+      .sort((a, b) => a.rank - b.rank);
+  }, [filteredDishes]);
 
   async function handleFile(file: File) {
     setUploadError(null);
@@ -377,17 +402,33 @@ export function MenuView({ restaurantId, dishes, loading, currency, onReload, on
                 </p>
               </Card>
             ) : (
-              <div className="space-y-4">
-                {filteredDishes.map((dish, index) => (
-                  <DishCard
-                    key={dish.id}
-                    dish={dish}
-                    index={index}
-                    currency={currency}
-                    onSave={(patch, servingOptions, removableIngredients, variants) => handleSaveDish(dish.id, patch, servingOptions, removableIngredients, variants)}
-                    onGenerateImage={() => handleGenerateImage(dish.id)}
-                    onDelete={() => handleDeleteDish(dish.id)}
-                  />
+              <div className="space-y-8">
+                {groupedDishes.map((sectionEntry) => (
+                  <div key={sectionEntry.section} className="space-y-4">
+                    <h3 className="font-display text-base font-semibold tracking-tight text-ink">
+                      {sectionEntry.label}
+                    </h3>
+                    {sectionEntry.groups.map((group) => (
+                      <div key={group.category} className="space-y-3">
+                        <h4 className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                          {group.label}
+                        </h4>
+                        <div className="space-y-4">
+                          {group.dishes.map((dish) => (
+                            <DishCard
+                              key={dish.id}
+                              dish={dish}
+                              index={filteredDishes.indexOf(dish)}
+                              currency={currency}
+                              onSave={(patch, servingOptions, removableIngredients, variants) => handleSaveDish(dish.id, patch, servingOptions, removableIngredients, variants)}
+                              onGenerateImage={() => handleGenerateImage(dish.id)}
+                              onDelete={() => handleDeleteDish(dish.id)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ))}
               </div>
             )}
