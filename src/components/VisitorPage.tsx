@@ -1342,7 +1342,7 @@ function MessageBubble({
                     if (category.start >= revealed) return null;
                     return (
                       <div key={`category-${section.key}-${category.key}`} className="space-y-2">
-                        <p className="px-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-[#1C1917]/45">
+                        <p className="inline-flex w-fit rounded-full bg-white px-2.5 py-1 shadow-sm text-[0.6875rem] font-semibold uppercase tracking-wide text-[#1C1917]/45">
                           {category.label}
                         </p>
                         {category.dishes
