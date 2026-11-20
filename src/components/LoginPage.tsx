@@ -225,6 +225,29 @@ export function LoginPage({
                 </p>
               </div>
             </section>
+
+            <section className="mb-8">
+              <h2 className="font-display text-base font-semibold text-ink sm:text-lg">Contact Us</h2>
+              <div className="mt-3 space-y-3">
+                <p className="text-sm leading-relaxed text-ink-soft">
+                  For questions about Virgo Portals, technical support or business enquiries, please contact us:
+                </p>
+                <p className="text-sm leading-relaxed text-ink-soft">
+                  <span className="font-semibold text-ink">Website: </span>
+                  <a href="https://virgoimagination.com/" target="_blank" rel="noopener noreferrer" className="text-olive-700 underline underline-offset-2 hover:text-olive-800">https://virgoimagination.com/</a>
+                </p>
+                <p className="text-sm leading-relaxed text-ink-soft">
+                  <span className="font-semibold text-ink">Email: </span>
+                  <a href="mailto:contact@virgoimagination.com" className="text-olive-700 underline underline-offset-2 hover:text-olive-800">contact@virgoimagination.com</a>
+                </p>
+                <p className="text-sm leading-relaxed text-ink-soft">
+                  <span className="font-semibold text-ink">Operator:</span> Virgo Imagination
+                </p>
+                <p className="text-sm leading-relaxed text-ink-soft">
+                  <span className="font-semibold text-ink">Location:</span> Sweden
+                </p>
+              </div>
+            </section>
           </article>
         </div>
       </div>
