@@ -28,9 +28,14 @@ const STATUS_LABELS: Record<HostSubscription['status'], string> = {
   expired: 'Expired',
 };
 
-function formatDate(iso: string | null): string {
+function formatDate(iso: string | null, timeZone: string): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone,
+  });
 }
 
 const PAYMENT_TYPE_LABELS: Record<PaymentRecord['type'], string> = {
@@ -163,6 +168,7 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
       periodStart: sub?.periodStart ?? null,
       periodEnd: sub?.periodEnd ?? null,
       paidAt: p.paidAt ?? p.createdAt,
+      timeZone: portal.timezone,
       isTest: isTestPayment(p.paymentRef),
     };
     const url = URL.createObjectURL(generateSubscriptionInvoiceBlob(inv));
@@ -201,7 +207,7 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
                 <p className="mt-1 text-sm text-ink-muted">
                   {STATUS_LABELS[sub.status]}
                   {sub.periodStart && sub.periodEnd
-                    ? ` · ${formatDate(sub.periodStart)} – ${formatDate(sub.periodEnd)}`
+                    ? ` · ${formatDate(sub.periodStart, portal.timezone)} – ${formatDate(sub.periodEnd, portal.timezone)}`
                     : ''}
                 </p>
               </>
@@ -230,7 +236,7 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
                 <CalendarDays className="h-3.5 w-3.5" /> Next renewal
               </dt>
               <dd className="mt-1 text-sm font-medium text-ink">
-                {sub.nextRenewal ? formatDate(sub.nextRenewal) : sub.status === 'active' ? 'Not renewing' : '—'}
+                {sub.nextRenewal ? formatDate(sub.nextRenewal, portal.timezone) : sub.status === 'active' ? 'Not renewing' : '—'}
               </dd>
             </div>
             <div>
@@ -256,7 +262,7 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
 
         {sub?.cancelAtPeriodEnd && sub.periodEnd ? (
           <p className="mt-4 rounded-xl bg-warning-50 px-4 py-3 text-sm text-warning-700 ring-1 ring-warning-200">
-            Your subscription will end on {formatDate(sub.periodEnd)}. Unused credits stay in your wallet.
+            Your subscription will end on {formatDate(sub.periodEnd, portal.timezone)}. Unused credits stay in your wallet.
           </p>
         ) : null}
       </section>
@@ -492,7 +498,7 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
               <tbody className="divide-y divide-cream-200 bg-white">
                 {payments.map((p, i) => (
                   <tr key={`${p.type}-${p.createdAt}-${i}`}>
-                    <td className="px-4 py-3 text-ink">{formatDate(p.paidAt ?? p.createdAt)}</td>
+                    <td className="px-4 py-3 text-ink">{formatDate(p.paidAt ?? p.createdAt, portal.timezone)}</td>
                     <td className="px-4 py-3 text-ink">{PAYMENT_TYPE_LABELS[p.type]}</td>
                     <td className="px-4 py-3 text-ink">{paymentItem(p)}</td>
                     <td className="px-4 py-3 tabular-nums text-ink">{p.currency === 'USD' ? formatUsdLegacy(p.amountCents) : formatSekSafe(p.totalCents ?? p.amountCents)}</td>
@@ -556,7 +562,7 @@ export function SubscriptionView({ portal }: SubscriptionViewProps) {
         }}
       >
         Cancellation takes effect at the end of your current paid period
-        {sub?.periodEnd ? ` (${formatDate(sub.periodEnd)})` : ''}. No further payments will be taken, and unused
+        {sub?.periodEnd ? ` (${formatDate(sub.periodEnd, portal.timezone)})` : ''}. No further payments will be taken, and unused
         credits stay in your wallet.
       </ConfirmDialog>
     </div>
