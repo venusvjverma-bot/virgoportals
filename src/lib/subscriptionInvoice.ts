@@ -24,6 +24,8 @@ export interface SubscriptionInvoiceData {
   periodStart: string | null;
   periodEnd: string | null;
   paidAt: string | null;
+  /** IANA timezone used for invoice dates, matching the host dashboard. */
+  timeZone?: string;
   isTest: boolean;
 }
 
@@ -49,13 +51,13 @@ function money(cents: number, currency: string): string {
   }).format(cents / 100)} kr`;
 }
 
-function fmtDate(iso: string | null): string {
+function fmtDate(iso: string | null, timeZone: string): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-    timeZone: 'UTC',
+    timeZone,
   });
 }
 
@@ -139,7 +141,7 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
   setText(COLORS.text);
   const detailW = contentW;
   y = drawWrapped(`Billed to: ${inv.restaurantName} (${inv.ownerEmail})`, margin, y, detailW, 5);
-  y = drawWrapped(`Invoice date: ${fmtDate(inv.paidAt ?? new Date().toISOString())}`, margin, y, detailW, 5);
+  y = drawWrapped(`Invoice date: ${fmtDate(inv.paidAt ?? new Date().toISOString(), inv.timeZone ?? 'UTC')}`, margin, y, detailW, 5);
   y = drawWrapped(`Subscription: ${inv.subscriptionRef ?? '—'}`, margin, y, detailW, 5);
   y = drawWrapped(`Payment reference: ${inv.paymentRef ?? '—'}`, margin, y, detailW, 5);
   y += 5;
@@ -189,7 +191,7 @@ function drawInvoice(doc: jsPDF, inv: SubscriptionInvoiceData): number {
   setText(COLORS.muted);
   doc.text(
     inv.periodStart && inv.periodEnd
-      ? `Billing period: ${fmtDate(inv.periodStart)} – ${fmtDate(inv.periodEnd)}`
+      ? `Billing period: ${fmtDate(inv.periodStart, inv.timeZone ?? 'UTC')} – ${fmtDate(inv.periodEnd, inv.timeZone ?? 'UTC')}`
       : 'Billing period: —',
     labelX,
     y,
