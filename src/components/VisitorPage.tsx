@@ -29,7 +29,7 @@ import {
 } from '@/lib/visitorStorage';
 import { createOrder } from '@/lib/orders';
 import { listVisitorCombos } from '@/lib/combos';
-import { sectionLabel } from '@/lib/menuSections';
+import { sectionLabel, categoriesForSection } from '@/lib/menuSections';
 import { cn } from '@/lib/cn';
 import { formatPriceInput, normalizeCurrency } from '@/lib/currency';
 import type { AddOnOption, BasketItem, Dish, DishServingOption, DishVariant, ResourceType, VisitorCombo } from '@/types';
@@ -1259,34 +1259,42 @@ function MessageBubble({
     };
   }, [message.id, message.dishes.length, message.combos?.length]);
 
-  const combos = message.combos ?? [];
-
-  // Cards are grouped by their saved menu section, preserving the order the
-  // backend returned. A heading is rendered only when its group has cards.
+  // Cards are grouped by their saved menu section, then by category within
+  // each section (canonical order), preserving the order the backend returned
+  // inside each category. Headings render only when their group has cards.
   const sectionHeadings = message.sectionHeadings ?? null;
-  const groups: { key: string; label: string; start: number; cards: React.ReactNode[] }[] = [];
-  let lastKey: string | null = null;
+  const combos = message.combos ?? [];
+  type CategoryGroup = { key: string; label: string; start: number; dishes: typeof message.dishes };
+  const sections: { key: string; label: string; start: number; categories: CategoryGroup[] }[] = [];
   let cardIndex = 0;
-  for (const dish of message.dishes) {
-    const key = dish.section ?? 'food';
-    if (key !== lastKey) {
-      groups.push({ key, label: sectionHeadings?.[key] || sectionLabel(key), start: cardIndex, cards: [] });
-      lastKey = key;
+  let comboStart = cardIndex;
+  for (const section of ['food', 'drinks', 'add_on'] as const) {
+    const sectionDishes = message.dishes.filter((dish) => (dish.section ?? 'food') === section);
+    if (sectionDishes.length === 0) continue;
+    const categoryGroups: CategoryGroup[] = categoriesForSection(section)
+      .map((category) => ({
+        key: category.value,
+        label: category.label,
+        start: 0,
+        dishes: sectionDishes.filter((dish) => dish.category === category.value),
+      }))
+      .filter((group) => group.dishes.length > 0);
+    const known = new Set(categoryGroups.map((group) => group.key));
+    const other = sectionDishes.filter((dish) => !known.has(dish.category ?? ''));
+    if (other.length > 0) categoryGroups.push({ key: 'other', label: 'Other', start: 0, dishes: other });
+    for (const group of categoryGroups) {
+      group.start = cardIndex;
+      cardIndex += group.dishes.length;
     }
-    groups[groups.length - 1].cards.push(
-      <DishResult key={`dish-${dish.id}`} dish={dish} currency={currency} onOpen={() => onOpen(dish)} />
-    );
-    cardIndex += 1;
+    sections.push({
+      key: section,
+      label: sectionHeadings?.[section] || sectionLabel(section),
+      start: categoryGroups[0]?.start ?? 0,
+      categories: categoryGroups,
+    });
   }
   if (combos.length > 0) {
-    groups.push({
-      key: 'combos',
-      label: sectionHeadings?.combos || 'Combos',
-      start: cardIndex,
-      cards: combos.map((combo) => (
-        <ComboResult key={`combo-${combo.id}`} combo={combo} currency={currency} onOpen={() => onOpenCombo(combo)} />
-      )),
-    });
+    comboStart = cardIndex;
   }
 
   return (
@@ -1323,17 +1331,51 @@ function MessageBubble({
             {isVisitor ? message.text : <AssistantMarkdown text={message.text} />}
           </div>
         </div>
-        {groups.length > 0 ? (
+        {sections.length > 0 || combos.length > 0 ? (
           <div className="space-y-2.5">
-            {groups.map((group) => {
-              if (group.start >= revealed) return null;
+            {sections.map((section) => {
+              if (section.start >= revealed) return null;
               return (
-                <div key={`group-${group.key}`} className="space-y-2.5">
-                  <CardSectionHeading label={group.label} />
-                  {group.cards.slice(0, revealed - group.start)}
+                <div key={`section-${section.key}`} className="space-y-2.5">
+                  <CardSectionHeading label={section.label} />
+                  {section.categories.map((category) => {
+                    if (category.start >= revealed) return null;
+                    return (
+                      <div key={`category-${section.key}-${category.key}`} className="space-y-2">
+                        <p className="px-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-[#1C1917]/45">
+                          {category.label}
+                        </p>
+                        {category.dishes
+                          .slice(0, revealed - category.start)
+                          .map((dish) => (
+                            <DishResult
+                              key={`dish-${dish.id}`}
+                              dish={dish}
+                              currency={currency}
+                              onOpen={() => onOpen(dish)}
+                            />
+                          ))}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
+            {combos.length > 0 && comboStart < revealed ? (
+              <div className="space-y-2.5">
+                <CardSectionHeading label={sectionHeadings?.combos || 'Combos'} />
+                {combos
+                  .slice(0, revealed - comboStart)
+                  .map((combo) => (
+                    <ComboResult
+                      key={`combo-${combo.id}`}
+                      combo={combo}
+                      currency={currency}
+                      onOpen={() => onOpenCombo(combo)}
+                    />
+                  ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
