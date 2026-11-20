@@ -30,13 +30,13 @@ const FIELDS = [
   { key: 'email', label: 'Email', type: 'email', autoComplete: 'email', placeholder: 'you@restaurant.com', Icon: Mail },
   { key: 'password', label: 'Password', type: 'password', autoComplete: 'new-password', placeholder: 'At least 8 characters', Icon: Lock },
   { key: 'confirmPassword', label: 'Confirm password', type: 'password', autoComplete: 'new-password', placeholder: 'Repeat your password', Icon: Lock },
-  { key: 'restaurantName', label: 'Restaurant name', type: 'text', autoComplete: 'organization', placeholder: 'e.g. Olive & Thyme', Icon: UtensilsCrossed },
-  { key: 'city', label: 'Location', type: 'text', autoComplete: 'address-level2', placeholder: 'e.g. Stockholm', Icon: MapPin },
+  { key: 'restaurantName', label: 'Restaurant name', type: 'text', autoComplete: 'organization', placeholder: 'restaurant or hotel name', Icon: UtensilsCrossed },
+  { key: 'city', label: 'Location', type: 'text', autoComplete: 'address-level2', placeholder: '', Icon: MapPin },
 ] as const;
 
 const OPTIONAL_FIELDS = [
-  { key: 'businessName', label: 'Business name', autoComplete: 'organization', placeholder: 'e.g. Olive & Thyme AB', Icon: Building2 },
-  { key: 'businessAddress', label: 'Business address', autoComplete: 'street-address', placeholder: 'e.g. Storgatan 12, 114 55 Stockholm', Icon: MapPin },
+  { key: 'businessName', label: 'Business name', autoComplete: 'organization', placeholder: '', Icon: Building2 },
+  { key: 'businessAddress', label: 'Business address', autoComplete: 'street-address', placeholder: '', Icon: MapPin },
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number]['key'] | (typeof OPTIONAL_FIELDS)[number]['key'];
