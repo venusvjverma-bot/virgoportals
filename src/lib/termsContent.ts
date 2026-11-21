@@ -8,7 +8,7 @@ export interface TermsSection {
   blocks: TermsBlock[];
 }
 
-export const TERMS_LAST_UPDATED = '2 November 2026';
+export const TERMS_LAST_UPDATED = '21 November 2026';
 
 export const TERMS_SECTIONS: TermsSection[] = [
   {
@@ -17,7 +17,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
       { type: 'p', text: 'Welcome to Virgo Portals.' },
       {
         type: 'p',
-        text: 'Virgo Portals provides a digital ordering platform that allows visitors to browse participating restaurants\u2019 menus, interact with digital menu assistants where available, select food and beverages, and submit orders to restaurants.',
+        text: 'Virgo Portals provides a digital ordering platform for visitors at participating restaurants and hotels. Visitors can browse menus, use digital menu assistants where available, select food and beverages, and submit orders through the platform.',
       },
       {
         type: 'p',
@@ -25,8 +25,17 @@ export const TERMS_SECTIONS: TermsSection[] = [
       },
       {
         type: 'p',
-        text: 'These terms explain the relationship between the visitor, Virgo Portals and the restaurant fulfilling the order.',
+        text: 'These terms explain the role of Virgo Portals and the responsibilities relevant to your order.',
       },
+    ],
+  },
+  {
+    title: 'Platform Operator',
+    blocks: [
+      { type: 'p', text: 'Virgo Portals is operated by Virgo Imagination.' },
+      { type: 'p', text: 'Address: Södergatan 53, 19547 Märsta, Sweden.' },
+      { type: 'p', text: 'Website: https://virgoimagination.com/' },
+      { type: 'p', text: 'Email: contact@virgoimagination.com' },
     ],
   },
   {
@@ -34,53 +43,45 @@ export const TERMS_SECTIONS: TermsSection[] = [
     blocks: [
       {
         type: 'p',
-        text: 'Virgo Portals provides the digital technology used to display restaurant menus and transmit customer orders to participating restaurants.',
+        text: 'Virgo Portals presents the digital menu, receives the visitor’s order and forwards the order information to the restaurant or hotel through its system.',
       },
       {
         type: 'p',
-        text: 'Virgo Portals acts as an ordering platform and does not itself prepare, cook, package or serve food.',
+        text: 'Virgo Portals does not prepare food or beverages, control their quality, deliver or serve them, manage the restaurant’s or hotel’s operational workflow, replace its POS system, or generate its bill or invoice.',
       },
       {
         type: 'p',
-        text: 'The restaurant is responsible for its menu, food preparation, ingredients, food quality, food safety, order fulfilment and customer service relating to the food and beverages supplied.',
-      },
-      {
-        type: 'p',
-        text: 'The restaurant\u2019s identity and contact details should be displayed wherever available in the ordering experience.',
+        text: 'Food preparation, quality, service, fulfilment and billing are the responsibility of the restaurant or hotel.',
       },
     ],
   },
   {
-    title: 'Placing an Order',
+    title: 'Placing and Acceptance of an Order',
     blocks: [
       {
         type: 'p',
-        text: 'Customers can browse the available menu, select items, choose available serving options, specify permitted customisations and add items to their basket.',
+        text: 'Visitors can browse the available menu, select items, choose available serving options, specify permitted customisations and add items to their basket.',
       },
-      { type: 'p', text: 'Before submitting an order, customers should review:' },
+      { type: 'p', text: 'Before submitting an order, please review:' },
       {
         type: 'list',
         items: [
           'Selected food and beverages.',
-          'Quantities and serving sizes.',
-          'Selected customisations and removed ingredients.',
+          'Quantities and serving options.',
+          'Selected customisations, variants and add-ons.',
           'Additional requests.',
-          'Applicable prices and any displayed tip.',
+          'Applicable prices and any displayed service charges or tip.',
           'Total order amount.',
           'Selected payment method.',
         ],
       },
       {
         type: 'p',
-        text: 'Submitting an order sends it to the restaurant for processing.',
+        text: 'Submitting an order sends it to the restaurant or hotel. Submission alone does not mean that the order has been accepted.',
       },
       {
         type: 'p',
-        text: 'Submission does not necessarily mean that the restaurant has accepted the order. Orders remain subject to restaurant availability, operating hours and capacity.',
-      },
-      {
-        type: 'p',
-        text: 'If the restaurant cannot fulfil an order, it should communicate this to the customer and handle any payment or refund obligations in accordance with applicable law.',
+        text: 'An order is accepted only when the restaurant or hotel has received it in its own system and accepts it.',
       },
     ],
   },
@@ -89,27 +90,15 @@ export const TERMS_SECTIONS: TermsSection[] = [
     blocks: [
       {
         type: 'p',
-        text: 'Menus, descriptions, photographs, prices and availability are provided by the participating restaurant.',
+        text: 'The restaurant or hotel is fully responsible for the information it provides or manages in its menu, including item names and descriptions, prices, additional charges, availability, ingredients, composition and allergen information.',
       },
       {
         type: 'p',
-        text: 'The restaurant is responsible for ensuring that its menu information and prices are accurate and up to date.',
+        text: 'Virgo Portals displays the menu information supplied or managed by the restaurant or hotel and does not independently verify its accuracy or completeness.',
       },
       {
         type: 'p',
-        text: 'Menu photographs are illustrative and the actual appearance or presentation of an item may differ.',
-      },
-      {
-        type: 'p',
-        text: 'An item may become unavailable due to stock limitations or restaurant operating conditions.',
-      },
-      {
-        type: 'p',
-        text: 'The customer will be informed of material changes or unavailability where applicable.',
-      },
-      {
-        type: 'p',
-        text: 'The displayed order total should be reviewed before submission.',
+        text: 'Visitors should contact restaurant or hotel staff directly if they need clarification about a menu item, its ingredients or allergens.',
       },
     ],
   },
@@ -118,19 +107,15 @@ export const TERMS_SECTIONS: TermsSection[] = [
     blocks: [
       {
         type: 'p',
-        text: 'Where available, customers may select serving options, remove ingredients, select add-ons or submit additional preparation requests.',
+        text: 'Where available, visitors may select serving options, variants, add-ons, remove ingredients or submit additional requests through the ordering experience.',
       },
       {
         type: 'p',
-        text: 'The restaurant will make reasonable efforts to follow the selected customisations.',
+        text: 'The restaurant or hotel is responsible for reviewing and handling the selected customisations and requests when preparing the order.',
       },
       {
         type: 'p',
-        text: 'However, an additional request is not automatically guaranteed. If the restaurant cannot fulfil a request, it should communicate this to the customer where reasonably possible.',
-      },
-      {
-        type: 'p',
-        text: 'Customers should contact the restaurant directly when a particular dietary requirement is essential.',
+        text: 'Visitors should speak directly with restaurant or hotel staff if a particular dietary requirement or request is essential.',
       },
     ],
   },
@@ -139,106 +124,99 @@ export const TERMS_SECTIONS: TermsSection[] = [
     blocks: [
       {
         type: 'p',
-        text: 'Customers with food allergies, intolerances or specific dietary requirements should contact the restaurant directly before placing an order if they need clarification.',
+        text: 'Visitors with food allergies, intolerances or specific dietary requirements should contact restaurant or hotel staff directly before ordering if they need clarification.',
       },
       {
         type: 'p',
-        text: 'Although customers may remove ingredients or submit special requests through the ordering platform, this does not guarantee that an item is free from a particular allergen.',
+        text: 'Removing an ingredient or submitting a special request through the platform does not guarantee that an item is free from a particular allergen. Cross-contact may occur during food preparation, handling or storage.',
       },
       {
         type: 'p',
-        text: 'Cross-contact may occur during food preparation, handling or storage.',
+        text: 'The restaurant or hotel is responsible for the accuracy of allergen information and for food preparation and handling in accordance with applicable requirements.',
       },
       {
         type: 'p',
-        text: 'The restaurant is responsible for providing accurate allergen information and handling food in accordance with applicable food safety requirements.',
+        text: 'Virgo Portals does not independently verify the ingredients, composition or allergen status of menu items.',
+      },
+    ],
+  },
+  {
+    title: 'Alcohol Age Declaration',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Where the ordering experience displays an age declaration for alcoholic beverages, visitors may be asked to confirm that they meet the legal age requirement applicable to the purchase or consumption of alcohol.',
       },
       {
         type: 'p',
-        text: 'Virgo Portals does not independently verify the ingredients or allergen status of restaurant menu items.',
+        text: 'This is a self-declaration only. Virgo Portals does not authenticate a visitor’s age or verify identity documents. The declaration is not proof of age and does not replace any age or ID check required from restaurant or hotel staff.',
+      },
+      {
+        type: 'p',
+        text: 'The restaurant or hotel is responsible for carrying out any required age and ID checks and for following its own alcohol-serving procedures and applicable requirements.',
       },
     ],
   },
   {
     title: 'Payment Methods',
     blocks: [
-      { type: 'p', text: 'The available payment methods are displayed during Checkout.' },
+      { type: 'p', text: 'The payment methods available to the visitor are displayed during Checkout.' },
       { type: 'sub', text: 'Pay to Staff' },
       {
         type: 'p',
-        text: 'When this option is selected, the order is transmitted to the restaurant.',
+        text: 'Pay to Staff represents the restaurant’s or hotel’s own payment arrangement. The visitor places the order through Virgo Portals and pays the restaurant or hotel directly. The restaurant or hotel determines how its staff collects the payment, for example at the table or at the counter.',
       },
       {
         type: 'p',
-        text: 'The customer pays the restaurant staff directly, according to the restaurant\u2019s arrangements, such as at the table or counter.',
-      },
-      {
-        type: 'p',
-        text: 'Submitting an order using Pay to Staff does not mean that an online payment has been processed.',
+        text: 'Virgo Portals does not collect, process or handle payments made directly to restaurant or hotel staff.',
       },
       { type: 'sub', text: 'Pay Online' },
       {
         type: 'p',
-        text: 'When this option is selected, the customer follows the online payment flow presented by the platform.',
-      },
-      {
-        type: 'p',
-        text: 'The actual payment functionality and payment status depend on the payment service integrated into the ordering experience.',
-      },
-      {
-        type: 'p',
-        text: 'Where test-payment functionality is used, it must be clearly distinguished from a real payment. Test payments do not charge the customer.',
+        text: 'When Pay Online is available and selected, the visitor follows the online payment flow presented during Checkout. The payment result or status is displayed as part of the ordering experience.',
       },
       { type: 'sub', text: 'Tips' },
       {
         type: 'p',
-        text: 'Where available, customers may voluntarily select a tip during Checkout.',
-      },
-      {
-        type: 'p',
-        text: 'Any selected tip should be displayed separately from the food and beverage subtotal and included transparently in the displayed total.',
+        text: 'Tips are optional. Visitors may choose to add a tip or select “No Tip”. A tip is not required to place an order.',
       },
     ],
   },
   {
-    title: 'Order Preparation and Fulfilment',
+    title: 'Serving and Order Fulfilment',
     blocks: [
       {
         type: 'p',
-        text: 'The restaurant is responsible for preparing and fulfilling accepted orders.',
+        text: 'The restaurant or hotel determines how an accepted order is served or handed over, including table service or collection at the counter, according to its own service arrangements.',
       },
       {
         type: 'p',
-        text: 'Estimated preparation times, where displayed, are estimates and may change depending on restaurant activity, availability and other operating conditions.',
-      },
-      {
-        type: 'p',
-        text: 'Customers should follow the restaurant\u2019s instructions for collection or table service.',
-      },
-      {
-        type: 'p',
-        text: 'Virgo Portals transmits order information but does not control the restaurant\u2019s preparation or fulfilment operations.',
+        text: 'The restaurant or hotel is responsible for preparing and fulfilling accepted orders and for its service to the visitor. Virgo Portals does not control these operational activities.',
       },
     ],
   },
   {
-    title: 'Cancellation, Incorrect Orders and Refunds',
+    title: 'Refunds and Payment Issues',
     blocks: [
       {
         type: 'p',
-        text: 'Customers should contact the restaurant as soon as possible if they need to report an incorrect order, request cancellation or raise an issue concerning food preparation or fulfilment.',
+        text: 'If an order has been accepted by the restaurant or hotel and a refund is required, the restaurant or hotel is responsible for handling the refund through its usual payment and refund process.',
       },
       {
         type: 'p',
-        text: 'Whether an order can be cancelled depends on its status, preparation progress and applicable consumer rights.',
+        text: 'For a payment that appears pending, unsuccessful or duplicated, the restaurant or hotel may investigate the payment status for the relevant order in its own system. The contact number provided with the order may be used by the restaurant or hotel to contact the visitor in accordance with its own policies.',
       },
       {
         type: 'p',
-        text: 'Where a payment has been made, refunds and payment corrections must be handled in accordance with applicable law and the responsibilities of the relevant seller and payment provider.',
+        text: 'If a payment issue does not resolve automatically and investigation by Virgo Portals is needed, please allow up to 48 hours for the investigation. If the issue is on the Virgo Portals side, Virgo Portals will investigate and work to resolve it within 48 hours.',
       },
       {
         type: 'p',
-        text: 'Nothing in these terms removes or restricts any mandatory consumer rights.',
+        text: 'The 48-hour period relates to investigation and resolution of an issue on the Virgo Portals side. It is not a guarantee that refunded funds will be credited to a visitor’s bank account within 48 hours.',
+      },
+      {
+        type: 'p',
+        text: 'Virgo Portals is not responsible for processing times or delays caused by a visitor’s bank or other bank-side processes.',
       },
     ],
   },
@@ -247,29 +225,30 @@ export const TERMS_SECTIONS: TermsSection[] = [
     blocks: [
       {
         type: 'p',
-        text: 'A mobile number may be required during Checkout so the restaurant can contact the customer regarding the order.',
+        text: 'A mobile number, including its country calling code, is required to place an order. The number is provided with the order so the restaurant or hotel can contact the visitor about it.',
       },
       {
         type: 'p',
-        text: 'Customer contact information must be handled in accordance with the applicable Privacy Policy and data protection legislation.',
+        text: 'Virgo Portals does not authenticate or independently verify the mobile number and does not guarantee that the number is genuine or reachable.',
       },
-      { type: 'p', text: 'The Privacy Policy should explain:' },
+    ],
+  },
+  {
+    title: 'Guest Data and Data Rights',
+    blocks: [
       {
-        type: 'list',
-        items: [
-          'What personal information is collected.',
-          'Why it is collected.',
-          'How it is used.',
-          'Who may receive it.',
-          'How long it is retained.',
-          'The customer\u2019s applicable data protection rights.',
-          'How customers can contact the relevant data controller.',
-        ],
+        type: 'p',
+        text: 'Virgo Portals independently stores visitor information and visitor order records for at least one year. These records are held by Virgo Portals and are not dependent on or connected to the restaurant’s or hotel’s internal database.',
       },
       {
         type: 'p',
-        text: 'Agreeing to these Terms & Conditions does not by itself constitute consent to all personal data processing.',
+        text: 'Visitors may contact Virgo Portals to request access to, correction of or deletion of their personal information. Requests will be processed within up to seven days of receipt, subject to applicable law and any lawful requirements to retain information.',
       },
+      {
+        type: 'p',
+        text: 'This processing period does not limit or replace any rights or response deadlines that apply under the General Data Protection Regulation (GDPR) or other applicable data protection law.',
+      },
+      { type: 'p', text: 'For data-related requests, contact: contact@virgoimagination.com.' },
     ],
   },
   {
@@ -277,11 +256,11 @@ export const TERMS_SECTIONS: TermsSection[] = [
     blocks: [
       {
         type: 'p',
-        text: 'For issues concerning food, ingredients, allergens, preparation, collection, order accuracy or restaurant service, customers should contact the restaurant responsible for fulfilling the order.',
+        text: 'Complaints about food preparation, food quality, serving, missing items, incorrect items or customisations should be raised directly with the restaurant or hotel staff. The restaurant or hotel is responsible for checking the issue and deciding how to correct or otherwise handle it.',
       },
       {
         type: 'p',
-        text: 'For technical issues concerning the Virgo Portals ordering platform, customers may contact the platform operator through its published support contact details.',
+        text: 'If a technical error in Virgo Portals causes the order information received by the restaurant or hotel to differ from the order submitted by the visitor, this is a platform technical issue. Visitors may contact Virgo Portals at contact@virgoimagination.com.',
       },
     ],
   },
@@ -290,15 +269,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
     blocks: [
       {
         type: 'p',
-        text: 'These terms are intended to operate in accordance with applicable Swedish and European Union consumer protection legislation.',
-      },
-      {
-        type: 'p',
-        text: 'Nothing in these terms excludes, limits or removes mandatory rights that customers have under applicable law.',
-      },
-      {
-        type: 'p',
-        text: 'Any disputes concerning food, restaurant services or order fulfilment should be directed to the responsible restaurant, without prejudice to the customer\u2019s statutory rights.',
+        text: 'These Terms and Conditions are governed by Swedish law. Your mandatory consumer rights under applicable law remain unaffected.',
       },
     ],
   },
@@ -307,11 +278,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
     blocks: [
       {
         type: 'p',
-        text: 'These Terms & Conditions may be updated when necessary.',
-      },
-      {
-        type: 'p',
-        text: 'The latest version should be made available through the ordering experience.',
+        text: 'Virgo Portals may update these Terms and Conditions from time to time. The latest version will be made available on this page.',
       },
     ],
   },
