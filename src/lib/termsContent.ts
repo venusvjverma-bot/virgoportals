@@ -208,7 +208,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
       },
       {
         type: 'p',
-        text: 'If a payment issue does not resolve automatically and investigation by Virgo Portals is needed, please allow up to 48 hours for the investigation. If the issue is on the Virgo Portals side, Virgo Portals will investigate and work to resolve it within 48 hours.',
+        text: 'If a payment issue does not resolve automatically and investigation by Virgo Portals is needed, please allow up to 48 hours for the investigation. If the issue is on the Virgo Portals side, Virgo Portals guarantees that its investigation and applicable resolution process will be completed within 48 hours.',
       },
       {
         type: 'p',
