@@ -13,6 +13,10 @@
       "hasChanged": false,
       "hash": "4e775675a4b0810d1644a6e35cdef9127900927ad279b151e7eb1214a1a61504"
     },
+    "connect-webhook": {
+      "hasChanged": false,
+      "hash": "f2024ce5347b6541d298fbda6840896358e64540c1bd4f8fb356cf22e2e0aef5"
+    },
     "dish-image": {
       "hasChanged": false,
       "hash": "3159df052dd8a6edf3c35e1b419d377b17ea56412a82c55bd8b5b85a363cd55c"
@@ -40,10 +44,6 @@
     "visitor-orders": {
       "hasChanged": false,
       "hash": "03e9541e5cb961bbe2b49f0d3822b93b9aefb80f41292d52ce70fe2bd22349de"
-    },
-    "connect-webhook": {
-      "hasChanged": false,
-      "hash": "db09a3047cf8d38db70ac53adfa1ec3fe229d4c750095cf7c6c99786bbaed15a"
     }
   }
 }

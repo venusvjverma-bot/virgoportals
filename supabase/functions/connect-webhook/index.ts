@@ -111,20 +111,27 @@ function extractAccountId(event: Record<string, unknown>): string | null {
 // ── Status mapping from the RETRIEVED Accounts v2 account ───────────────────
 // Verified fields used (Accounts v2 recipient structure):
 //   configuration.recipient.capabilities.stripe_balance.stripe_transfers.status
-//     'active' → connection fully usable; 'requested'/'pending' → verification
-//     in progress; 'restricted'/other → needs attention.
+//     Documented values: 'active' | 'pending' | 'restricted' | 'unsupported' |
+//     'rejected' (since 2026-09-30.endive). 'requested' is a separate boolean
+//     on the capability object, NOT a status value.
+//   configuration.recipient.capabilities.stripe_balance.payouts.status — the
+//     dedicated payouts capability that governs paying out to the restaurant.
 //   configuration.recipient.requirements.currently_due / past_due /
 //     disabled_reasons (arrays), plus any account-level disabled_reason.
 // Mapping rules (in order):
 //   1. past_due non-empty OR disabled_reasons non-empty OR disabled_reason →
 //      'action_required'
-//   2. capability 'active' AND no pending requirement arrays → 'connected'
-//   3. capability 'requested'/'pending' OR currently_due non-empty →
+//   2. transfers capability 'active' AND no pending requirement arrays →
+//      'connected'
+//   3. transfers capability 'pending' OR currently_due non-empty →
 //      'pending_verification'
-//   4. otherwise → null (leave the stored status untouched; never guess)
+//   4. transfers capability 'restricted'/'unsupported'/'rejected' →
+//      'action_required'
+//   5. otherwise → null (leave the stored status untouched; never guess)
 // charges_enabled is NOT applicable to a recipient-only account (v2 exposes no
 // such boolean) and is preserved as-is (null). payouts_enabled mirrors the
-// transfers capability, which is what pays out to the restaurant.
+// DEDICATED stripe_balance.payouts capability, which is what pays out to the
+// restaurant — not stripe_transfers (receiving transfers).
 
 interface DerivedStatus {
   status: string | null;
@@ -144,6 +151,8 @@ function deriveStatus(account: Record<string, unknown>): DerivedStatus {
   const balance = (capabilities.stripe_balance ?? {}) as Record<string, unknown>;
   const transfers = (balance.stripe_transfers ?? {}) as Record<string, unknown>;
   const capStatus = typeof transfers.status === 'string' ? transfers.status : null;
+  const payouts = (balance.payouts ?? {}) as Record<string, unknown>;
+  const payoutsStatus = typeof payouts.status === 'string' ? payouts.status : null;
 
   const reqs = (recipient.requirements ?? {}) as Record<string, unknown>;
   const currentlyDue = readArray(reqs.currently_due);
@@ -157,6 +166,7 @@ function deriveStatus(account: Record<string, unknown>): DerivedStatus {
         : null;
 
   const requirements: Record<string, unknown> = { capability_status: capStatus };
+  if (payoutsStatus !== null) requirements.payouts_status = payoutsStatus;
   if (Array.isArray(reqs.currently_due)) requirements.currently_due = currentlyDue;
   if (Array.isArray(reqs.past_due)) requirements.past_due = pastDue;
   if (Array.isArray(reqs.disabled_reasons)) requirements.disabled_reasons = disabledReasons;
@@ -166,11 +176,16 @@ function deriveStatus(account: Record<string, unknown>): DerivedStatus {
     status = 'action_required';
   } else if (capStatus === 'active') {
     status = 'connected';
-  } else if (capStatus === 'requested' || capStatus === 'pending' || currentlyDue.length > 0) {
+  } else if (capStatus === 'pending' || currentlyDue.length > 0) {
     status = 'pending_verification';
+  } else if (capStatus === 'restricted' || capStatus === 'unsupported' || capStatus === 'rejected') {
+    status = 'action_required';
   }
 
-  const payoutsEnabled = capStatus === 'active' ? true : capStatus === null ? null : false;
+  // Payouts follow the dedicated payouts capability; null when Stripe does not
+  // report one (preserving the existing stored value semantics).
+  const payoutsEnabled =
+    payoutsStatus === 'active' ? true : payoutsStatus === null ? null : false;
   return { status, payoutsEnabled, disabledReason, requirements };
 }
 
@@ -198,7 +213,14 @@ Deno.serve(async (req: Request) => {
 
     const eventId = typeof event.id === 'string' ? event.id : 'unknown';
     const eventType = typeof event.type === 'string' ? event.type : '';
-    if (eventType !== 'v2.core.account.updated') {
+    // Capability status changes fire the dedicated [configuration.recipient]
+    // event (Stripe's verification guide says to listen to both it and the
+    // generic account update); accepted together so status stays reliable.
+    const relevant =
+      eventType === 'v2.core.account.updated' ||
+      eventType === 'v2.core.account[configuration.recipient].capability_status_updated' ||
+      eventType === 'v2.core.account[configuration.recipient].updated';
+    if (!relevant) {
       // Other event types (e.g. lifecycle notifications) need no action here.
       return json({ received: true, ignored: eventType });
     }
