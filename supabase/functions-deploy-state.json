@@ -9,6 +9,10 @@
       "hasChanged": false,
       "hash": "06a9bc3f546351511b078ad13342bd529e0526101ee8dfd867efcbad9795699d"
     },
+    "connect-gateway": {
+      "hasChanged": false,
+      "hash": "4e775675a4b0810d1644a6e35cdef9127900927ad279b151e7eb1214a1a61504"
+    },
     "dish-image": {
       "hasChanged": false,
       "hash": "3159df052dd8a6edf3c35e1b419d377b17ea56412a82c55bd8b5b85a363cd55c"
@@ -36,10 +40,6 @@
     "visitor-orders": {
       "hasChanged": false,
       "hash": "03e9541e5cb961bbe2b49f0d3822b93b9aefb80f41292d52ce70fe2bd22349de"
-    },
-    "connect-gateway": {
-      "hasChanged": false,
-      "hash": "6033d2087c591d014dce3b42668baf8824cd06c870ac40e83ad8cef759005a2d"
     }
   }
 }

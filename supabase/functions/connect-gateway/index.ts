@@ -12,10 +12,15 @@
  * The classic v1 "type: express" flow is not used — Recipient configuration
  * exists only on Accounts v2.
  *
- * Retry safety: a Stripe account is created only when no mapping row exists.
- * If Stripe succeeds but the database insert loses a race (unique
- * restaurant_id), the existing mapping wins and its account is reused, so
- * retrying never creates a second connected account.
+ * Retry safety: account creation carries a STABLE Stripe idempotency key
+ * derived from the restaurant id ("connect-recipient-<restaurant_id>"). Two
+ * concurrent requests therefore both resolve to the SAME Stripe account (Stripe
+ * serialises identical keys and replays the first response), and a retry after
+ * a Stripe success followed by a database failure recovers that same account
+ * instead of creating another one. The database unique constraint on
+ * restaurant_id is the second layer: a losing insert adopts the winning row.
+ * (Stripe replays idempotency keys for 24h; beyond that the mapping-row check
+ * covers reuse, since the row exists whenever a previous attempt completed.)
  *
  * Secrets used (never exposed to the frontend):
  * - STRIPE_SECRET_KEY (shared with subscription-api, read-only here)
@@ -52,7 +57,11 @@ class StripeError extends Error {
   }
 }
 
-async function stripeV2Request(path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function stripeV2Request(
+  path: string,
+  body: Record<string, unknown>,
+  idempotencyKey?: string,
+): Promise<Record<string, unknown>> {
   const key = Deno.env.get('STRIPE_SECRET_KEY');
   if (!key) throw new Error('Stripe is not configured.');
   const response = await fetch(`https://api.stripe.com${path}`, {
@@ -61,6 +70,7 @@ async function stripeV2Request(path: string, body: Record<string, unknown>): Pro
       Authorization: `Bearer ${key}`,
       'Stripe-Version': stripeV2Version(),
       'Content-Type': 'application/json',
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -149,7 +159,12 @@ Deno.serve(async (req: Request) => {
         return json({ connected: true, status, onboardingUrl: null });
       }
     } else {
-      const account = await stripeV2Request('/v2/core/accounts', {
+      // Stable idempotency key per restaurant: Stripe replays the first
+      // response for concurrent/duplicate requests, so every path converges on
+      // one connected account even before the database constraint is consulted.
+      const account = await stripeV2Request(
+        '/v2/core/accounts',
+        {
         contact_email: user.email,
         display_name: row.name ?? 'Virgo Portals restaurant',
         dashboard: 'express',
@@ -165,7 +180,9 @@ Deno.serve(async (req: Request) => {
           responsibilities: { fees_collector: 'application', losses_collector: 'application' },
         },
         metadata: { restaurant_id: row.id },
-      });
+        },
+        `connect-recipient-${row.id}`,
+      );
       accountId = String(account.id ?? '');
       if (!accountId.startsWith('acct_')) {
         throw new StripeError('Stripe returned an unexpected account id.');
