@@ -24,3 +24,6 @@ verify_jwt = false
 
 [functions.subscription-api]
 verify_jwt = false
+
+[functions.connect-gateway]
+verify_jwt = false
