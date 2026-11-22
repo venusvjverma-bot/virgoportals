@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BarChart3, Calendar, CreditCard, LayoutGrid, LogOut, Menu, Printer, QrCode, ScrollText, ShoppingBag, Sparkles, Store, X } from 'lucide-react';
+import { BarChart3, Calendar, CreditCard, Landmark, LayoutGrid, LogOut, Menu, Printer, QrCode, ScrollText, ShoppingBag, Sparkles, Store, X } from 'lucide-react';
 import { LogoMark } from '@/components/Logo';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
@@ -19,6 +19,7 @@ const NAV: NavItem[] = [
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
   { id: 'reports', label: 'Reports', icon: BarChart3 },
   { id: 'printer-setup', label: 'Printer Setup', icon: Printer },
+  { id: 'connect-gateway', label: 'Connect Gateway', icon: Landmark },
 ];
 
 const TITLES: Partial<Record<HostView, { title: string; subtitle: string }>> = {
@@ -27,6 +28,7 @@ const TITLES: Partial<Record<HostView, { title: string; subtitle: string }>> = {
   orders: { title: 'Orders', subtitle: 'Incoming test orders from visitors, updated live.' },
   reports: { title: 'Reports', subtitle: 'Department sessions and order totals.' },
   'printer-setup': { title: 'Printer Setup', subtitle: 'Install the printing app and connect your receipt printers.' },
+  'connect-gateway': { title: 'Connect Gateway', subtitle: 'Receive payouts through Stripe, connected to your restaurant.' },
 };
 
 interface HostShellProps {

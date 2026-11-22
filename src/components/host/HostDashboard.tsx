@@ -14,6 +14,7 @@ import { OrdersView } from '@/components/host/OrdersView';
 import { OrderDetailView } from '@/components/host/OrderDetailView';
 import { ReportsView } from '@/components/host/ReportsView';
 import { PrinterSetupView } from '@/components/host/PrinterSetupView';
+import { ConnectGatewayView } from '@/components/host/ConnectGatewayView';
 import { Button } from '@/components/ui/Button';
 import { Notice } from '@/components/ui/Notice';
 import { getOwnPortal, updatePortal } from '@/lib/portal';
@@ -179,6 +180,8 @@ export function HostDashboard({ onLogout }: HostDashboardProps) {
           onOpenDepartment={openDepartment}
         />
       ) : null}
+
+      {view === 'connect-gateway' ? <ConnectGatewayView restaurant={portal} /> : null}
 
       {view === 'orders' ? (
         <OrdersView

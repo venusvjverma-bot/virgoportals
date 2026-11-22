@@ -201,6 +201,7 @@ export type HostView =
   | 'orders'
   | 'reports'
   | 'printer-setup'
+  | 'connect-gateway'
   | 'order-detail'
   | 'department-detail'
   | 'event-detail';
