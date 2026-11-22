@@ -40,6 +40,10 @@
     "visitor-orders": {
       "hasChanged": false,
       "hash": "03e9541e5cb961bbe2b49f0d3822b93b9aefb80f41292d52ce70fe2bd22349de"
+    },
+    "connect-webhook": {
+      "hasChanged": false,
+      "hash": "db09a3047cf8d38db70ac53adfa1ec3fe229d4c750095cf7c6c99786bbaed15a"
     }
   }
 }
