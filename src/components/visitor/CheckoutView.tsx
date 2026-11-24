@@ -342,7 +342,7 @@ export function CheckoutView({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-cream-100 animate-fade-in">
+    <div className="checkout-screen fixed inset-0 z-50 flex flex-col bg-cream-100 animate-fade-in">
       <header className="flex items-center gap-3 border-b border-cream-200 bg-cream-50 px-5 py-4">
         <button
           type="button"
