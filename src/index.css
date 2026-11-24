@@ -3,6 +3,15 @@
 @tailwind utilities;
 
 @layer base {
+  /* Keep checkout controls at iOS Safari's 16px minimum to prevent focus zoom. */
+  .checkout-screen input[type='text'],
+  .checkout-screen input[type='tel'],
+  .checkout-screen input[inputmode='decimal'],
+  .checkout-screen select,
+  .checkout-screen textarea {
+    font-size: 16px;
+  }
+
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
