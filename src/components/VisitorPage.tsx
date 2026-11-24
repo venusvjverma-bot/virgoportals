@@ -1056,7 +1056,7 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
                 border: '1px solid #E5DED3',
                 color: '#292929',
               }}
-              className="flex-1 px-5 py-2.5 text-sm shadow-soft transition-all duration-200 placeholder:text-[#858585] focus:outline-none focus:ring-2 focus:ring-olive-500"
+              className="flex-1 px-5 py-2.5 text-base shadow-soft transition-all duration-200 placeholder:text-[#858585] focus:outline-none focus:ring-2 focus:ring-olive-500"
             />
             <button
               type="submit"
