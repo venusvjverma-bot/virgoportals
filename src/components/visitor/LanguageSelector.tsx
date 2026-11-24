@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronRight, Search } from 'lucide-react';
 import { PrivacyPage } from './PrivacyPage';
 
@@ -32,7 +33,7 @@ export function LanguageSelector({ onSelect }: LanguageSelectorProps) {
     lang.search.toLowerCase().includes(query.trim().toLowerCase())
   );
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4 backdrop-blur-sm animate-fade-in"
       role="dialog"
@@ -101,19 +102,18 @@ export function LanguageSelector({ onSelect }: LanguageSelectorProps) {
                 border: '1px solid #E5DED3',
                 borderRadius: '12px',
                 padding: '12px 12px 12px 42px',
-                fontSize: '15px',
+                fontSize: '16px',
                 color: '#292A27',
                 transition: 'border-color 200ms ease',
               }}
               onFocus={(e) => { e.currentTarget.style.borderColor = '#71806A'; }}
               onBlur={(e) => { e.currentTarget.style.borderColor = '#E5DED3'; }}
-              autoFocus
             />
           </div>
         </div>
 
         {/* Scrollable language list */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-soft px-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-soft px-6" style={{ WebkitOverflowScrolling: "touch" }}>
           {filtered.length === 0 ? (
             <p
               className="py-10 text-center"
@@ -185,6 +185,7 @@ export function LanguageSelector({ onSelect }: LanguageSelectorProps) {
         </div>
       </div>
       {showPrivacy ? <PrivacyPage onClose={() => setShowPrivacy(false)} /> : null}
-    </div>
+    </div>,
+    document.body
   );
 }
