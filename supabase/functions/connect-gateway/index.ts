@@ -220,6 +220,9 @@ Deno.serve(async (req: Request) => {
     // A redirect back to the return URL is never treated as proof of completion;
     // status stays a snapshot updated only by later status-verification work.
     const origin = getOrigin(req);
+    // configurations is response-only since 2026-11-18.endive — sending it
+    // fails with 400 invalid_fields (use_case.account_onboarding.configurations:
+    // Unknown field). The link's configuration is derived from the account.
     const link = await stripeV2Request('/v2/core/account_links', {
       account: accountId,
       use_case: {
@@ -227,7 +230,6 @@ Deno.serve(async (req: Request) => {
         account_onboarding: {
           return_url: `${origin}/?connect=return`,
           refresh_url: `${origin}/?connect=refresh`,
-          configurations: ['recipient'],
         },
       },
     });
