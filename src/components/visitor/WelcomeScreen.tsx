@@ -72,7 +72,7 @@ export function WelcomeScreen({
         aria-hidden="true"
       />
 
-      <div className="relative z-10 flex min-h-screen w-full flex-col items-center justify-center px-6 py-10">
+      <div className="welcome-screen-content relative z-10 flex w-full flex-col items-center justify-center px-6">
         <div className="w-full max-w-md space-y-6 text-center">
           <span
             className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wider"
