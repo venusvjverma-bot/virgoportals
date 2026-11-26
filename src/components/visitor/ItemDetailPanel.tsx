@@ -59,7 +59,7 @@ export function ItemDetailPanel({ dish, currency, addOns, onClose, onAddToBasket
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(() => {
     const initialVariantId = initial?.variant?.id;
     if (initialVariantId && activeVariants.some((v) => v.id === initialVariantId)) return initialVariantId;
-    return null;
+    return activeVariants[0]?.id ?? null;
   });
   const selectedVariant = activeVariants.find((v) => v.id === selectedVariantId) ?? null;
   const variantMissing = activeVariants.length > 0 && !selectedVariant;
