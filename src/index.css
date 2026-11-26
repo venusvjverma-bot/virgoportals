@@ -170,6 +170,14 @@
  * in a single track. GPU-accelerated via transform. Pauses animation
  * for users who prefer reduced motion.
  */
+.welcome-screen-content {
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding-top: max(2.5rem, env(safe-area-inset-top));
+  padding-bottom: max(2.5rem, env(safe-area-inset-bottom));
+}
+
 .food-wall-track {
   display: flex;
   flex-direction: column;
@@ -196,10 +204,10 @@
 
 @keyframes food-wall-scroll {
   from {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translateY(-50%);
+    transform: translate3d(0, -50%, 0);
   }
 }
 
