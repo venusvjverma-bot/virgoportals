@@ -89,7 +89,7 @@ function toHistory(messages: ChatMessage[]): { role: 'user' | 'assistant'; conte
     }));
 }
 
-function useVisibleHeight(ref: RefObject<HTMLDivElement>, active: boolean) {
+function useVisibleHeight(ref: RefObject<HTMLDivElement>, active: boolean, suppressOffset: boolean) {
   useEffect(() => {
     if (!active) return;
     const node = ref.current;
@@ -111,7 +111,7 @@ function useVisibleHeight(ref: RefObject<HTMLDivElement>, active: boolean) {
       }
       if (offset !== lastOffset) {
         lastOffset = offset;
-        node.style.transform = offset > 0 ? `translateY(${offset}px)` : '';
+        node.style.transform = !suppressOffset && offset > 0 ? `translateY(${offset}px)` : '';
       }
     };
 
@@ -126,7 +126,7 @@ function useVisibleHeight(ref: RefObject<HTMLDivElement>, active: boolean) {
       node.style.height = '';
       node.style.transform = '';
     };
-  }, [ref, active]);
+  }, [ref, active, suppressOffset]);
 }
 
 export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageProps) {
@@ -162,7 +162,8 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
   const scopeRef = useRef<string>('');
   const resetAfterConfirmRef = useRef(false);
 
-  useVisibleHeight(shellRef, Boolean(view));
+  const isIOS = typeof navigator !== 'undefined' && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+  useVisibleHeight(shellRef, Boolean(view), showWelcome && isIOS);
 
   // ── Load portal/resource ──
   useEffect(() => {
