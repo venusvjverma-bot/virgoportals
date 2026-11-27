@@ -16,23 +16,37 @@ export function WelcomeScreen({
   images,
   onContinue,
 }: WelcomeScreenProps) {
-  const [loadedCount, setLoadedCount] = useState(0);
-  const [imagesFailed, setImagesFailed] = useState(false);
+  const [imageStatus, setImageStatus] = useState<Record<string, 'loaded' | 'failed'>>({});
 
-  const displayImages = useMemo(() => {
-    if (images.length === 0) return [];
-    return [...images, ...images];
-  }, [images]);
+  const uniqueImages = useMemo(() => Array.from(new Set(images)), [images]);
+  const imageSignature = uniqueImages.join('\\u0000');
 
   useEffect(() => {
-    if (images.length === 0) return;
-    const timer = window.setTimeout(() => {
-      if (loadedCount === 0) setImagesFailed(true);
-    }, 4000);
-    return () => window.clearTimeout(timer);
-  }, [images.length, loadedCount]);
+    setImageStatus({});
+  }, [imageSignature]);
 
-  const showBackground = displayImages.length > 0 && !imagesFailed;
+  const loadedImages = uniqueImages.filter((src) => imageStatus[src] === 'loaded');
+  const allImagesSettled =
+    uniqueImages.length > 0 &&
+    uniqueImages.every((src) => imageStatus[src] === 'loaded' || imageStatus[src] === 'failed');
+  const animationReady = allImagesSettled && loadedImages.length > 0;
+  const displayImages = animationReady ? [...loadedImages, ...loadedImages] : [...uniqueImages, ...uniqueImages];
+  const showBackground = animationReady;
+
+  const markImageLoaded = (src: string) => {
+    setImageStatus((current) =>
+      current[src] === 'loaded' ? current : { ...current, [src]: 'loaded' }
+    );
+  };
+
+  const markImageFailed = (src: string) => {
+    setImageStatus((current) =>
+      current[src] === 'failed' ? current : { ...current, [src]: 'failed' }
+    );
+    if (import.meta.env.DEV) {
+      console.warn('[WelcomeScreen] Dish background image failed to load:', src);
+    }
+  };
 
   return (
     <div
@@ -46,7 +60,11 @@ export function WelcomeScreen({
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
           <div
             className="food-wall-track"
-            style={{ animationDuration: `${Math.max(images.length, 1) * 6}s` }}
+            style={{
+              animationDuration: `${Math.max(loadedImages.length, 1) * 6}s`,
+              animationPlayState: animationReady ? 'running' : 'paused',
+              visibility: animationReady ? 'visible' : 'hidden',
+            }}
           >
             {displayImages.map((src, index) => (
               <img
@@ -54,8 +72,8 @@ export function WelcomeScreen({
                 src={src}
                 alt=""
                 className="food-wall-image"
-                onLoad={() => setLoadedCount((prev) => prev + 1)}
-                onError={() => setImagesFailed(true)}
+                onLoad={() => markImageLoaded(src)}
+                onError={() => markImageFailed(src)}
               />
             ))}
           </div>
