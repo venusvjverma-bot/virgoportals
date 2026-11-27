@@ -56,7 +56,7 @@ export function WelcomeScreen({
       aria-modal="true"
       aria-label={`Welcome to ${resourceName}`}
     >
-      {showBackground ? (
+      {uniqueImages.length > 0 ? (
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
           <div
             className="food-wall-track"
