@@ -26,11 +26,9 @@ export function WelcomeScreen({
   }, [imageSignature]);
 
   const loadedImages = uniqueImages.filter((src) => imageStatus[src] === 'loaded');
-  const allImagesSettled =
-    uniqueImages.length > 0 &&
-    uniqueImages.every((src) => imageStatus[src] === 'loaded' || imageStatus[src] === 'failed');
-  const animationReady = allImagesSettled && loadedImages.length > 0;
-  const displayImages = animationReady ? [...loadedImages, ...loadedImages] : [...uniqueImages, ...uniqueImages];
+  // Start as soon as the first image is ready; later successful images join progressively.
+  const animationReady = loadedImages.length > 0;
+  const displayImages = [...loadedImages, ...loadedImages];
   const showBackground = animationReady;
 
   const markImageLoaded = (src: string) => {
@@ -61,7 +59,7 @@ export function WelcomeScreen({
           <div
             className="food-wall-track"
             style={{
-              animationDuration: `${Math.max(loadedImages.length, 1) * 6}s`,
+              animationDuration: `${Math.max(uniqueImages.length, 1) * 6}s`,
               animationPlayState: animationReady ? 'running' : 'paused',
               visibility: animationReady ? 'visible' : 'hidden',
             }}
