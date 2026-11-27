@@ -227,8 +227,14 @@ export function VisitorPage({ portalId, resourceId, resourceType }: VisitorPageP
           // Fetch dish images for the welcome screen background (department/event only)
           if (loaded.resourceId && loaded.resourceType && (loaded.resourceType === 'department' || loaded.resourceType === 'event')) {
             getPublicDishImages(loaded.resourceId, loaded.resourceType)
-              .then((urls) => { if (active) setWelcomeImages(urls); })
-              .catch(() => { /* welcome screen handles empty images gracefully */ });
+              .then((urls) => {
+                if (active) setWelcomeImages(urls);
+              })
+              .catch((error) => {
+                if (import.meta.env.DEV) {
+                  console.warn('[VisitorPage] Could not fetch welcome dish images:', error);
+                }
+              });
             setShowWelcome(true);
           }
 
