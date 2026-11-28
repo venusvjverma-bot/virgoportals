@@ -170,6 +170,13 @@ export function HostSignupPage({ onBack }: HostSignupPageProps) {
                   </button>
                 ) : null}
               </div>
+              <p className="mt-2 text-xs leading-relaxed text-ink-muted">
+                {key === 'email' ? 'Enter a valid email address for account registration and communication.' : null}
+                {key === 'password' ? 'Use a minimum of 8 characters, including at least one special character.' : null}
+                {key === 'confirmPassword' ? 'Re-enter your password to ensure both entries match.' : null}
+                {key === 'restaurantName' ? <>Enter the official name of your <span className="font-semibold text-ink">Restaurant or Hotel</span>.</> : null}
+                {key === 'city' ? <>Enter the city where your <span className="font-semibold text-ink">Restaurant or Hotel</span> is located.</> : null}
+              </p>
             </Field>
             );
           })}
@@ -194,13 +201,14 @@ export function HostSignupPage({ onBack }: HostSignupPageProps) {
                   onChange={(event) => update(key, event.target.value)}
                 />
               </div>
+              <p className="mt-2 text-xs leading-relaxed text-ink-muted">
+                {key === 'businessName'
+                  ? 'Enter the registered legal name of your business, if applicable.'
+                  : 'Enter the complete registered or operating address of your business, if applicable.'}
+              </p>
             </Field>
           ))}
         </div>
-
-        <p className="mt-4 text-xs leading-relaxed text-ink-muted">
-          Use at least 8 characters, including one special character such as ! ? # or @.
-        </p>
 
         {error ? (
           <Notice tone="error" className="mt-5">
