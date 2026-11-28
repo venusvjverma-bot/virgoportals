@@ -28,7 +28,11 @@ export function WelcomeScreen({
   const loadedImages = uniqueImages.filter((src) => imageStatus[src] === 'loaded');
   // Start as soon as the first image is ready; later successful images join progressively.
   const animationReady = loadedImages.length > 0;
-  const displayImages = [...loadedImages, ...loadedImages];
+  // Render from uniqueImages (not loadedImages) so <img> elements exist immediately
+  // and can fire onLoad. The scroll keyframe moves the track by -50%, so the track
+  // must hold two identical copies of the sequence at all times — images that fail
+  // are hidden (not removed) to keep both halves identical as the animation runs.
+  const displayImages = [...uniqueImages, ...uniqueImages];
   const showBackground = animationReady;
 
   const markImageLoaded = (src: string) => {
@@ -70,6 +74,13 @@ export function WelcomeScreen({
                 src={src}
                 alt=""
                 className="food-wall-image"
+                style={
+                  imageStatus[src] === 'failed'
+                    ? { display: 'none' }
+                    : imageStatus[src] === 'loaded'
+                      ? undefined
+                      : { opacity: 0 }
+                }
                 onLoad={() => markImageLoaded(src)}
                 onError={() => markImageFailed(src)}
               />
